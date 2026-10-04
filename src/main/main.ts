@@ -15,6 +15,7 @@ import { Monitor, errorMessage } from "../core/monitor";
 import { threadUrl } from "../core/settings";
 import { Store } from "./store";
 import { client } from "./client";
+import { copyRoomId } from "./clipboard";
 import { iconData } from "./tray-icon";
 const here = dirname(fileURLToPath(import.meta.url));
 let window: BrowserWindow | null = null;
@@ -98,6 +99,7 @@ if (!app.requestSingleInstanceLock()) {
         });
       handle("snapshot", () => monitor.snapshot());
       handle("refresh", () => monitor.refresh());
+      handle("copy-room-id", copyRoomId);
       handle("watch", async (id, enabled) => {
         await monitor.watch(id, enabled);
         await monitor.refresh();

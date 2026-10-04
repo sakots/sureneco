@@ -6,6 +6,7 @@ const api: Api = {
   watch: (id, enabled) => ipcRenderer.invoke("watch", id, enabled),
   saveSettings: (settings) => ipcRenderer.invoke("settings", settings),
   openThread: (id, post) => ipcRenderer.invoke("open-thread", id, post),
+  copyRoomId: (id) => ipcRenderer.invoke("copy-room-id", id),
   subscribe: (callback) => {
     const listener = (_: Electron.IpcRendererEvent, value: Snapshot) =>
       callback(value);

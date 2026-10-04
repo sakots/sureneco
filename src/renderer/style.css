@@ -198,8 +198,7 @@ h3 {
   font-weight: 650;
   overflow-wrap: anywhere;
 }
-.thread-title:hover,
-.recruitment-body:hover {
+.thread-title:hover {
   color: var(--accent);
 }
 .thread p {
@@ -366,4 +365,15 @@ footer {
   .switch span {
     transition: none;
   }
+}
+
+.room-id {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  background: var(--soft);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

@@ -50,5 +50,6 @@ export interface Api {
   watch(id: string, enabled: boolean): Promise<void>;
   saveSettings(settings: Settings): Promise<void>;
   openThread(id: string, post?: number): Promise<void>;
+  copyRoomId(id: string): Promise<void>;
   subscribe(callback: (snapshot: Snapshot) => void): () => void;
 }

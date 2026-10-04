@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { defaults, validateSettings } from "../core/settings";
 import { isRecent } from "../core/detection";
+import { splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot } from "../core/types";
 const labels: Record<keyof Settings, string> = {
   update_sec: "更新間隔（秒）",
@@ -237,15 +238,40 @@ export function App({ api }: { api: Api }) {
                         {new Date(item.postedAt).toLocaleString("ja-JP")}
                       </time>
                     </div>
+                    <div className="recruitment-body">
+                      {splitRoomIds(item.body).map((part, index) =>
+                        part.roomId ? (
+                          <button
+                            key={index}
+                            className="room-id"
+                            aria-label={`ルームID ${part.roomId}をコピー`}
+                            title="ルームIDをコピー"
+                            disabled={busy}
+                            onClick={() =>
+                              void act(async () => {
+                                await api.copyRoomId(part.roomId!);
+                                setNotice(
+                                  `ルームID ${part.roomId}をコピーしました。`,
+                                );
+                              })
+                            }
+                          >
+                            {part.text}
+                          </button>
+                        ) : (
+                          part.text
+                        ),
+                      )}
+                    </div>
                     <button
-                      className="recruitment-body"
+                      className="secondary"
                       onClick={() =>
                         void act(() =>
                           api.openThread(item.threadId, item.number),
                         )
                       }
                     >
-                      {item.body}
+                      レスを開く
                     </button>
                     <p className="metadata">
                       #{item.number} · {item.id ? `ID:${item.id}` : item.name}{" "}
