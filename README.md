@@ -40,7 +40,12 @@ pnpm package:linux
 
 WindowsからLinux用配布物を作る場合は、WSLのUbuntuやLinuxコンテナー内で実行してください。WSLではUbuntu側のホームディレクトリにリポジトリを配置し、Linux側で`pnpm install`してから`pnpm package:linux`を実行します。Windows側のnode_modulesは共有しません。Dockerを使う方法は[electron-builderの公式手順](https://www.electron.build/docs/features/multi-platform-build/)を参照してください。プロジェクトで必要なNode.jsは22.12以上です。
 
-パッケージはrelease/に出力します。
+パッケージはrelease/に出力します。v0.2.0のファイル名は次の形に統一します。
+
+- `sureneco_v0.2.0.amd64.deb`
+- `sureneco_v0.2.0.AppImage`
+- `sureneco_v0.2.0_Setup.exe`
+- `sureneco_v0.2.0_win.zip`
 
 同じOS・CPU・Electronバージョン向けのパッケージ作成では、インストール済みElectronをコピーして使用します。[公式のelectronDist設定](https://www.electron.build/docs/configuration/#electrondist)を使い、`win-unpacked.tmp`や`linux-unpacked.tmp`の名前変更時に発生するEPERMを避けるための処理です。別OS・CPU向けには流用しません。
 
@@ -62,6 +67,7 @@ WindowsからLinux用配布物を作る場合は、WSLのUbuntuやLinuxコンテ
 
 ### [2026/10/04] v0.2.0
 
+- 配布ファイル名の接頭辞を`sureneco_vバージョン`に統一。
 - 友人戦募集カードの上部にレス番号を明示。
 - 画面全体の余白と一覧・設定欄の高さを抑え、GUIをコンパクトに調整。
 

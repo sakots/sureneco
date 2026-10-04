@@ -41,7 +41,14 @@
       "maintainer": "sakots",
       "syncDesktopName": true
     },
+    "deb": {
+      "artifactName": "${name}_v${version}.${arch}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "${name}_v${version}.${ext}"
+    },
     "win": {
+      "artifactName": "${name}_v${version}_win.${ext}",
       "target": [
         "nsis",
         "zip"
@@ -49,6 +56,7 @@
       "icon": "resources/icon.png"
     },
     "nsis": {
+      "artifactName": "${name}_v${version}_Setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }

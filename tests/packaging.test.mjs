@@ -59,3 +59,31 @@ it("配布物から既定画面を除去し、アプリ本体は保持する", a
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it("配布形式ごとに共通のバージョン接頭辞を使い、次のバージョンにも反映する", () => {
+  const builderRequire = createRequire(require.resolve("electron-builder"));
+  const libraryRequire = createRequire(
+    builderRequire.resolve("app-builder-lib"),
+  );
+  const { expandMacro } = libraryRequire("./util/macroExpander");
+  const { Arch, getArtifactArchName } = libraryRequire("builder-util");
+  for (const releaseVersion of [metadata.version, "0.3.0"]) {
+    for (const [options, extension, suffix] of [
+      [config.deb, "deb", ".amd64.deb"],
+      [config.appImage, "AppImage", ".AppImage"],
+      [config.nsis, "exe", "_Setup.exe"],
+      [config.win, "zip", "_win.zip"],
+    ]) {
+      const name = expandMacro(
+        options?.artifactName ?? "",
+        getArtifactArchName(Arch.x64, extension),
+        {
+          name: metadata.name,
+          version: releaseVersion,
+        },
+        { ext: extension },
+      );
+      expect(name).toBe(`sureneco_v${releaseVersion}${suffix}`);
+    }
+  }
+});
