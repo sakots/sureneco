@@ -30,3 +30,7 @@ it("別OS・CPU・バージョンにはホストのElectronを流用しない", 
     expect(await config.electronDist({ ...context, ...change })).toBeNull();
   }
 });
+
+it("Windows用インストーラーとZIP版を同時に生成する", () => {
+  expect(config.win.target).toEqual(["nsis", "zip"]);
+});

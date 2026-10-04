@@ -42,7 +42,10 @@
       "syncDesktopName": true
     },
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "zip"
+      ],
       "icon": "resources/icon.png"
     },
     "nsis": {

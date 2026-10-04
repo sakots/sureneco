@@ -19,11 +19,13 @@ pnpm build
 pnpm start
 ```
 
-Windows用インストーラーはWindowsのPowerShellで作成します。
+Windows用のNSISインストーラーとZIP版は、WindowsのPowerShellで同時に作成します。
 
 ```powershell
 pnpm package:win
 ```
+
+release/にインストーラー（.exe）とZIP（.zip）を出力します。ZIP版は全ファイルを展開し、sureneco.exeを起動してください。設定の保存先はインストール版と同じuserDataディレクトリです。
 
 Linux用AppImage / debはUbuntu上で作成します。
 
@@ -59,6 +61,7 @@ WindowsからLinux用配布物を作る場合は、WSLのUbuntuやLinuxコンテ
 - 募集検出の初期値に「四東・四南・三東・三南」と5桁の番号を含む条件を追加。
 - 募集判定に5桁のルームIDを必須とし、レス参照をたどってIDを取得できるように変更。
 - 同じ環境向けのパッケージ作成で展開済みElectronを使用し、ZIP展開後のフォルダー名変更を回避。
+- Windows用インストーラーとZIP版の同時生成に対応。
 
 ### [2026/10/04] v0.0.0
 

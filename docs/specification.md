@@ -48,4 +48,4 @@ Vitestで解析、設定検証、NG、締め検出、通知の重複抑止、取
 
 ## 配布物の作成
 
-Windows用はWindowsで`pnpm package:win`、Linux用はUbuntuで`pnpm package:linux`を実行する。パッケージ作成前にチェックと`install-electron`を実行する。electron-builder.config.mjsはpackage.jsonのbuild設定を読み込み、対象OS・CPU・Electronバージョンが開発環境と一致する場合、node_modules内の展開済みElectronをelectronDistに指定する。これによりelectron-builderのZIP展開後の`.tmp`ディレクトリrenameを使わず、コピーによって配布用ディレクトリを作る。別OS・CPU・バージョン向けのビルドは通常の取得処理を使い、ホストOSのバイナリを流用しない。WindowsのEPERMの原因自体はログだけでは断定できず、実機での再実行を必要とする。
+Windows用はWindowsで`pnpm package:win`を実行し、NSISインストーラーとZIP版をrelease/に同時に出力する。ZIP版は全ファイルを展開してsureneco.exeを起動する。設定の保存先はインストール版と同じuserDataディレクトリで、ZIPの展開先には保存しない。Linux用はUbuntuで`pnpm package:linux`を実行する。パッケージ作成前にチェックと`install-electron`を実行する。electron-builder.config.mjsはpackage.jsonのbuild設定を読み込み、対象OS・CPU・Electronバージョンが開発環境と一致する場合、node_modules内の展開済みElectronをelectronDistに指定する。これによりelectron-builderのZIP展開後の`.tmp`ディレクトリrenameを使わず、コピーによって配布用ディレクトリを作る。別OS・CPU・バージョン向けのビルドは通常の取得処理を使い、ホストOSのバイナリを流用しない。WindowsのEPERMの原因自体はログだけでは断定できず、実機での再実行を必要とする。
