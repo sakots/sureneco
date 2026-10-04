@@ -233,3 +233,47 @@ describe("ルームIDが必須の募集判定", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("数字表記の対局形式", () => {
+  it("3・4とローマ数字の東・南を初期フィルタで検出する", () => {
+    for (const prefix of [
+      "3",
+      "4",
+      "３",
+      "４",
+      "III",
+      "IV",
+      "iii",
+      "iv",
+      "Ⅲ",
+      "Ⅳ",
+      "ⅲ",
+      "ⅳ",
+    ]) {
+      for (const wind of ["東", "南"]) {
+        const body = `${prefix}${wind} 01234`;
+        expect(
+          scanPosts(id, parseDat(line(body)), [], defaults, now).notifications,
+          body,
+        ).toHaveLength(1);
+      }
+    }
+  });
+  it("別の数値やIDのないレスを募集扱いしない", () => {
+    for (const body of [
+      "13東 12345",
+      "１４南 12345",
+      "VIII東 12345",
+      "XIV南 12345",
+      "2東 12345",
+      "V南 12345",
+      "3東",
+      "IV南 123456",
+    ]) {
+      expect(
+        scanPosts(id, parseDat(line(body)), [], defaults, now).items,
+        body,
+      ).toHaveLength(0);
+    }
+  });
+});
