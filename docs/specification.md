@@ -6,7 +6,7 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 
 ## 取得
 
-既定の板URLは https://egg.5ch.io/mj/ 。板のsubject.txtをShift_JISで取得し、スレッドID、タイトル、レス数を解析する。subback.htmlと同じスレッド一覧を機械可読形式から読む。レスはdat/{id}.datから取得する。HTMLタグはテキストに変換し、外部HTMLを実行しない。5ch.io / 5ch.netのHTTPSの板URLだけを許可する。各リクエストは15秒、最大5MiB。リダイレクトは拒否する。HTTPエラーや取得形式の変化は画面に表示し、次回更新で再試行する。監視対象の取得は逐次実行する。
+既定の板URLは [https://egg.5ch.io/mj/] 。板のsubject.txtをShift_JISで取得し、スレッドID、タイトル、レス数を解析する。subback.htmlと同じスレッド一覧を機械可読形式から読む。レスはdat/{id}.datから取得する。HTMLタグはテキストに変換し、外部HTMLを実行しない。5ch.io / 5ch.netのHTTPSの板URLだけを許可する。各リクエストは15秒、最大5MiB。リダイレクトは拒否する。HTTPエラーや取得形式の変化は画面に表示し、次回更新で再試行する。監視対象の取得は逐次実行する。
 
 ## 検出と通知
 
@@ -25,7 +25,7 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 - ng_thread_title_regex: 既定空。
 - yujinsen_regex: 既定 `友人戦|友人部屋|(?:募集|部屋)[\s:：]*[0-9０-９]{5,6}|[0-9０-９]{5,6}[\s　]*(?:募|＠|@)`。
 - closed_yujinsen_regex: 既定 `〆|締め|しめ|締切|締め切|解散|埋まり|満員`。
-- url: 既定 https://egg.5ch.io/mj/ 。
+- url: 既定 [https://egg.5ch.io/mj/] 。
 - ng_words / ng_ids / ng_watchois: NG本文・ID・ワッチョイの文字列配列。
 
 数値設定の上限は2147483。正規表現は1000文字まで、NGは各1000件・一件500文字まで。不正な値・正規表現は保存前に拒否する。ElectronのuserData/state.jsonに設定、監視対象、取得済みレス番号を一時ファイルからのrenameで保存する。破損した保存ファイルは上書きせず、起動時にエラーダイアログを表示して終了する。募集履歴はメモリ内だけに保持する。
