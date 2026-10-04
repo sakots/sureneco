@@ -6,7 +6,7 @@ export const defaults: Settings = {
   thread_title_regex: "雀魂|じゃんたま|ジャンタマ|mahjongsoul|majsoul",
   ng_thread_title_regex: "",
   yujinsen_regex:
-    "友人戦|友人部屋|(?:募集|部屋)[\\s:：]*[0-9０-９]{5,6}|[0-9０-９]{5,6}[\\s　]*(?:募|＠|@)|^(?=[\\s\\S]*(?:四東|四南|三東|三南))[\\s\\S]*(?<![0-9０-９])[0-9０-９]{5}(?![0-9０-９])",
+    "友人戦|友人部屋|(?:募集|部屋)[\\s:：]*[0-9０-９]{5,6}|[0-9０-９]{5,6}[\\s　]*(?:募|＠|@)|四東|四南|三東|三南",
   closed_yujinsen_regex: "〆|締め|しめ|締切|締め切|解散|埋まり|満員",
   url: "https://egg.5ch.io/mj/",
   ng_words: [],

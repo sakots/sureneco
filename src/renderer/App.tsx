@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { defaults, validateSettings } from "../core/settings";
 import { isRecent } from "../core/detection";
-import { splitRoomIds } from "../core/room-id";
+import { extractRoomIds, splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot } from "../core/types";
 const labels: Record<keyof Settings, string> = {
   update_sec: "更新間隔（秒）",
@@ -65,6 +65,23 @@ export function App({ api }: { api: Api }) {
       setBusy(false);
     }
   }
+  const roomIdButton = (roomId: string, text: string, key: number | string) => (
+    <button
+      key={key}
+      className="room-id"
+      aria-label={`ルームID ${roomId}をコピー`}
+      title="ルームIDをコピー"
+      disabled={busy}
+      onClick={() =>
+        void act(async () => {
+          await api.copyRoomId(roomId);
+          setNotice(`ルームID ${roomId}をコピーしました。`);
+        })
+      }
+    >
+      {text}
+    </button>
+  );
   const watched = snapshot?.watched ?? [];
   const recent =
     snapshot?.recruitments.filter(
@@ -221,6 +238,10 @@ export function App({ api }: { api: Api }) {
               {snapshot.recruitments.map((item) => {
                 const active =
                   !item.closed && isRecent(item, snapshot.settings, Date.now());
+                const directIds = extractRoomIds(item.body);
+                const referencedIds = item.roomIds.filter(
+                  (id) => !directIds.includes(id),
+                );
                 return (
                   <article
                     className={`recruitment ${active ? "fresh" : ""}`}
@@ -240,29 +261,17 @@ export function App({ api }: { api: Api }) {
                     </div>
                     <div className="recruitment-body">
                       {splitRoomIds(item.body).map((part, index) =>
-                        part.roomId ? (
-                          <button
-                            key={index}
-                            className="room-id"
-                            aria-label={`ルームID ${part.roomId}をコピー`}
-                            title="ルームIDをコピー"
-                            disabled={busy}
-                            onClick={() =>
-                              void act(async () => {
-                                await api.copyRoomId(part.roomId!);
-                                setNotice(
-                                  `ルームID ${part.roomId}をコピーしました。`,
-                                );
-                              })
-                            }
-                          >
-                            {part.text}
-                          </button>
-                        ) : (
-                          part.text
-                        ),
+                        part.roomId
+                          ? roomIdButton(part.roomId, part.text, index)
+                          : part.text,
                       )}
                     </div>
+                    {referencedIds.length > 0 && (
+                      <div className="referenced-rooms">
+                        <span>参照先のルームID</span>{" "}
+                        {referencedIds.map((id) => roomIdButton(id, id, id))}
+                      </div>
+                    )}
                     <button
                       className="secondary"
                       onClick={() =>

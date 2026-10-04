@@ -26,6 +26,7 @@ export interface Post {
   postedAt: number;
 }
 export interface Recruitment extends Post {
+  roomIds: string[];
   threadId: string;
   closed: boolean;
 }

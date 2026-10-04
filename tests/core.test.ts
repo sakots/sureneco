@@ -147,7 +147,7 @@ describe("募集の判定", () => {
       scanPosts(
         id,
         parseDat(
-          line("友人戦", "old", undefined, "2026/10/04(日) 10:00:00.00"),
+          line("友人戦 12345", "old", undefined, "2026/10/04(日) 10:00:00.00"),
         ),
         [],
         defaults,
@@ -158,13 +158,78 @@ describe("募集の判定", () => {
   it("参照なしの締めは同じ投稿者の募集だけに適用する", () => {
     const posts = parseDat(
       [
-        line("友人戦", "abc", "名無し"),
-        line("友人戦", "xyz", "名無し"),
+        line("友人戦 12345", "abc", "名無し"),
+        line("友人戦 23456", "xyz", "名無し"),
         line("〆", "abc", "名無し"),
       ].join("\n"),
     );
     expect(
       scanPosts(id, posts, [], defaults, now).items.map((x) => x.closed),
     ).toEqual([true, false]);
+  });
+});
+
+describe("ルームIDが必須の募集判定", () => {
+  it("募集語句だけ、6桁の番号、5桁のレス参照番号は募集にしない", () => {
+    for (const body of [
+      "友人戦",
+      "友人部屋 あと2人",
+      "友人戦 123456",
+      "友人戦 >>12345",
+    ]) {
+      expect(
+        scanPosts(id, parseDat(line(body)), [], defaults, now).items,
+        body,
+      ).toHaveLength(0);
+    }
+  });
+  it("過去レスへの参照と連鎖からIDを取得し、返信も募集にする", () => {
+    const posts = parseDat(
+      [
+        line("四南 ０１２３４"),
+        line("&gt;&gt;1 あと2人"),
+        line("&gt;&gt;2 お待ちしています"),
+      ].join("\n"),
+    );
+    const result = scanPosts(id, posts.slice(1), [], defaults, now, posts);
+    expect(result.items.map((x) => x.roomIds)).toEqual([["01234"], ["01234"]]);
+    expect(result.notifications.map((x) => x.number)).toEqual([2, 3]);
+  });
+  it("複数参照を重複なく解決し、本文にIDがあれば本文を優先する", () => {
+    const posts = parseDat(
+      [
+        line("友人戦 12345"),
+        line("友人戦 ５６７８９"),
+        line("三東 &gt;&gt;1 &gt;&gt;2 &gt;&gt;1"),
+        line("友人戦 01234 &gt;&gt;1"),
+      ].join("\n"),
+    );
+    expect(
+      scanPosts(id, posts.slice(2), [], defaults, now, posts).items.map(
+        (x) => x.roomIds,
+      ),
+    ).toEqual([["12345", "56789"], ["01234"]]);
+  });
+  it("自己・未来・存在しない参照とNG参照先は募集にしない", () => {
+    const posts = parseDat(
+      [
+        line("友人戦 &gt;&gt;1 &gt;&gt;2 &gt;&gt;99"),
+        line("友人戦 12345"),
+        line("友人戦 &gt;&gt;2"),
+      ].join("\n"),
+    );
+    expect(
+      scanPosts(id, [posts[0]], [], defaults, now, posts).items,
+    ).toHaveLength(0);
+    expect(
+      scanPosts(
+        id,
+        [posts[2]],
+        [],
+        { ...defaults, ng_words: ["12345"] },
+        now,
+        posts,
+      ).items,
+    ).toHaveLength(0);
   });
 });

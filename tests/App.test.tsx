@@ -75,6 +75,7 @@ const recruitment = {
   postedAt: Date.now(),
   threadId: "1791034502",
   closed: false,
+  roomIds: ["01234", "56789"],
 };
 it("ルームIDをクリックすると半角でコピーし、レスは別の操作で開く", async () => {
   const api = setup([recruitment]);
@@ -110,4 +111,17 @@ it("コピーに失敗した場合はエラーを表示する", async () => {
     "コピーできませんでした",
   );
   expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("参照先から得たルームIDもコピーできる", async () => {
+  const api = setup([
+    { ...recruitment, body: ">>1 あと1人", roomIds: ["01234"] },
+  ]);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /^友人戦募集/ }));
+  expect(screen.getByText("参照先のルームID")).toBeTruthy();
+  await user.click(
+    screen.getByRole("button", { name: "ルームID 01234をコピー" }),
+  );
+  expect(api.copyRoomId).toHaveBeenCalledWith("01234");
 });

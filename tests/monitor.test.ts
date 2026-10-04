@@ -111,3 +111,31 @@ it("板URLの変更で監視対象をリセットし、保存失敗時は設定�
   expect(state.watched).toEqual([]);
   expect(state.cursors).toEqual({});
 });
+
+it("初回取得したレスを参照して新規募集を検出し、再起動後も解決する", async () => {
+  const now = Date.parse("2026-10-04T12:00:00+09:00");
+  const state: SavedState = {
+    settings: defaults,
+    watched: ["1791034502"],
+    cursors: {},
+  };
+  const original =
+    "名無し<>sage<>2026/10/04(日) 10:00:00 ID:abc<>友人戦 01234<>";
+  const reply =
+    "名無し<>sage<>2026/10/04(日) 11:59:30 ID:abc<>&gt;&gt;1 あと1人<>";
+  let dat = original;
+  const client = { subject: async () => "", dat: async () => dat };
+  const notify = vi.fn();
+  const save = async () => {};
+  await new Monitor(state, client, save, notify, () => now).refresh();
+  expect(notify).not.toHaveBeenCalled();
+  dat += `\n${reply}`;
+  const monitor = new Monitor(state, client, save, notify, () => now);
+  await monitor.refresh();
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(1);
+  expect(monitor.snapshot().recruitments[0]).toMatchObject({
+    number: 2,
+    roomIds: ["01234"],
+  });
+});

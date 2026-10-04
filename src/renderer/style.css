@@ -377,3 +377,13 @@ footer {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.referenced-rooms {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-size: 13px;
+}

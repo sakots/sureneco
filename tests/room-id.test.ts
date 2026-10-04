@@ -35,3 +35,11 @@ it("先頭ゼロと全角を扱い、不正なコピー要求を拒否する", (
   expect(() => copyRoomId("invalid")).toThrow();
   expect(clipboard.writeText).not.toHaveBeenCalled();
 });
+
+it("レス参照番号はルームIDにしない", () => {
+  const parts = splitRoomIds("友人戦 >>12345 ＞＞ ５６７８９ 01234");
+  expect(parts.filter((x) => x.roomId).map((x) => x.roomId)).toEqual(["01234"]);
+  expect(parts.map((x) => x.text).join("")).toBe(
+    "友人戦 >>12345 ＞＞ ５６７８９ 01234",
+  );
+});

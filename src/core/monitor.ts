@@ -89,6 +89,7 @@ export class Monitor {
             this.items,
             settings,
             this.now(),
+            posts,
           );
           await this.save({ ...this.state, cursors: nextCursors });
           this.state.cursors = nextCursors;

@@ -1,4 +1,5 @@
 import type { Post, Recruitment, Settings } from "./types";
+import { extractRoomIds, postReferences } from "./room-id";
 export function isBlocked(post: Post, settings: Settings): boolean {
   return (
     settings.ng_words.some((x) => post.body.includes(x)) ||
@@ -19,16 +20,16 @@ export function scanPosts(
   previous: Recruitment[],
   settings: Settings,
   now: number,
+  sourcePosts: Post[] = posts,
 ) {
   const items = previous.map((x) => ({ ...x }));
   const added: Recruitment[] = [];
   const recruit = new RegExp(settings.yujinsen_regex, "i");
   const close = new RegExp(settings.closed_yujinsen_regex, "i");
+  const source = new Map(sourcePosts.map((post) => [post.number, post]));
   for (const post of posts) {
     if (close.test(post.body)) {
-      const refs = [...post.body.matchAll(/>>\s*(\d+)/g)].map((x) =>
-        Number(x[1]),
-      );
+      const refs = postReferences(post.body);
       for (const item of items) {
         if (item.threadId !== threadId) continue;
         const sameAuthor =
@@ -37,8 +38,15 @@ export function scanPosts(
         if (refs.length ? refs.includes(item.number) : sameAuthor)
           item.closed = true;
       }
-    } else if (recruit.test(post.body) && !isBlocked(post, settings)) {
-      const item = { ...post, threadId, closed: false };
+    } else if (!isBlocked(post, settings)) {
+      const { roomIds, matches } = resolveRecruitment(
+        post,
+        source,
+        settings,
+        recruit,
+      );
+      if (!matches || !roomIds.length) continue;
+      const item = { ...post, roomIds, threadId, closed: false };
       items.push(item);
       added.push(item);
     }
@@ -47,4 +55,37 @@ export function scanPosts(
     items: items.slice(-200),
     notifications: added.filter((x) => !x.closed && isRecent(x, settings, now)),
   };
+}
+
+function resolveRecruitment(
+  post: Post,
+  source: Map<number, Post>,
+  settings: Settings,
+  pattern: RegExp,
+) {
+  const direct = extractRoomIds(post.body);
+  let matches = pattern.test(post.body);
+  if (direct.length) return { roomIds: direct, matches };
+  const roomIds = new Set<string>();
+  const visited = new Set<number>([post.number]);
+  const pending: Post[] = [];
+  const enqueue = (current: Post) => {
+    for (const number of postReferences(current.body).reverse()) {
+      if (number >= current.number) continue;
+      const referenced = source.get(number);
+      if (referenced) pending.push(referenced);
+    }
+  };
+  enqueue(post);
+  while (pending.length) {
+    const referenced = pending.pop()!;
+    if (visited.has(referenced.number)) continue;
+    visited.add(referenced.number);
+    if (isBlocked(referenced, settings)) continue;
+    matches ||= pattern.test(referenced.body);
+    const ids = extractRoomIds(referenced.body);
+    if (ids.length) ids.forEach((id) => roomIds.add(id));
+    else enqueue(referenced);
+  }
+  return { roomIds: [...roomIds], matches };
 }
