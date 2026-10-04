@@ -277,3 +277,75 @@ describe("数字表記の対局形式", () => {
     }
   });
 });
+
+describe("終了した募集への返信", () => {
+  it("期限切れの参照先を、連鎖やIDの再掲で復活させない", () => {
+    for (const body of ["&gt;&gt;1 あと1人", "友人戦 12345 &gt;&gt;1"]) {
+      const posts = parseDat(
+        [
+          line("友人戦 12345", "host", undefined, "2026/10/04(日) 10:00:00.00"),
+          line(body, "reply"),
+          line("&gt;&gt;2 あと1人", "other"),
+        ].join("\n"),
+      );
+      const result = scanPosts(id, posts.slice(1), [], defaults, now, posts);
+      expect(result.items).toHaveLength(0);
+      expect(result.notifications).toHaveLength(0);
+    }
+  });
+  it("全レスから締めを判定し、過去・同一取得内の締めへの返信を抑止する", () => {
+    for (const closing of ["&gt;&gt;1 〆", "〆"]) {
+      for (const body of ["&gt;&gt;1 あと1人", "友人戦 12345 &gt;&gt;1"]) {
+        const posts = parseDat(
+          [
+            line("友人戦 12345", "host", "名無し"),
+            line(closing, "host", "名無し"),
+            line(body, "reply", "名無し"),
+            line("&gt;&gt;3 あと1人", "other", "名無し"),
+          ].join("\n"),
+        );
+        expect(
+          scanPosts(id, posts.slice(2), [], defaults, now, posts).notifications,
+        ).toHaveLength(0);
+        expect(
+          scanPosts(id, posts, [], defaults, now).notifications,
+        ).toHaveLength(0);
+      }
+    }
+  });
+  it("返信の後の締めも通知に反映し、別の新規募集は通知する", () => {
+    const posts = parseDat(
+      [
+        line("友人戦 12345", "host", "名無し"),
+        line("&gt;&gt;1 あと1人", "reply", "名無し"),
+        line("&gt;&gt;1 〆", "host", "名無し"),
+        line("友人戦 56789", "host", "名無し"),
+        line("&gt;&gt;4 あと1人", "reply", "名無し"),
+      ].join("\n"),
+    );
+    expect(
+      scanPosts(id, posts, [], defaults, now).notifications.map(
+        (x) => x.number,
+      ),
+    ).toEqual([4, 5]);
+  });
+  it("保存済み履歴の締め状態と期限の境界を反映する", () => {
+    const posts = parseDat(
+      [line("友人戦 12345"), line("&gt;&gt;1 あと1人")].join("\n"),
+    );
+    const previous = scanPosts(id, [posts[0]], [], defaults, now).items;
+    previous[0].closed = true;
+    expect(
+      scanPosts(id, [posts[1]], previous, defaults, now, posts).notifications,
+    ).toHaveLength(0);
+    const boundary = posts[0].postedAt + defaults.emphasis_sec * 1000;
+    posts[1].postedAt = boundary;
+    expect(
+      scanPosts(id, [posts[1]], [], defaults, boundary, posts).notifications,
+    ).toHaveLength(1);
+    expect(
+      scanPosts(id, [posts[1]], [], defaults, boundary + 1, posts)
+        .notifications,
+    ).toHaveLength(0);
+  });
+});

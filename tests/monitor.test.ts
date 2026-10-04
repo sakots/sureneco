@@ -120,7 +120,7 @@ it("初回取得したレスを参照して新規募集を検出し、再起動�
     cursors: {},
   };
   const original =
-    "名無し<>sage<>2026/10/04(日) 10:00:00 ID:abc<>友人戦 01234<>";
+    "名無し<>sage<>2026/10/04(日) 11:59:00 ID:abc<>友人戦 01234<>";
   const reply =
     "名無し<>sage<>2026/10/04(日) 11:59:30 ID:abc<>&gt;&gt;1 あと1人<>";
   let dat = original;
@@ -138,4 +138,30 @@ it("初回取得したレスを参照して新規募集を検出し、再起動�
     number: 2,
     roomIds: ["01234"],
   });
+});
+
+it("再起動後も、初回取得で締まった募集と期限切れの募集への返信を通知しない", async () => {
+  const now = Date.parse("2026-10-04T12:00:00+09:00");
+  for (const ended of ["closed", "expired"]) {
+    const state: SavedState = {
+      settings: defaults,
+      watched: ["1791034502"],
+      cursors: {},
+    };
+    const time = ended === "expired" ? "10:00:00" : "11:59:00";
+    let dat = `名無し<>sage<>2026/10/04(日) ${time} ID:abc<>友人戦 01234<>`;
+    if (ended === "closed")
+      dat += "\n名無し<>sage<>2026/10/04(日) 11:59:10 ID:abc<>&gt;&gt;1 〆<>";
+    const client = { subject: async () => "", dat: async () => dat };
+    const notify = vi.fn();
+    const save = async () => {};
+    await new Monitor(state, client, save, notify, () => now).refresh();
+    dat +=
+      "\n名無し<>sage<>2026/10/04(日) 11:59:30 ID:reply<>&gt;&gt;1 あと1人<>";
+    const restarted = new Monitor(state, client, save, notify, () => now);
+    await restarted.refresh();
+    expect(notify).not.toHaveBeenCalled();
+    expect(restarted.snapshot().recruitments).toHaveLength(0);
+    expect(restarted.snapshot().errors).toEqual([]);
+  }
 });

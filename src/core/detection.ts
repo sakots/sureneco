@@ -27,16 +27,26 @@ export function scanPosts(
   const recruit = new RegExp(settings.yujinsen_regex, "i");
   const close = new RegExp(settings.closed_yujinsen_regex, "i");
   const source = new Map(sourcePosts.map((post) => [post.number, post]));
+  const closed = new Set(
+    previous
+      .filter((item) => item.threadId === threadId && item.closed)
+      .map((item) => item.number),
+  );
+  // 履歴に残っていない募集にも、取得済みの締めレスを反映する。
+  for (const closing of sourcePosts) {
+    if (!close.test(closing.body)) continue;
+    const refs = postReferences(closing.body);
+    for (const target of sourcePosts) {
+      if (target.number < closing.number && closesPost(closing, target, refs))
+        closed.add(target.number);
+    }
+  }
   for (const post of posts) {
     if (close.test(post.body)) {
       const refs = postReferences(post.body);
       for (const item of items) {
         if (item.threadId !== threadId) continue;
-        const sameAuthor =
-          (!!post.id && post.id === item.id) ||
-          (!!post.watchoi && post.watchoi === item.watchoi);
-        if (refs.length ? refs.includes(item.number) : sameAuthor)
-          item.closed = true;
+        if (closesPost(post, item, refs)) item.closed = true;
       }
     } else if (!isBlocked(post, settings)) {
       const { roomIds, matches } = resolveRecruitment(
@@ -44,9 +54,16 @@ export function scanPosts(
         source,
         settings,
         recruit,
+        closed,
+        now,
       );
       if (!matches || !roomIds.length) continue;
-      const item = { ...post, roomIds, threadId, closed: false };
+      const item = {
+        ...post,
+        roomIds,
+        threadId,
+        closed: closed.has(post.number),
+      };
       items.push(item);
       added.push(item);
     }
@@ -57,35 +74,48 @@ export function scanPosts(
   };
 }
 
+function closesPost(closing: Post, target: Post, refs: number[]): boolean {
+  return refs.length
+    ? refs.includes(target.number)
+    : (!!closing.id && closing.id === target.id) ||
+        (!!closing.watchoi && closing.watchoi === target.watchoi);
+}
+
 function resolveRecruitment(
   post: Post,
   source: Map<number, Post>,
   settings: Settings,
   pattern: RegExp,
+  closed: Set<number>,
+  now: number,
 ) {
   const direct = extractRoomIds(post.body);
   let matches = pattern.test(post.body);
-  if (direct.length) return { roomIds: direct, matches };
   const roomIds = new Set<string>();
-  const visited = new Set<number>([post.number]);
-  const pending: Post[] = [];
-  const enqueue = (current: Post) => {
+  const visited = new Set<string>();
+  const pending: { post: Post; collect: boolean }[] = [];
+  const enqueue = (current: Post, collect: boolean) => {
     for (const number of postReferences(current.body).reverse()) {
       if (number >= current.number) continue;
       const referenced = source.get(number);
-      if (referenced) pending.push(referenced);
+      if (referenced) pending.push({ post: referenced, collect });
     }
   };
-  enqueue(post);
+  enqueue(post, !direct.length);
   while (pending.length) {
-    const referenced = pending.pop()!;
-    if (visited.has(referenced.number)) continue;
-    visited.add(referenced.number);
+    const { post: referenced, collect } = pending.pop()!;
+    const key = `${referenced.number}:${collect}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    if (closed.has(referenced.number) || !isRecent(referenced, settings, now))
+      return { roomIds: [], matches: false };
     if (isBlocked(referenced, settings)) continue;
-    matches ||= pattern.test(referenced.body);
     const ids = extractRoomIds(referenced.body);
-    if (ids.length) ids.forEach((id) => roomIds.add(id));
-    else enqueue(referenced);
+    if (collect) {
+      matches ||= pattern.test(referenced.body);
+      ids.forEach((id) => roomIds.add(id));
+    }
+    enqueue(referenced, collect && !ids.length);
   }
-  return { roomIds: [...roomIds], matches };
+  return { roomIds: direct.length ? direct : [...roomIds], matches };
 }
