@@ -13,7 +13,7 @@
   --focus: #2667bd;
   font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
   font-synthesis: none;
-  line-height: 1.6;
+  line-height: 1.45;
   font-size: 14px;
   background: var(--bg);
   color: var(--text);
@@ -63,7 +63,7 @@ textarea {
 .app {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 30px 36px 18px;
+  padding: 16px 20px 12px;
 }
 .header,
 .brand,
@@ -75,24 +75,24 @@ footer,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 12px;
 }
 .brand {
   justify-content: flex-start;
-  gap: 14px;
+  gap: 10px;
 }
 .logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 15px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  font-size: 25px;
+  font-size: 20px;
   background: var(--accent);
   color: var(--accent-text);
 }
 h1 {
-  font-size: 26px;
+  font-size: 22px;
   letter-spacing: -0.5px;
   margin: 0;
   line-height: 1.2;
@@ -122,14 +122,14 @@ p {
 }
 nav {
   display: flex;
-  gap: 26px;
+  gap: 20px;
   border-bottom: 1px solid var(--border);
-  margin: 28px 0;
+  margin: 14px 0;
 }
 nav button {
   border: 0;
   border-bottom: 3px solid transparent;
-  padding: 12px 3px;
+  padding: 8px 3px;
   background: transparent;
   color: var(--muted);
 }
@@ -147,15 +147,15 @@ nav span {
   margin-left: 5px;
 }
 h2 {
-  font-size: 20px;
+  font-size: 18px;
   margin: 0;
 }
 h3 {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   font-size: 15px;
 }
 .section-head {
-  margin-bottom: 22px;
+  margin-bottom: 12px;
 }
 .section-head p {
   font-size: 13px;
@@ -164,7 +164,7 @@ h3 {
 .secondary {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 9px 15px;
+  padding: 5px 12px;
   background: var(--panel);
   white-space: nowrap;
 }
@@ -180,7 +180,7 @@ h3 {
   background: var(--panel);
 }
 .thread {
-  padding: 20px;
+  padding: 10px 14px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
@@ -203,7 +203,7 @@ h3 {
 }
 .thread p {
   font-size: 12px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 .thread p span {
   margin: 0 8px;
@@ -234,11 +234,11 @@ h3 {
 }
 .hint,
 .message {
-  padding: 13px 16px;
+  padding: 8px 12px;
   border-radius: 8px;
   background: var(--soft);
   color: var(--accent);
-  margin: 18px 0;
+  margin: 12px 0;
   font-size: 13px;
   overflow-wrap: anywhere;
 }
@@ -247,7 +247,7 @@ h3 {
   color: var(--error-text);
 }
 .empty {
-  padding: 70px 20px;
+  padding: 32px 16px;
   text-align: center;
   border: 1px dashed var(--border);
   border-radius: 12px;
@@ -272,8 +272,8 @@ h3 {
 }
 .recruitment {
   border: 1px solid var(--border);
-  padding: 20px;
-  margin-bottom: 14px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
   border-radius: 10px;
   background: var(--panel);
 }
@@ -291,24 +291,24 @@ h3 {
   text-align: left;
   border: 0;
   background: transparent;
-  padding: 16px 0;
+  padding: 8px 0;
 }
 .metadata {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
 .settings-card {
-  padding: 24px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--panel);
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 label {
   display: block;
   font-size: 13px;
   font-weight: 600;
-  margin-top: 16px;
+  margin-top: 10px;
 }
 input,
 textarea {
@@ -318,8 +318,8 @@ textarea {
   background: var(--bg);
   color: var(--text);
   border-radius: 7px;
-  padding: 9px 12px;
-  margin-top: 7px;
+  padding: 6px 10px;
+  margin-top: 4px;
   font-weight: 400;
 }
 textarea {
@@ -328,7 +328,7 @@ textarea {
 .numeric-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
+  gap: 12px;
 }
 .numeric-grid label {
   margin-top: 0;
@@ -341,15 +341,15 @@ textarea {
   padding: 6px 0 12px;
 }
 footer {
-  margin-top: 28px;
+  margin-top: 16px;
   border-top: 1px solid var(--border);
-  padding-top: 16px;
+  padding-top: 10px;
   color: var(--muted);
   font-size: 11px;
 }
 @media (max-width: 800px) {
   .app {
-    padding: 24px;
+    padding: 14px;
   }
   .header {
     gap: 10px;
@@ -359,6 +359,15 @@ footer {
   }
   .numeric-grid {
     gap: 10px;
+  }
+}
+@media (max-width: 560px) {
+  .header,
+  footer {
+    flex-wrap: wrap;
+  }
+  .numeric-grid {
+    grid-template-columns: 1fr;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -383,7 +392,7 @@ footer {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   color: var(--muted);
   font-size: 13px;
 }

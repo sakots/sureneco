@@ -352,7 +352,7 @@ function SettingsForm({
       {ng.includes(key as (typeof ng)[number]) ? (
         <textarea
           id={key}
-          rows={4}
+          rows={3}
           value={draft[key]}
           onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
         />

@@ -50,6 +50,7 @@ it("設定の検証エラーを表示し、NGを一行一件で保存する", as
   const api = setup();
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: "設定" }));
+  expect(screen.getByLabelText("NG ID").getAttribute("rows")).toBe("3");
   const interval = screen.getByLabelText("更新間隔（秒）");
   await user.clear(interval);
   await user.type(interval, "29");
