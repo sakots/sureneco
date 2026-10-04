@@ -126,3 +126,11 @@ it("参照先から得たルームIDもコピーできる", async () => {
   );
   expect(api.copyRoomId).toHaveBeenCalledWith("01234");
 });
+
+it("募集カードにレス番号を明示し、参照先の番号と区別する", async () => {
+  setup([{ ...recruitment, body: ">>1 あと1人" }]);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /^友人戦募集/ }));
+  expect(screen.getByText("レス 12")).toBeTruthy();
+  expect(screen.queryByText("レス 1")).toBeNull();
+});

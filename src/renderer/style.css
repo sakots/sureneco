@@ -280,6 +280,14 @@ h3 {
 .recruitment.fresh {
   border-left: 4px solid var(--accent);
 }
+.recruitment-head {
+  flex-wrap: wrap;
+}
+.recruitment-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .recruitment-head time {
   color: var(--muted);
   font-size: 12px;

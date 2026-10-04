@@ -248,13 +248,16 @@ export function App({ api }: { api: Api }) {
                     key={`${item.threadId}-${item.number}`}
                   >
                     <div className="recruitment-head">
-                      <span className={`badge ${active ? "green" : ""}`}>
-                        {item.closed
-                          ? "締め切り"
-                          : active
-                            ? "募集中"
-                            : "期限切れ"}
-                      </span>
+                      <div className="recruitment-summary">
+                        <strong>レス {item.number}</strong>
+                        <span className={`badge ${active ? "green" : ""}`}>
+                          {item.closed
+                            ? "締め切り"
+                            : active
+                              ? "募集中"
+                              : "期限切れ"}
+                        </span>
+                      </div>
                       <time>
                         {new Date(item.postedAt).toLocaleString("ja-JP")}
                       </time>
@@ -283,8 +286,7 @@ export function App({ api }: { api: Api }) {
                       レスを開く
                     </button>
                     <p className="metadata">
-                      #{item.number} · {item.id ? `ID:${item.id}` : item.name}{" "}
-                      {item.watchoi}
+                      {item.id ? `ID:${item.id}` : item.name} {item.watchoi}
                     </p>
                     <p className="metadata">
                       {snapshot.threads.find((t) => t.id === item.threadId)
