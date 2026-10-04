@@ -4,9 +4,19 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { App } from "../src/renderer/App";
 import { defaults } from "../src/core/settings";
-import type { Api, Snapshot } from "../src/core/types";
+import type { Api, Snapshot, UpdateState } from "../src/core/types";
 afterEach(cleanup);
-function setup(recruitments: Snapshot["recruitments"] = []) {
+function setup(
+  recruitments: Snapshot["recruitments"] = [],
+  update: UpdateState = {
+    version: "0.2.0",
+    mode: "disabled",
+    status: "disabled",
+    latestVersion: null,
+    progress: 0,
+    error: null,
+  },
+) {
   const snapshot: Snapshot = {
     settings: defaults,
     watched: [],
@@ -25,6 +35,12 @@ function setup(recruitments: Snapshot["recruitments"] = []) {
     notificationAvailable: true,
   };
   const api: Api = {
+    getUpdateState: vi.fn(async () => update),
+    checkUpdate: vi.fn(async () => {}),
+    downloadUpdate: vi.fn(async () => {}),
+    installUpdate: vi.fn(async () => {}),
+    openRelease: vi.fn(async () => {}),
+    subscribeUpdate: vi.fn(() => () => {}),
     getSnapshot: vi.fn(async () => snapshot),
     refresh: vi.fn(async () => {}),
     watch: vi.fn(async () => {}),
@@ -133,4 +149,50 @@ it("募集カードにレス番号を明示し、参照先の番号と区別す�
   await user.click(await screen.findByRole("button", { name: /^友人戦募集/ }));
   expect(screen.getByText("レス 12")).toBeTruthy();
   expect(screen.queryByText("レス 1")).toBeNull();
+});
+
+it("新版を表示し、ダウンロードを明示操作で開始する", async () => {
+  const api = setup([], {
+    version: "0.2.0",
+    mode: "auto",
+    status: "available",
+    latestVersion: "0.3.0",
+    progress: 0,
+    error: null,
+  });
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "更新画面を開く" }),
+  );
+  expect(screen.getByText("現在のバージョン v0.2.0")).toBeTruthy();
+  expect(api.downloadUpdate).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "ダウンロード" }));
+  expect(api.downloadUpdate).toHaveBeenCalledTimes(1);
+});
+it("取得済みの更新を再起動して適用でき、ZIP版はリリース画面へ案内する", async () => {
+  const user = userEvent.setup();
+  const api = setup([], {
+    version: "0.2.0",
+    mode: "auto",
+    status: "downloaded",
+    latestVersion: "0.3.0",
+    progress: 100,
+    error: null,
+  });
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  await user.click(screen.getByRole("button", { name: "再起動して更新" }));
+  expect(api.installUpdate).toHaveBeenCalledTimes(1);
+  cleanup();
+  const manual = setup([], {
+    version: "0.2.0",
+    mode: "manual",
+    status: "available",
+    latestVersion: "0.3.0",
+    progress: 0,
+    error: null,
+  });
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  expect(screen.queryByRole("button", { name: "ダウンロード" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "リリースを開く" }));
+  expect(manual.openRelease).toHaveBeenCalledTimes(1);
 });

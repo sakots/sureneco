@@ -404,3 +404,20 @@ footer {
   color: var(--muted);
   font-size: 13px;
 }
+
+.update-actions,
+.update-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.update-banner {
+  justify-content: space-between;
+}
+progress {
+  width: 100%;
+  margin-top: 8px;
+  accent-color: var(--accent);
+}

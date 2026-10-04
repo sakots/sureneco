@@ -6,7 +6,7 @@ await build({
   target: "node22",
   format: "esm",
   outdir: "dist/main",
-  external: ["electron"],
+  external: ["electron", "electron-updater"],
 });
 await build({
   entryPoints: ["src/main/preload.ts"],

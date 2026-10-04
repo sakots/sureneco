@@ -45,7 +45,30 @@ export interface Snapshot {
   updatedAt: number | null;
   notificationAvailable: boolean;
 }
+export interface UpdateState {
+  version: string;
+  mode: "auto" | "manual" | "disabled";
+  status:
+    | "idle"
+    | "checking"
+    | "available"
+    | "current"
+    | "downloading"
+    | "downloaded"
+    | "installing"
+    | "error"
+    | "disabled";
+  latestVersion: string | null;
+  progress: number;
+  error: string | null;
+}
 export interface Api {
+  getUpdateState(): Promise<UpdateState>;
+  checkUpdate(): Promise<void>;
+  downloadUpdate(): Promise<void>;
+  installUpdate(): Promise<void>;
+  openRelease(): Promise<void>;
+  subscribeUpdate(callback: (state: UpdateState) => void): () => void;
   getSnapshot(): Promise<Snapshot>;
   refresh(): Promise<void>;
   watch(id: string, enabled: boolean): Promise<void>;

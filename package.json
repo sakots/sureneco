@@ -16,14 +16,19 @@
     "build": "pnpm typecheck && vite build && node scripts/build-main.mjs",
     "theme:check": "node scripts/theme-check.mjs",
     "check": "pnpm test && pnpm build && pnpm theme:check && pnpm format:check && git diff --check",
-    "package:linux": "pnpm check && pnpm exec install-electron && electron-builder --config electron-builder.config.mjs --linux",
-    "package:win": "pnpm check && pnpm exec install-electron && electron-builder --config electron-builder.config.mjs --win",
+    "package:linux": "pnpm check && pnpm exec install-electron && electron-builder --config electron-builder.config.mjs --linux --publish never",
+    "package:win": "pnpm check && pnpm exec install-electron && electron-builder --config electron-builder.config.mjs --win --publish never",
     "format": "prettier --write src tests scripts vite.config.ts tsconfig.json package.json electron-builder.config.mjs",
     "format:check": "prettier --check src tests scripts vite.config.ts tsconfig.json package.json electron-builder.config.mjs"
   },
   "build": {
     "appId": "io.github.sakots.sureneco",
     "productName": "sureneco",
+    "publish": {
+      "provider": "github",
+      "owner": "sakots",
+      "repo": "sureneco"
+    },
     "directories": {
       "output": "release"
     },
@@ -56,12 +61,14 @@
       "icon": "resources/icon.png"
     },
     "nsis": {
+      "include": "resources/installer.nsh",
       "artifactName": "${name}_v${version}_Setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

@@ -9,6 +9,9 @@ import {
   shell,
   dialog,
 } from "electron";
+import electronUpdater from "electron-updater";
+import { readFile } from "node:fs/promises";
+import { UpdateManager, updateMode, releaseUrl } from "./updates";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Monitor, errorMessage } from "../core/monitor";
@@ -27,6 +30,7 @@ let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
+let updateTimer: ReturnType<typeof setInterval> | undefined;
 const notifications = new Set<Notification>();
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -37,6 +41,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("before-quit", () => {
     quitting = true;
     clearTimeout(timer);
+    clearInterval(updateTimer);
   });
   app.on("window-all-closed", () => {
     if (!tray) app.quit();
@@ -102,6 +107,44 @@ if (!app.requestSingleInstanceLock()) {
           trusted(event);
           return fn(...args);
         });
+      const packageType = app.isPackaged
+        ? await readFile(join(process.resourcesPath, "package-type"), "utf8")
+            .then((value) => value.trim())
+            .catch(() => "")
+        : "";
+      const updates = new UpdateManager(
+        electronUpdater.autoUpdater,
+        app.getVersion(),
+        updateMode(
+          app.isPackaged,
+          process.platform,
+          packageType,
+          !!process.env.APPIMAGE,
+        ),
+        (version) => {
+          if (!notificationAvailable) return;
+          const notification = new Notification(
+            notificationOptions(
+              "surenecoの更新",
+              `v${version}が公開されました。設定画面から更新できます。`,
+              notificationProtocol ?? undefined,
+            ),
+          );
+          notifications.add(notification);
+          notification.on("click", () => showMainWindow(window));
+          notification.on("close", () => notifications.delete(notification));
+          notification.show();
+        },
+      );
+      updates.onChange = (value) => {
+        if (window && !window.isDestroyed())
+          window.webContents.send("update-state", value);
+      };
+      handle("update-state", () => updates.snapshot());
+      handle("check-update", () => updates.check());
+      handle("download-update", () => updates.download());
+      handle("install-update", () => updates.install());
+      handle("open-release", () => shell.openExternal(releaseUrl));
       handle("snapshot", () => monitor.snapshot());
       handle("refresh", () => monitor.refresh());
       handle("copy-room-id", copyRoomId);
@@ -170,6 +213,8 @@ if (!app.requestSingleInstanceLock()) {
       if (process.platform === "win32") {
         Notification.handleActivation(() => showMainWindow(window));
       }
+      void updates.check();
+      updateTimer = setInterval(() => void updates.check(), 6 * 60 * 60 * 1000);
       await monitor.refresh();
       schedule();
     })

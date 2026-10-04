@@ -87,3 +87,20 @@ it("配布形式ごとに共通のバージョン接頭辞を使い、次のバ�
     }
   }
 });
+
+it("GitHub更新メタデータを生成し、ローカルビルドから公開しない", async () => {
+  const builderRequire = createRequire(require.resolve("electron-builder"));
+  const libraryRequire = createRequire(
+    builderRequire.resolve("app-builder-lib"),
+  );
+  const { validateConfiguration } = libraryRequire("./util/config/config");
+  await validateConfiguration(metadata.build, { isEnabled: false });
+  expect(config.publish).toEqual({
+    provider: "github",
+    owner: "sakots",
+    repo: "sureneco",
+  });
+  for (const target of ["win", "linux"]) {
+    expect(metadata.scripts[`package:${target}`]).toContain("--publish never");
+  }
+});

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { defaults, validateSettings } from "../core/settings";
 import { isRecent } from "../core/detection";
 import { extractRoomIds, splitRoomIds } from "../core/room-id";
-import type { Api, Settings, Snapshot } from "../core/types";
+import type { Api, Settings, Snapshot, UpdateState } from "../core/types";
+import { UpdatePanel } from "./UpdatePanel";
 const labels: Record<keyof Settings, string> = {
   update_sec: "更新間隔（秒）",
   elapsed_days: "候補の経過日数（日）",
@@ -29,6 +30,7 @@ export function App({ api }: { api: Api }) {
   const [page, setPage] = useState<"threads" | "recruitments" | "settings">(
     "threads",
   );
+  const [update, setUpdate] = useState<UpdateState | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,10 +48,22 @@ export function App({ api }: { api: Api }) {
       .catch((err) => {
         if (alive) setError(String(err));
       });
+    const stopUpdates = api.subscribeUpdate((value) => {
+      if (alive) setUpdate(value);
+    });
+    void api
+      .getUpdateState()
+      .then((value) => {
+        if (alive) setUpdate(value);
+      })
+      .catch((err) => {
+        if (alive) setError(String(err));
+      });
     const timer = setInterval(() => setTick((x) => x + 1), 10000);
     return () => {
       alive = false;
       stop();
+      stopUpdates();
       clearInterval(timer);
     };
   }, [api]);
@@ -126,6 +140,16 @@ export function App({ api }: { api: Api }) {
           設定
         </button>
       </nav>
+      {update &&
+        ["available", "downloaded"].includes(update.status) &&
+        page !== "settings" && (
+          <div className="message update-banner">
+            <span>sureneco v{update.latestVersion}に更新できます。</span>
+            <button className="secondary" onClick={() => setPage("settings")}>
+              更新画面を開く
+            </button>
+          </div>
+        )}
       {error && (
         <div role="alert" className="message error">
           {error}
@@ -304,16 +328,19 @@ export function App({ api }: { api: Api }) {
             </>
           )}
           {page === "settings" && (
-            <SettingsForm
-              initial={snapshot.settings}
-              busy={busy}
-              onSave={(settings) =>
-                act(async () => {
-                  await api.saveSettings(settings);
-                  setNotice("設定を保存しました。");
-                })
-              }
-            />
+            <>
+              {update && <UpdatePanel api={api} state={update} />}
+              <SettingsForm
+                initial={snapshot.settings}
+                busy={busy}
+                onSave={(settings) =>
+                  act(async () => {
+                    await api.saveSettings(settings);
+                    setNotice("設定を保存しました。");
+                  })
+                }
+              />
+            </>
           )}
         </main>
       )}
