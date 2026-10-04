@@ -7,6 +7,8 @@
 
 5ch麻雀板の雀魂スレッドから友人戦募集を通知する、Windows / Ubuntu向け常駐アプリです。Electron + TypeScript + Reactで実装しています。
 
+![alt text](images/app.png)
+
 ## 開発
 
 Node.js 22.12以上とpnpmを用意してください。
