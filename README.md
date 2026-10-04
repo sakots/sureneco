@@ -1,5 +1,10 @@
 # sureneco
 
+![Last commit](https://img.shields.io/github/last-commit/sakots/sureneco)
+![version](https://img.shields.io/github/v/release/sakots/sureneco)
+![Downloads](https://img.shields.io/github/downloads/sakots/sureneco/total)
+![License](https://img.shields.io/github/license/sakots/sureneco)
+
 5ch麻雀板の雀魂スレッドから友人戦募集を通知する、Windows / Ubuntu向け常駐アプリです。Electron + TypeScript + Reactで実装しています。
 
 ## 開発
