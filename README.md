@@ -17,11 +17,25 @@ pnpm dev
 ```sh
 pnpm build
 pnpm start
-pnpm package:linux   # Ubuntu: AppImage / deb
-pnpm package:win     # Windows: NSISインストーラー（Windows上で実行推奨）
 ```
 
+Windows用インストーラーはWindowsのPowerShellで作成します。
+
+```powershell
+pnpm package:win
+```
+
+Linux用AppImage / debはUbuntu上で作成します。
+
+```sh
+pnpm package:linux
+```
+
+WindowsからLinux用配布物を作る場合は、WSLのUbuntuやLinuxコンテナー内で実行してください。WSLではUbuntu側のホームディレクトリにリポジトリを配置し、Linux側で`pnpm install`してから`pnpm package:linux`を実行します。Windows側のnode_modulesは共有しません。Dockerを使う方法は[electron-builderの公式手順](https://www.electron.build/docs/features/multi-platform-build/)を参照してください。プロジェクトで必要なNode.jsは22.12以上です。
+
 パッケージはrelease/に出力します。
+
+`EPERM ... rename ...linux-unpacked.tmp -> ...linux-unpacked`が出た場合は、Electronの展開フォルダー名の変更がOSに拒否されています。ログだけでは、ファイルの使用中・アクセス権・セキュリティソフトのどれが原因かは断定できません。配布先OSに合った上記の環境で再実行してください。同じ環境で再試行する場合は、並行して動いているビルドや配布物を終了し、該当フォルダーを開いているアプリも閉じてから試してください。
 
 ## 使い方
 
