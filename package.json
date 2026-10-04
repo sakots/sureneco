@@ -1,0 +1,77 @@
+{
+  "name": "sureneco",
+  "version": "0.1.0",
+  "private": true,
+  "description": "5ch雀魂スレッドの友人戦募集通知",
+  "author": "sakots",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main/main.js",
+  "packageManager": "pnpm@11.15.1",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "start": "electron .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "pnpm typecheck && vite build && node scripts/build-main.mjs",
+    "theme:check": "node scripts/theme-check.mjs",
+    "check": "pnpm test && pnpm build && pnpm theme:check && pnpm format:check && git diff --check",
+    "package:linux": "pnpm check && electron-builder --linux",
+    "package:win": "pnpm check && electron-builder --win",
+    "format": "prettier --write src tests scripts vite.config.ts tsconfig.json package.json",
+    "format:check": "prettier --check src tests scripts vite.config.ts tsconfig.json package.json"
+  },
+  "build": {
+    "appId": "io.github.sakots.sureneco",
+    "productName": "sureneco",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "icon": "resources/icon.png",
+      "maintainer": "sakots",
+      "syncDesktopName": true
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.1",
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "desktopName": "sureneco.desktop"
+}
