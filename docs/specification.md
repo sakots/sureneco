@@ -45,3 +45,7 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 ## 検証
 
 Vitestで解析、設定検証、NG、締め検出、通知の重複抑止、取得失敗からの回復、保存を検証する。React画面の操作をテストする。TypeScript型チェック、Vite/Electronビルド、明暗テーマ診断、git diff --checkを実施する。ネットワークの実接続やOS通知・トレイの受け入れ確認は実機で別途行う。
+
+## 配布物の作成
+
+Windows用はWindowsで`pnpm package:win`、Linux用はUbuntuで`pnpm package:linux`を実行する。パッケージ作成前にチェックと`install-electron`を実行する。electron-builder.config.mjsはpackage.jsonのbuild設定を読み込み、対象OS・CPU・Electronバージョンが開発環境と一致する場合、node_modules内の展開済みElectronをelectronDistに指定する。これによりelectron-builderのZIP展開後の`.tmp`ディレクトリrenameを使わず、コピーによって配布用ディレクトリを作る。別OS・CPU・バージョン向けのビルドは通常の取得処理を使い、ホストOSのバイナリを流用しない。WindowsのEPERMの原因自体はログだけでは断定できず、実機での再実行を必要とする。

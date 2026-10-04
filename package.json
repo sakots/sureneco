@@ -16,10 +16,10 @@
     "build": "pnpm typecheck && vite build && node scripts/build-main.mjs",
     "theme:check": "node scripts/theme-check.mjs",
     "check": "pnpm test && pnpm build && pnpm theme:check && pnpm format:check && git diff --check",
-    "package:linux": "pnpm check && electron-builder --linux",
-    "package:win": "pnpm check && electron-builder --win",
-    "format": "prettier --write src tests scripts vite.config.ts tsconfig.json package.json",
-    "format:check": "prettier --check src tests scripts vite.config.ts tsconfig.json package.json"
+    "package:linux": "pnpm check && pnpm exec install-electron && electron-builder --config electron-builder.config.mjs --linux",
+    "package:win": "pnpm check && pnpm exec install-electron && electron-builder --config electron-builder.config.mjs --win",
+    "format": "prettier --write src tests scripts vite.config.ts tsconfig.json package.json electron-builder.config.mjs",
+    "format:check": "prettier --check src tests scripts vite.config.ts tsconfig.json package.json electron-builder.config.mjs"
   },
   "build": {
     "appId": "io.github.sakots.sureneco",
