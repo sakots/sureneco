@@ -69,7 +69,7 @@ it("配布形式ごとに共通のバージョン接頭辞を使い、次のバ�
   const { Arch, getArtifactArchName } = libraryRequire("builder-util");
   for (const releaseVersion of [metadata.version, "0.3.0"]) {
     for (const [options, extension, suffix] of [
-      [config.deb, "deb", ".amd64.deb"],
+      [config.deb, "deb", "_amd64.deb"],
       [config.appImage, "AppImage", ".AppImage"],
       [config.nsis, "exe", "_Setup.exe"],
       [config.win, "zip", "_win.zip"],

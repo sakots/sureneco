@@ -56,7 +56,7 @@ Vitestで解析、設定検証、NG、締め検出、通知の重複抑止、取
 
 配布ファイル名は`sureneco_v${version}`で始まる形に統一し、バージョンはpackage.jsonから反映する。v0.2.0の出力名は以下とする。
 
-- `sureneco_v0.2.0.amd64.deb`
+- `sureneco_v0.2.0_amd64.deb`
 - `sureneco_v0.2.0.AppImage`
 - `sureneco_v0.2.0_Setup.exe`
 - `sureneco_v0.2.0_win.zip`

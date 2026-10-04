@@ -42,7 +42,7 @@ WindowsからLinux用配布物を作る場合は、WSLのUbuntuやLinuxコンテ
 
 パッケージはrelease/に出力します。v0.2.0のファイル名は次の形に統一します。
 
-- `sureneco_v0.2.0.amd64.deb`
+- `sureneco_v0.2.0_amd64.deb`
 - `sureneco_v0.2.0.AppImage`
 - `sureneco_v0.2.0_Setup.exe`
 - `sureneco_v0.2.0_win.zip`

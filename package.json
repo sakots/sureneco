@@ -47,7 +47,7 @@
       "syncDesktopName": true
     },
     "deb": {
-      "artifactName": "${name}_v${version}.${arch}.${ext}"
+      "artifactName": "${name}_v${version}_${arch}.${ext}"
     },
     "appImage": {
       "artifactName": "${name}_v${version}.${ext}"
