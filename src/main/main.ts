@@ -17,6 +17,11 @@ import { Store } from "./store";
 import { client } from "./client";
 import { copyRoomId } from "./clipboard";
 import { iconData } from "./tray-icon";
+import {
+  registerNotificationProtocol,
+  notificationOptions,
+  showMainWindow,
+} from "./notifications";
 const here = dirname(fileURLToPath(import.meta.url));
 let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -27,8 +32,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    window?.show();
-    window?.focus();
+    showMainWindow(window);
   });
   app.on("before-quit", () => {
     quitting = true;
@@ -40,7 +44,10 @@ if (!app.requestSingleInstanceLock()) {
   app
     .whenReady()
     .then(async () => {
-      app.setAppUserModelId("io.github.sakots.sureneco");
+      const notificationProtocol = registerNotificationProtocol(app);
+      const notificationAvailable =
+        Notification.isSupported() &&
+        (process.platform !== "win32" || notificationProtocol !== null);
       const store = new Store(app.getPath("userData"));
       const state = await store.load();
       const monitor = new Monitor(
@@ -48,25 +55,23 @@ if (!app.requestSingleInstanceLock()) {
         client,
         (s) => store.save(s),
         (item, thread) => {
-          if (!Notification.isSupported()) return;
-          const targetUrl = threadUrl(
-            state.settings.url,
-            item.threadId,
-            item.number,
+          if (!notificationAvailable) return;
+          const notification = new Notification(
+            notificationOptions(
+              `友人戦募集 · ${thread?.title ?? item.threadId}`,
+              item.body.slice(0, 220),
+              notificationProtocol ?? undefined,
+            ),
           );
-          const notification = new Notification({
-            title: `友人戦募集 · ${thread?.title ?? item.threadId}`,
-            body: item.body.slice(0, 220),
-          });
           notifications.add(notification);
           notification.on("click", () => {
-            void shell.openExternal(targetUrl);
+            showMainWindow(window);
           });
           notification.on("close", () => notifications.delete(notification));
           notification.show();
         },
       );
-      monitor.notificationAvailable = Notification.isSupported();
+      monitor.notificationAvailable = notificationAvailable;
       window = new BrowserWindow({
         width: 1120,
         height: 820,
@@ -131,8 +136,7 @@ if (!app.requestSingleInstanceLock()) {
             {
               label: "surenecoを開く",
               click: () => {
-                window?.show();
-                window?.focus();
+                showMainWindow(window);
               },
             },
             {
@@ -146,8 +150,7 @@ if (!app.requestSingleInstanceLock()) {
           ]),
         );
         tray.on("click", () => {
-          window?.show();
-          window?.focus();
+          showMainWindow(window);
         });
       } catch {
         tray = null;
@@ -164,6 +167,9 @@ if (!app.requestSingleInstanceLock()) {
       )
         await window.loadURL(process.env.SURENECO_DEV_URL);
       else await window.loadFile(join(here, "../renderer/index.html"));
+      if (process.platform === "win32") {
+        Notification.handleActivation(() => showMainWindow(window));
+      }
       await monitor.refresh();
       schedule();
     })

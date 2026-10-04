@@ -11,7 +11,7 @@ it("同じOS・CPU・バージョンでは展開済みElectronを使う", async 
   expect(await config.electronDist(context)).toBe(
     join(dirname(require.resolve("electron/package.json")), "dist"),
   );
-  const { electronDist, ...rest } = config;
+  const { electronDist, afterPack, ...rest } = config;
   expect(rest).toEqual(metadata.build);
   expect(metadata.scripts["package:win"]).toContain("install-electron");
   expect(metadata.scripts["package:win"]).toContain(
@@ -33,4 +33,29 @@ it("別OS・CPU・バージョンにはホストのElectronを流用しない", 
 
 it("Windows用インストーラーとZIP版を同時に生成する", () => {
   expect(config.win.target).toEqual(["nsis", "zip"]);
+});
+
+it("配布物から既定画面を除去し、アプリ本体は保持する", async () => {
+  const { mkdtemp, mkdir, writeFile, readFile, access, rm } =
+    await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const directory = await mkdtemp(join(tmpdir(), "sureneco-package-"));
+  const resources = join(directory, "resources");
+  try {
+    await mkdir(resources);
+    await writeFile(join(resources, "default_app.asar"), "electron default");
+    await writeFile(join(resources, "app.asar"), "sureneco");
+    const context = {
+      appOutDir: directory,
+      packager: { getResourcesDir: () => resources },
+    };
+    await config.afterPack(context);
+    await expect(access(join(resources, "default_app.asar"))).rejects.toThrow();
+    expect(await readFile(join(resources, "app.asar"), "utf8")).toBe(
+      "sureneco",
+    );
+    await config.afterPack(context);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

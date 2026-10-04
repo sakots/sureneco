@@ -20,6 +20,10 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 
 本文にルームIDがない場合は「>>番号」「＞＞番号」で同じスレッドの過去レスをたどる。参照の連鎖と複数の参照に対応し、同じレスの重複探索はしない。自分自身・未来・取得できないレスは参照先にしない。NG対象の参照先は使わない。初回取得した既存レスも参照用に利用するが、通知するのは新規レスだけ。参照元の本文にIDがあればそのIDを優先し、参照先から別のIDを足さない。募集の新しさは参照元の投稿時刻で判定する。
 
+## 通知のクリック
+
+通知をクリックするとsurenecoのウィンドウを再表示する。最小化している場合は復元してフォーカスする。スレッドをブラウザーで開く操作は画面内の「レスを開く」を使う。Windowsでは通知にprotocol activationを指定し、sureneco-notification://notificationsで実行ファイルを起動する。開発中はsureneco-notification-devを使い、Electron実行ファイルにアプリの絶対パスを引数として登録する。開発用AppUserModelIDも本番と分ける。登録に失敗した場合はデスクトップ通知を利用不可として表示する。既に起動している場合は多重起動せず既存ウィンドウを表示する。再起動後の通知クリックはWindowsのhandleActivationでも受け付ける。
+
 ## ルームIDのコピー
 
 募集本文の独立した5桁の数字をクリック可能なルームIDとして表示する。参照先から取得したIDは「参照先のルームID」として表示し、同じ操作でコピーできる。レス参照番号はコピーボタンにしない。半角・全角に対応し、6桁以上の数値の一部は抽出しない。複数のIDはそれぞれクリックできる。クリックすると先頭のゼロを保持した半角5桁をクリップボードにコピーし、完了を画面に表示する。失敗時はエラーを表示する。コピー操作でブラウザーは開かない。該当レスは別の「レスを開く」ボタンから開く。コピーはpreloadの限定APIからIPCを通してElectronのclipboard.writeTextを呼び、メインプロセスで5桁の数字を検証する。
@@ -49,3 +53,5 @@ Vitestで解析、設定検証、NG、締め検出、通知の重複抑止、取
 ## 配布物の作成
 
 Windows用はWindowsで`pnpm package:win`を実行し、NSISインストーラーとZIP版をrelease/に同時に出力する。ZIP版は全ファイルを展開してsureneco.exeを起動する。設定の保存先はインストール版と同じuserDataディレクトリで、ZIPの展開先には保存しない。Linux用はUbuntuで`pnpm package:linux`を実行する。パッケージ作成前にチェックと`install-electron`を実行する。electron-builder.config.mjsはpackage.jsonのbuild設定を読み込み、対象OS・CPU・Electronバージョンが開発環境と一致する場合、node_modules内の展開済みElectronをelectronDistに指定する。これによりelectron-builderのZIP展開後の`.tmp`ディレクトリrenameを使わず、コピーによって配布用ディレクトリを作る。別OS・CPU・バージョン向けのビルドは通常の取得処理を使い、ホストOSのバイナリを流用しない。WindowsのEPERMの原因自体はログだけでは断定できず、実機での再実行を必要とする。
+
+コピーしたElectronに含まれるresources/default_app.asarはafterPackで除去する。アプリ本体のapp.asarは保持する。開発環境のElectronのファイルは変更しない。
