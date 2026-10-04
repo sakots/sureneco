@@ -78,6 +78,51 @@ describe("5ch解析", () => {
 });
 
 describe("募集の判定", () => {
+  it("初期値で四東・四南・三東・三南と5桁の番号を含む募集を検出する", () => {
+    for (const mode of ["四東", "四南", "三東", "三南"]) {
+      for (const body of [
+        `${mode} 12345`,
+        `${mode}\n部屋番号：０１２３４`,
+        `01234\n${mode} お待ちしています`,
+      ]) {
+        expect(
+          scanPosts(
+            id,
+            parseDat(line(body.replaceAll("\n", "<br>"))),
+            [],
+            defaults,
+            now,
+          ).notifications,
+          body,
+        ).toHaveLength(1);
+      }
+      for (const body of [
+        mode,
+        `${mode} 1234`,
+        `${mode} 123456`,
+        `${mode} ６12345`,
+        `${mode} 12345６`,
+      ]) {
+        expect(
+          scanPosts(
+            id,
+            parseDat(line(body.replaceAll("\n", "<br>"))),
+            [],
+            defaults,
+            now,
+          ).items,
+          body,
+        ).toHaveLength(0);
+      }
+    }
+    expect(
+      scanPosts(id, parseDat(line("12345 東風")), [], defaults, now).items,
+    ).toHaveLength(0);
+    expect(
+      scanPosts(id, parseDat(line("四東 12345 〆")), [], defaults, now)
+        .notifications,
+    ).toHaveLength(0);
+  });
   it("本文は部分一致、IDとワッチョイは完全一致でNGにする", () => {
     const [post] = parseDat(line("友人戦 荒らし"));
     expect(isBlocked(post, { ...defaults, ng_words: ["荒らし"] })).toBe(true);
