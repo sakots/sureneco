@@ -68,17 +68,19 @@ it("設定の検証エラーを表示し、NGを一行一件で保存する", as
   await user.click(await screen.findByRole("button", { name: "設定" }));
   expect(screen.getByLabelText("NG ID").getAttribute("rows")).toBe("3");
   const interval = screen.getByLabelText("更新間隔（秒）");
+  expect((interval as HTMLInputElement).value).toBe("20");
+  expect(interval.getAttribute("min")).toBe("20");
   await user.clear(interval);
-  await user.type(interval, "29");
+  await user.type(interval, "19");
   await user.click(screen.getByRole("button", { name: "設定を保存" }));
   expect(api.saveSettings).not.toHaveBeenCalled();
   await user.clear(interval);
-  await user.type(interval, "30");
+  await user.type(interval, "20");
   await user.type(screen.getByLabelText("NG ID"), "abc\nxyz");
   await user.click(screen.getByRole("button", { name: "設定を保存" }));
   await waitFor(() =>
     expect(api.saveSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ update_sec: 30, ng_ids: ["abc", "xyz"] }),
+      expect.objectContaining({ update_sec: 20, ng_ids: ["abc", "xyz"] }),
     ),
   );
 });

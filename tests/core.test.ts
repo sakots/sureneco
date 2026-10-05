@@ -19,10 +19,16 @@ const line = (
 
 describe("設定", () => {
   it("整数、正規表現、板URLを検証する", () => {
+    expect(defaults.update_sec).toBe(20);
     expect(validateSettings(defaults)).toEqual(defaults);
+    for (const update_sec of [20, 30, 60]) {
+      expect(validateSettings({ ...defaults, update_sec }).update_sec).toBe(
+        update_sec,
+      );
+    }
     for (const change of [
-      { update_sec: 29 },
-      { update_sec: 30.5 },
+      { update_sec: 19 },
+      { update_sec: 20.5 },
       { elapsed_days: 0 },
       { emphasis_sec: NaN },
       { thread_title_regex: "[" },

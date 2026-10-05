@@ -393,7 +393,7 @@ function SettingsForm({
               ? "number"
               : "text"
           }
-          min={key === "update_sec" ? 30 : 1}
+          min={key === "update_sec" ? 20 : 1}
           step={1}
           value={draft[key]}
           onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}

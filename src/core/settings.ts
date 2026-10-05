@@ -1,6 +1,6 @@
 import type { Settings } from "./types";
 export const defaults: Settings = {
-  update_sec: 60,
+  update_sec: 20,
   elapsed_days: 14,
   emphasis_sec: 600,
   thread_title_regex: "雀魂|じゃんたま|ジャンタマ|mahjongsoul|majsoul",
@@ -38,11 +38,11 @@ export function validateSettings(input: unknown): Settings {
     if (
       typeof n !== "number" ||
       !Number.isSafeInteger(n) ||
-      n < (key === "update_sec" ? 30 : 1) ||
+      n < (key === "update_sec" ? 20 : 1) ||
       n > 2147483
     )
       throw new Error(
-        `${key}は${key === "update_sec" ? 30 : 1}以上2147483以下の整数にしてください。`,
+        `${key}は${key === "update_sec" ? 20 : 1}以上2147483以下の整数にしてください。`,
       );
     result[key] = n;
   }

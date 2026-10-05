@@ -32,7 +32,7 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 
 ## 設定と保存
 
-- update_sec: 更新間隔。30以上の整数。既定60。
+- update_sec: 更新間隔。20以上の整数。既定20。設定画面で変更できる。保存済みの値は維持する。
 - elapsed_days: 候補のスレ立てからの経過日数。1以上の整数。既定14。
 - emphasis_sec: 新しい募集とみなす秒数。1以上の整数。既定600。
 - thread_title_regex: 既定 `雀魂|じゃんたま|ジャンタマ|mahjongsoul|majsoul`。
