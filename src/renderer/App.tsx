@@ -110,7 +110,7 @@ export function App({ api }: { api: Api }) {
           </span>
           <div>
             <h1>sureneco</h1>
-            <p>雀魂の友人戦を、見逃さずに。</p>
+            <p>友人戦するにゃ！</p>
           </div>
         </div>
         <span className="status">
