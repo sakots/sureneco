@@ -355,3 +355,92 @@ describe("終了した募集への返信", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("通知を許可するワッチョイ", () => {
+  it("完全一致する投稿者だけを通知し、募集一覧は維持する", () => {
+    const posts = parseDat(
+      [
+        line("友人戦 12345", "a", "名無し (ﾜｯﾁｮｲ allowed)"),
+        line("友人戦 23456", "b", "名無し (ﾜｯﾁｮｲ other)"),
+        line("友人戦 34567", "c", "名無し"),
+        line("友人戦 45678", "d", "名無し (ﾜｯﾁｮｲ allowed-extra)"),
+      ].join("\n"),
+    );
+    const result = scanPosts(
+      id,
+      posts,
+      [],
+      { ...defaults, allowed_watchois: ["ﾜｯﾁｮｲ allowed"] },
+      now,
+    );
+    expect(result.notifications.map((x) => x.number)).toEqual([1]);
+    expect(result.items).toHaveLength(4);
+    expect(scanPosts(id, posts, [], defaults, now).notifications).toHaveLength(
+      4,
+    );
+  });
+  it("許可設定よりNGと締め・期限切れの判定を優先する", () => {
+    const posts = parseDat(line("友人戦 12345"));
+    const settings = { ...defaults, allowed_watchois: ["ﾜｯﾁｮｲ abcd-1234"] };
+    for (const ng of [
+      { ng_words: ["友人戦"] },
+      { ng_ids: ["abc"] },
+      { ng_watchois: ["ﾜｯﾁｮｲ abcd-1234"] },
+    ]) {
+      expect(
+        scanPosts(id, posts, [], { ...settings, ...ng }, now).notifications,
+      ).toHaveLength(0);
+    }
+    expect(
+      scanPosts(id, posts, [], settings, now + 3600000).notifications,
+    ).toHaveLength(0);
+    const closed = parseDat(
+      [line("友人戦 12345"), line("&gt;&gt;1 〆", "other", "名無し")].join(
+        "\n",
+      ),
+    );
+    expect(scanPosts(id, closed, [], settings, now).notifications).toHaveLength(
+      0,
+    );
+    expect(scanPosts(id, closed, [], settings, now).items[0].closed).toBe(true);
+  });
+  it("参照先ではなく返信した投稿者のワッチョイで通知を判定する", () => {
+    const posts = parseDat(
+      [
+        line("友人戦 12345", "a", "名無し (ﾜｯﾁｮｲ other)"),
+        line("&gt;&gt;1 あと1人", "b", "名無し (ﾜｯﾁｮｲ allowed)"),
+        line("&gt;&gt;2 あと1人", "c", "名無し (ﾜｯﾁｮｲ other)"),
+      ].join("\n"),
+    );
+    const result = scanPosts(
+      id,
+      posts,
+      [],
+      { ...defaults, allowed_watchois: ["ﾜｯﾁｮｲ allowed"] },
+      now,
+    );
+    expect(result.notifications.map((x) => x.number)).toEqual([2]);
+    expect(result.items).toHaveLength(3);
+  });
+  it("許可リストを検証し、既存設定では空として扱う", () => {
+    const { allowed_watchois, ...existing } = defaults;
+    expect(validateSettings(existing).allowed_watchois).toEqual([]);
+    expect(
+      validateSettings({
+        ...defaults,
+        allowed_watchois: [" ﾜｯﾁｮｲ allowed ", "", "ﾜｯﾁｮｲ allowed"],
+      }).allowed_watchois,
+    ).toEqual(["ﾜｯﾁｮｲ allowed"]);
+    for (const value of [
+      "ﾜｯﾁｮｲ allowed",
+      null,
+      [1],
+      ["a".repeat(501)],
+      Array(1001).fill("a"),
+    ]) {
+      expect(() =>
+        validateSettings({ ...defaults, allowed_watchois: value }),
+      ).toThrow();
+    }
+  });
+});

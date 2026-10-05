@@ -165,3 +165,36 @@ it("再起動後も、初回取得で締まった募集と期限切れの募集�
     expect(restarted.snapshot().errors).toEqual([]);
   }
 });
+
+it("ワッチョイの許可設定を通知に反映し、解除後も既存レスを再通知しない", async () => {
+  const now = Date.parse("2026-10-04T12:00:00+09:00");
+  const id = "1791034502";
+  const state: SavedState = {
+    settings: { ...defaults, allowed_watchois: ["ﾜｯﾁｮｲ allowed"] },
+    watched: [id],
+    cursors: { [id]: 0 },
+  };
+  const post = (watchoi: string, room: string) =>
+    `名無し (${watchoi})<>sage<>2026/10/04(日) 11:59:30 ID:${room}<>友人戦 ${room}<>`;
+  let dat = [post("ﾜｯﾁｮｲ allowed", "12345"), post("ﾜｯﾁｮｲ other", "23456")].join(
+    "\n",
+  );
+  const notify = vi.fn();
+  const monitor = new Monitor(
+    state,
+    { subject: async () => "", dat: async () => dat },
+    async () => {},
+    notify,
+    () => now,
+  );
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(1);
+  expect(notify.mock.calls[0][0].watchoi).toBe("ﾜｯﾁｮｲ allowed");
+  expect(monitor.snapshot().recruitments).toHaveLength(2);
+  await monitor.saveSettings({ ...state.settings, allowed_watchois: [] });
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(1);
+  dat += `\n${post("ﾜｯﾁｮｲ other", "34567")}`;
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(2);
+});

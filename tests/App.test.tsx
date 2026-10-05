@@ -198,3 +198,23 @@ it("取得済みの更新を再起動して適用でき、ZIP版はリリース�
   await user.click(screen.getByRole("button", { name: "リリースを開く" }));
   expect(manual.openRelease).toHaveBeenCalledTimes(1);
 });
+
+it("通知を許可するワッチョイを一行一件で保存し、既定値では解除する", async () => {
+  const api = setup();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  const field = screen.getByLabelText("通知を許可するワッチョイ");
+  await user.type(field, " ﾜｯﾁｮｲ allowed \nﾜｯﾁｮｲ other\nﾜｯﾁｮｲ allowed");
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      allowed_watchois: ["ﾜｯﾁｮｲ allowed", "ﾜｯﾁｮｲ other"],
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: "既定値を入力" }));
+  expect((field as HTMLTextAreaElement).value).toBe("");
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenLastCalledWith(
+    expect.objectContaining({ allowed_watchois: [] }),
+  );
+});

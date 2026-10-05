@@ -12,6 +12,7 @@ export const defaults: Settings = {
   ng_words: [],
   ng_ids: [],
   ng_watchois: [],
+  allowed_watchois: [],
 };
 export function boardUrl(value: string): string {
   const url = new URL(value);
@@ -68,8 +69,14 @@ export function validateSettings(input: unknown): Settings {
   }
   if (typeof value.url !== "string") throw new Error("板URLが不正です。");
   result.url = boardUrl(value.url);
-  for (const key of ["ng_words", "ng_ids", "ng_watchois"] as const) {
-    const list = value[key];
+  for (const key of [
+    "ng_words",
+    "ng_ids",
+    "ng_watchois",
+    "allowed_watchois",
+  ] as const) {
+    const list =
+      key === "allowed_watchois" && value[key] === undefined ? [] : value[key];
     if (
       !Array.isArray(list) ||
       list.length > 1000 ||

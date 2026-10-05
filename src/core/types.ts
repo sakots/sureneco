@@ -10,6 +10,7 @@ export interface Settings {
   ng_words: string[];
   ng_ids: string[];
   ng_watchois: string[];
+  allowed_watchois: string[];
 }
 export interface Thread {
   id: string;

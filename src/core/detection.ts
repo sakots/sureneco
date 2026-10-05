@@ -70,7 +70,13 @@ export function scanPosts(
   }
   return {
     items: items.slice(-200),
-    notifications: added.filter((x) => !x.closed && isRecent(x, settings, now)),
+    notifications: added.filter(
+      (x) =>
+        !x.closed &&
+        isRecent(x, settings, now) &&
+        (!settings.allowed_watchois.length ||
+          settings.allowed_watchois.includes(x.watchoi)),
+    ),
   };
 }
 

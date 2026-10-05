@@ -16,6 +16,7 @@ const labels: Record<keyof Settings, string> = {
   ng_words: "NG本文",
   ng_ids: "NG ID",
   ng_watchois: "NGワッチョイ",
+  allowed_watchois: "通知を許可するワッチョイ",
 };
 const numeric = ["update_sec", "elapsed_days", "emphasis_sec"] as const;
 const patterns = [
@@ -25,6 +26,7 @@ const patterns = [
   "closed_yujinsen_regex",
 ] as const;
 const ng = ["ng_words", "ng_ids", "ng_watchois"] as const;
+const lists = [...ng, "allowed_watchois"] as const;
 export function App({ api }: { api: Api }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [page, setPage] = useState<"threads" | "recruitments" | "settings">(
@@ -378,7 +380,7 @@ function SettingsForm({
   const field = (key: keyof Settings) => (
     <label key={key} htmlFor={key}>
       {labels[key]}
-      {ng.includes(key as (typeof ng)[number]) ? (
+      {lists.includes(key as (typeof lists)[number]) ? (
         <textarea
           id={key}
           rows={3}
@@ -411,7 +413,7 @@ function SettingsForm({
           const candidate = {
             ...draft,
             ...Object.fromEntries(numeric.map((k) => [k, Number(draft[k])])),
-            ...Object.fromEntries(ng.map((k) => [k, draft[k].split("\n")])),
+            ...Object.fromEntries(lists.map((k) => [k, draft[k].split("\n")])),
           };
           void onSave(validateSettings(candidate));
         } catch (err) {
@@ -444,6 +446,14 @@ function SettingsForm({
           大文字小文字は区別しません。除外するスレッド名は空欄にできます。
         </p>
         {patterns.map(field)}
+      </section>
+      <section className="settings-card">
+        <h3>通知する投稿者</h3>
+        <p className="help">
+          一行に一件。ワッチョイ全体を入力してください。完全一致する投稿者の募集だけを通知します。
+          空欄なら全投稿者が対象です。NG設定が優先され、募集一覧には通知対象外の募集も表示されます。
+        </p>
+        {field("allowed_watchois")}
       </section>
       <section className="settings-card">
         <h3>NG設定</h3>
