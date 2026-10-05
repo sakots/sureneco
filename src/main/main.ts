@@ -8,6 +8,7 @@ import {
   ipcMain,
   shell,
   dialog,
+  screen,
 } from "electron";
 import electronUpdater from "electron-updater";
 import { readFile } from "node:fs/promises";
@@ -17,6 +18,11 @@ import { dirname, join } from "node:path";
 import { Monitor, errorMessage } from "../core/monitor";
 import { threadUrl } from "../core/settings";
 import { Store } from "./store";
+import {
+  WindowStateStore,
+  restoreWindowState,
+  captureWindowState,
+} from "./window-state";
 import { client } from "./client";
 import { copyRoomId } from "./clipboard";
 import { iconData } from "./tray-icon";
@@ -31,6 +37,7 @@ let tray: Tray | null = null;
 let quitting = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let updateTimer: ReturnType<typeof setInterval> | undefined;
+let persistWindowState = () => {};
 const notifications = new Set<Notification>();
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -40,6 +47,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on("before-quit", () => {
     quitting = true;
+    persistWindowState();
     clearTimeout(timer);
     clearInterval(updateTimer);
   });
@@ -77,11 +85,20 @@ if (!app.requestSingleInstanceLock()) {
         },
       );
       monitor.notificationAvailable = notificationAvailable;
+      const windowStore = new WindowStateStore(app.getPath("userData"));
+      const primary = screen.getPrimaryDisplay();
+      const workAreas = [
+        primary,
+        ...screen
+          .getAllDisplays()
+          .filter((display) => display.id !== primary.id),
+      ].map((display) => display.workArea);
+      const { maximized, ...bounds } = restoreWindowState(
+        windowStore.load(),
+        workAreas,
+      );
       window = new BrowserWindow({
-        width: 1120,
-        height: 820,
-        minWidth: 400,
-        minHeight: 600,
+        ...bounds,
         title: "sureneco",
         backgroundColor: "#f5f6f8",
         icon: nativeImage.createFromDataURL(iconData),
@@ -92,6 +109,22 @@ if (!app.requestSingleInstanceLock()) {
           nodeIntegration: false,
         },
       });
+      let wasMaximized = maximized;
+      window.on("maximize", () => {
+        wasMaximized = true;
+      });
+      window.on("unmaximize", () => {
+        if (window && !window.isMinimized()) wasMaximized = false;
+      });
+      persistWindowState = () => {
+        if (!window || window.isDestroyed()) return;
+        try {
+          windowStore.save(captureWindowState(window, wasMaximized));
+        } catch (error) {
+          console.error("ウィンドウ状態を保存できません:", errorMessage(error));
+        }
+      };
+      if (maximized) window.maximize();
       window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
       window.webContents.on("will-navigate", (event) => event.preventDefault());
       const trusted = (event: Electron.IpcMainInvokeEvent) => {
@@ -199,6 +232,7 @@ if (!app.requestSingleInstanceLock()) {
         tray = null;
       }
       window.on("close", (event) => {
+        persistWindowState();
         if (!quitting && tray) {
           event.preventDefault();
           window?.hide();
