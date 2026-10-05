@@ -80,7 +80,7 @@ if (!app.requestSingleInstanceLock()) {
       window = new BrowserWindow({
         width: 1120,
         height: 820,
-        minWidth: 760,
+        minWidth: 400,
         minHeight: 600,
         title: "sureneco",
         backgroundColor: "#f5f6f8",

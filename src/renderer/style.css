@@ -371,8 +371,17 @@ footer {
 }
 @media (max-width: 560px) {
   .header,
+  .section-head,
+  .form-actions,
+  nav,
   footer {
     flex-wrap: wrap;
+  }
+  nav {
+    gap: 12px;
+  }
+  .section-head > div {
+    min-width: 0;
   }
   .numeric-grid {
     grid-template-columns: 1fr;
