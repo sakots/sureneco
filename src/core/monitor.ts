@@ -20,6 +20,7 @@ export class Monitor {
   private refreshing = false;
   private queue: Promise<unknown> = Promise.resolve();
   private pending: Promise<void> | null = null;
+  private startupChecks: Set<string>;
   onChange: (snapshot: Snapshot) => void = () => {};
   notificationAvailable = true;
   constructor(
@@ -28,7 +29,9 @@ export class Monitor {
     private save: (state: SavedState) => Promise<void>,
     private notify: (item: Recruitment, thread?: Thread) => void,
     private now: () => number = Date.now,
-  ) {}
+  ) {
+    this.startupChecks = new Set(state.watched);
+  }
   snapshot(): Snapshot {
     return structuredClone({
       settings: this.state.settings,
@@ -80,20 +83,17 @@ export class Monitor {
           const posts = parseDat(await this.client.dat(settings.url, id));
           const cursor = this.state.cursors[id];
           const now = this.now();
+          const rescan = this.startupChecks.has(id) || cursor === 0;
           const nextCursors = {
             ...this.state.cursors,
             [id]: Math.max(cursor ?? 0, posts.length),
           };
           const detected = scanPosts(
             id,
-            cursor === undefined
-              ? []
-              : posts.filter(
-                  (p) =>
-                    p.number > cursor &&
-                    (cursor !== 0 || isRecent(p, settings, now)),
-                ),
-            cursor === 0
+            rescan
+              ? posts.filter((p) => isRecent(p, settings, now))
+              : posts.filter((p) => p.number > (cursor ?? 0)),
+            rescan
               ? this.items.filter((item) => item.threadId !== id)
               : this.items,
             settings,
@@ -103,6 +103,7 @@ export class Monitor {
           await this.save({ ...this.state, cursors: nextCursors });
           this.state.cursors = nextCursors;
           this.items = detected.items;
+          this.startupChecks.delete(id);
           for (const item of detected.notifications) {
             try {
               this.notify(
@@ -139,6 +140,7 @@ export class Monitor {
       const next = { ...this.state, watched, cursors };
       await this.save(next);
       Object.assign(this.state, next);
+      if (!enabled) this.startupChecks.delete(id);
       this.emit();
     });
   }
@@ -155,6 +157,7 @@ export class Monitor {
       await this.save(next);
       Object.assign(this.state, next);
       if (changedBoard) {
+        this.startupChecks.clear();
         this.threads = [];
         this.items = [];
       }

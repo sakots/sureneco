@@ -3,7 +3,7 @@ import { Monitor } from "../src/core/monitor";
 import { defaults } from "../src/core/settings";
 import type { SavedState } from "../src/core/types";
 
-it("初回を基準にし、再取得と再起動で重複せず、取得失敗から回復する", async () => {
+it("起動時に既存募集を確認し、通常更新では重複せず、取得失敗から回復する", async () => {
   const now = Date.parse("2026-10-04T12:00:00+09:00");
   const id = String(now / 1000 - 3600);
   const state: SavedState = { settings: defaults, watched: [id], cursors: {} };
@@ -21,21 +21,24 @@ it("初回を基準にし、再取得と再起動で重複せず、取得失敗�
   };
   const monitor = new Monitor(state, client, save, notify, () => now);
   await monitor.refresh();
-  expect(notify).not.toHaveBeenCalled();
+  expect(notify).toHaveBeenCalledTimes(1);
   expect(state.cursors[id]).toBe(1);
   count = 2;
   await monitor.refresh();
   await monitor.refresh();
-  expect(notify).toHaveBeenCalledTimes(1);
+  expect(notify).toHaveBeenCalledTimes(2);
   fail = true;
   count = 3;
   await monitor.refresh();
   expect(monitor.snapshot().errors.join("")).toContain("403");
   expect(state.cursors[id]).toBe(2);
   fail = false;
+  notify.mockClear();
   const restarted = new Monitor(state, client, save, notify, () => now);
   await restarted.refresh();
-  expect(notify).toHaveBeenCalledTimes(2);
+  expect(notify.mock.calls.map((call) => call[0].number)).toEqual([1, 2, 3]);
+  await restarted.refresh();
+  expect(notify).toHaveBeenCalledTimes(3);
   expect(restarted.snapshot().errors).toEqual([]);
   expect(save).toHaveBeenCalled();
 });
@@ -128,12 +131,13 @@ it("初回取得したレスを参照して新規募集を検出し、再起動�
   const notify = vi.fn();
   const save = async () => {};
   await new Monitor(state, client, save, notify, () => now).refresh();
-  expect(notify).not.toHaveBeenCalled();
+  expect(notify).toHaveBeenCalledTimes(1);
+  notify.mockClear();
   dat += `\n${reply}`;
   const monitor = new Monitor(state, client, save, notify, () => now);
   await monitor.refresh();
   await monitor.refresh();
-  expect(notify).toHaveBeenCalledTimes(1);
+  expect(notify.mock.calls.map((call) => call[0].number)).toEqual([1, 2]);
   expect(monitor.snapshot().recruitments[0]).toMatchObject({
     number: 2,
     roomIds: ["01234"],
@@ -161,7 +165,9 @@ it("再起動後も、初回取得で締まった募集と期限切れの募集�
     const restarted = new Monitor(state, client, save, notify, () => now);
     await restarted.refresh();
     expect(notify).not.toHaveBeenCalled();
-    expect(restarted.snapshot().recruitments).toHaveLength(0);
+    expect(
+      restarted.snapshot().recruitments.filter((item) => !item.closed),
+    ).toHaveLength(0);
     expect(restarted.snapshot().errors).toEqual([]);
   }
 });
@@ -199,51 +205,54 @@ it("ワッチョイの許可設定を通知に反映し、解除後も既存レ�
   expect(notify).toHaveBeenCalledTimes(2);
 });
 
-it("トグルをオンにした直後に既存の有効な募集と返信を通知する", async () => {
-  const now = Date.parse("2026-10-04T12:00:00+09:00");
-  const id = "1791034502";
-  const state: SavedState = {
-    settings: {
-      ...defaults,
-      allowed_watchois: ["ﾜｯﾁｮｲ allowed"],
-      ng_words: ["NG"],
-    },
-    watched: [],
-    cursors: {},
-  };
-  const post = (
-    body: string,
-    author = "abc",
-    time = "11:59:30",
-    watchoi = "ﾜｯﾁｮｲ allowed",
-  ) =>
-    `名無し (${watchoi})<>sage<>2026/10/04(日) ${time} ID:${author}<>${body}<>`;
-  const dat = [
-    post("友人戦 12345", "old", "10:00:00"),
-    post("友人戦 23456", "closed"),
-    post("&gt;&gt;2 〆", "other"),
-    post("友人戦 34567 NG", "ng"),
-    post("友人戦 45678", "excluded", undefined, "ﾜｯﾁｮｲ other"),
-    post("友人戦 56789", "live"),
-    post("&gt;&gt;6 あと1人", "reply"),
-    post("友人戦", "no-room"),
-    post("&gt;&gt;1 あと1人", "expired-reply"),
-  ].join("\n");
-  const notify = vi.fn();
-  const monitor = new Monitor(
-    state,
-    { subject: async () => "", dat: async () => dat },
-    async () => {},
-    notify,
-    () => now,
-  );
-  await monitor.watch(id, true);
-  await monitor.refresh();
-  expect(notify.mock.calls.map((call) => call[0].number)).toEqual([6, 7]);
-  expect(state.cursors[id]).toBe(9);
-  await monitor.refresh();
-  expect(notify).toHaveBeenCalledTimes(2);
-});
+it.each(["toggle", "startup"])(
+  "%s時に既存の有効な募集と返信だけを通知する",
+  async (mode) => {
+    const now = Date.parse("2026-10-04T12:00:00+09:00");
+    const id = "1791034502";
+    const state: SavedState = {
+      settings: {
+        ...defaults,
+        allowed_watchois: ["ﾜｯﾁｮｲ allowed"],
+        ng_words: ["NG"],
+      },
+      watched: mode === "startup" ? [id] : [],
+      cursors: mode === "startup" ? { [id]: 9 } : {},
+    };
+    const post = (
+      body: string,
+      author = "abc",
+      time = "11:59:30",
+      watchoi = "ﾜｯﾁｮｲ allowed",
+    ) =>
+      `名無し (${watchoi})<>sage<>2026/10/04(日) ${time} ID:${author}<>${body}<>`;
+    const dat = [
+      post("友人戦 12345", "old", "10:00:00"),
+      post("友人戦 23456", "closed"),
+      post("&gt;&gt;2 〆", "other"),
+      post("友人戦 34567 NG", "ng"),
+      post("友人戦 45678", "excluded", undefined, "ﾜｯﾁｮｲ other"),
+      post("友人戦 56789", "live"),
+      post("&gt;&gt;6 あと1人", "reply"),
+      post("友人戦", "no-room"),
+      post("&gt;&gt;1 あと1人", "expired-reply"),
+    ].join("\n");
+    const notify = vi.fn();
+    const monitor = new Monitor(
+      state,
+      { subject: async () => "", dat: async () => dat },
+      async () => {},
+      notify,
+      () => now,
+    );
+    if (mode === "toggle") await monitor.watch(id, true);
+    await monitor.refresh();
+    expect(notify.mock.calls.map((call) => call[0].number)).toEqual([6, 7]);
+    expect(state.cursors[id]).toBe(9);
+    await monitor.refresh();
+    expect(notify).toHaveBeenCalledTimes(2);
+  },
+);
 it("再開時に既存募集を再確認し、重複したオン操作と通常更新では再通知しない", async () => {
   const now = Date.parse("2026-10-04T12:00:00+09:00");
   const id = "1791034502";
@@ -283,5 +292,47 @@ it("再開時に既存募集を再確認し、重複したオン操作と通常�
     () => now,
   );
   await restarted.refresh();
-  expect(notify).toHaveBeenCalledTimes(2);
+  expect(notify).toHaveBeenCalledTimes(3);
+  await restarted.refresh();
+  expect(notify).toHaveBeenCalledTimes(3);
+});
+
+it("保存済みのレス番号があっても、起動時の取得失敗後に既存募集を再確認する", async () => {
+  const now = Date.parse("2026-10-04T12:00:00+09:00");
+  const id = "1791034502";
+  const state: SavedState = {
+    settings: defaults,
+    watched: [id],
+    cursors: { [id]: 2 },
+  };
+  const dat = [
+    "名無し<>sage<>2026/10/04(日) 10:00:00 ID:old<>友人戦 12345<>",
+    "名無し<>sage<>2026/10/04(日) 11:59:30 ID:live<>友人戦 23456<>",
+  ].join("\n");
+  const client = {
+    subject: async () => "",
+    dat: vi
+      .fn()
+      .mockRejectedValueOnce(new Error("HTTP 403"))
+      .mockResolvedValue(dat),
+  };
+  const notify = vi.fn();
+  const save = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("disk full"))
+    .mockResolvedValue(undefined);
+  const monitor = new Monitor(state, client, save, notify, () => now);
+  await monitor.refresh();
+  expect(monitor.snapshot().errors.join("")).toContain("403");
+  await monitor.refresh();
+  expect(monitor.snapshot().errors.join("")).toContain("disk full");
+  expect(notify).not.toHaveBeenCalled();
+  expect(state.cursors[id]).toBe(2);
+  await monitor.refresh();
+  expect(notify.mock.calls.map((call) => call[0].number)).toEqual([2]);
+  expect(monitor.snapshot().recruitments.map((item) => item.number)).toEqual([
+    2,
+  ]);
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(1);
 });
