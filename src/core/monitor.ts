@@ -1,5 +1,5 @@
 import { candidates, parseDat, parseSubject } from "./parser";
-import { isBlocked, scanPosts } from "./detection";
+import { isBlocked, isRecent, scanPosts } from "./detection";
 import { validateSettings, validThreadId } from "./settings";
 import type {
   Recruitment,
@@ -79,16 +79,25 @@ export class Monitor {
         try {
           const posts = parseDat(await this.client.dat(settings.url, id));
           const cursor = this.state.cursors[id];
+          const now = this.now();
           const nextCursors = {
             ...this.state.cursors,
             [id]: Math.max(cursor ?? 0, posts.length),
           };
           const detected = scanPosts(
             id,
-            cursor === undefined ? [] : posts.filter((p) => p.number > cursor),
-            this.items,
+            cursor === undefined
+              ? []
+              : posts.filter(
+                  (p) =>
+                    p.number > cursor &&
+                    (cursor !== 0 || isRecent(p, settings, now)),
+                ),
+            cursor === 0
+              ? this.items.filter((item) => item.threadId !== id)
+              : this.items,
             settings,
-            this.now(),
+            now,
             posts,
           );
           await this.save({ ...this.state, cursors: nextCursors });
@@ -123,7 +132,10 @@ export class Monitor {
       const watched = this.state.watched.filter((x) => x !== id);
       if (enabled) watched.push(id);
       const cursors = { ...this.state.cursors };
-      if (this.state.watched.includes(id) !== enabled) delete cursors[id];
+      if (this.state.watched.includes(id) !== enabled) {
+        if (enabled) cursors[id] = 0;
+        else delete cursors[id];
+      }
       const next = { ...this.state, watched, cursors };
       await this.save(next);
       Object.assign(this.state, next);

@@ -198,3 +198,90 @@ it("ワッチョイの許可設定を通知に反映し、解除後も既存レ�
   await monitor.refresh();
   expect(notify).toHaveBeenCalledTimes(2);
 });
+
+it("トグルをオンにした直後に既存の有効な募集と返信を通知する", async () => {
+  const now = Date.parse("2026-10-04T12:00:00+09:00");
+  const id = "1791034502";
+  const state: SavedState = {
+    settings: {
+      ...defaults,
+      allowed_watchois: ["ﾜｯﾁｮｲ allowed"],
+      ng_words: ["NG"],
+    },
+    watched: [],
+    cursors: {},
+  };
+  const post = (
+    body: string,
+    author = "abc",
+    time = "11:59:30",
+    watchoi = "ﾜｯﾁｮｲ allowed",
+  ) =>
+    `名無し (${watchoi})<>sage<>2026/10/04(日) ${time} ID:${author}<>${body}<>`;
+  const dat = [
+    post("友人戦 12345", "old", "10:00:00"),
+    post("友人戦 23456", "closed"),
+    post("&gt;&gt;2 〆", "other"),
+    post("友人戦 34567 NG", "ng"),
+    post("友人戦 45678", "excluded", undefined, "ﾜｯﾁｮｲ other"),
+    post("友人戦 56789", "live"),
+    post("&gt;&gt;6 あと1人", "reply"),
+    post("友人戦", "no-room"),
+    post("&gt;&gt;1 あと1人", "expired-reply"),
+  ].join("\n");
+  const notify = vi.fn();
+  const monitor = new Monitor(
+    state,
+    { subject: async () => "", dat: async () => dat },
+    async () => {},
+    notify,
+    () => now,
+  );
+  await monitor.watch(id, true);
+  await monitor.refresh();
+  expect(notify.mock.calls.map((call) => call[0].number)).toEqual([6, 7]);
+  expect(state.cursors[id]).toBe(9);
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(2);
+});
+it("再開時に既存募集を再確認し、重複したオン操作と通常更新では再通知しない", async () => {
+  const now = Date.parse("2026-10-04T12:00:00+09:00");
+  const id = "1791034502";
+  const state: SavedState = { settings: defaults, watched: [], cursors: {} };
+  const notify = vi.fn();
+  const monitor = new Monitor(
+    state,
+    {
+      subject: async () => "",
+      dat: async () =>
+        "名無し<>sage<>2026/10/04(日) 11:59:30 ID:abc<>友人戦 12345<>",
+    },
+    async () => {},
+    notify,
+    () => now,
+  );
+  await monitor.watch(id, true);
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(1);
+  await monitor.watch(id, true);
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(1);
+  await monitor.watch(id, false);
+  await monitor.watch(id, true);
+  await monitor.refresh();
+  expect(notify).toHaveBeenCalledTimes(2);
+  expect(monitor.snapshot().recruitments).toHaveLength(1);
+  const restarted = new Monitor(
+    state,
+    {
+      subject: async () => "",
+      dat: async () =>
+        "名無し<>sage<>2026/10/04(日) 11:59:30 ID:abc<>友人戦 12345<>",
+    },
+    async () => {},
+    notify,
+    () => now,
+  );
+  await restarted.refresh();
+  expect(notify).toHaveBeenCalledTimes(2);
+});
