@@ -35,10 +35,36 @@ export async function launchMahjongSoul(
       detached: true,
       stdio: "ignore",
     });
-    child.once("error", reject);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      child.removeListener("exit", onExit);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (code === 0 && !signal) {
+        finish();
+        return;
+      }
+      const detail = signal ? `シグナル: ${signal}` : `終了コード: ${code}`;
+      finish(
+        new Error(
+          `雀魂の起動に失敗しました: ${settings.launcher_path}（${detail}）`,
+        ),
+      );
+    };
+    child.once("error", (error) => {
+      finish(
+        new Error(
+          `雀魂の起動に失敗しました: ${settings.launcher_path}（${error.message}）`,
+        ),
+      );
+    });
+    child.once("exit", onExit);
     child.once("spawn", () => {
       child.unref();
-      resolve();
+      timer = setTimeout(() => finish(), 1000);
     });
   });
 }

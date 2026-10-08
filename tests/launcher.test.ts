@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { defaults, validateSettings } from "../src/core/settings";
 vi.mock("electron", () => ({
   clipboard: { writeText: vi.fn() },
@@ -9,7 +9,11 @@ vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 import { clipboard, shell } from "electron";
 import { spawn } from "node:child_process";
 import { launchMahjongSoul } from "../src/main/launcher";
-afterEach(() => vi.resetAllMocks());
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.resetAllMocks();
+});
 
 it("既定ブラウザーで雀魂を開き、先頭ゼロを保ってIDをコピーする", async () => {
   await launchMahjongSoul("０１２３４", defaults);
@@ -30,7 +34,7 @@ it.each(["browser", "application"] as const)(
       queueMicrotask(() => child.emit("spawn"));
       return child as unknown as ReturnType<typeof spawn>;
     });
-    await launchMahjongSoul("12345", {
+    const launching = launchMahjongSoul("12345", {
       ...defaults,
       launcher_mode: mode,
       launcher_path: "/opt/My App/launcher",
@@ -38,6 +42,8 @@ it.each(["browser", "application"] as const)(
       launcher_user_data_dir: "/home/example/Browser Data",
       launcher_args: ["-applaunch", "12345", "an argument with spaces"],
     });
+    await vi.advanceTimersByTimeAsync(1000);
+    await launching;
     expect(spawn).toHaveBeenCalledWith(
       "/opt/My App/launcher",
       mode === "browser"
@@ -67,6 +73,46 @@ it("実行ファイルが見つからない場合は起動エラーを返す", a
     }),
   ).rejects.toThrow("ENOENT");
   expect(child.unref).not.toHaveBeenCalled();
+});
+
+it.each([
+  [1, null, "終了コード: 1"],
+  [null, "SIGTERM", "シグナル: SIGTERM"],
+] as const)(
+  "起動直後の異常終了を通知する（%s / %s）",
+  async (code, signal, detail) => {
+    const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+    vi.mocked(spawn).mockReturnValue(
+      child as unknown as ReturnType<typeof spawn>,
+    );
+    const result = expect(
+      launchMahjongSoul("12345", {
+        ...defaults,
+        launcher_mode: "application",
+        launcher_path: "/opt/game",
+      }),
+    ).rejects.toThrow(`/opt/game（${detail}）`);
+    child.emit("spawn");
+    child.emit("exit", code, signal);
+    await result;
+    expect(vi.getTimerCount()).toBe(0);
+  },
+);
+
+it("既存ブラウザーへ要求を渡して正常終了する場合は成功する", async () => {
+  const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+  vi.mocked(spawn).mockReturnValue(
+    child as unknown as ReturnType<typeof spawn>,
+  );
+  const launching = launchMahjongSoul("12345", {
+    ...defaults,
+    launcher_mode: "browser",
+    launcher_path: "/opt/browser",
+  });
+  child.emit("spawn");
+  child.emit("exit", 0, null);
+  await launching;
+  expect(vi.getTimerCount()).toBe(0);
 });
 
 it("既存の設定に起動設定の既定値を補い、不正なパス・引数を拒否する", () => {
