@@ -25,6 +25,7 @@ import {
 } from "./window-state";
 import { client } from "./client";
 import { copyRoomId } from "./clipboard";
+import { launchMahjongSoul } from "./launcher";
 import { iconData } from "./tray-icon";
 import {
   registerNotificationProtocol,
@@ -181,6 +182,9 @@ if (!app.requestSingleInstanceLock()) {
       handle("snapshot", () => monitor.snapshot());
       handle("refresh", () => monitor.refresh());
       handle("copy-room-id", copyRoomId);
+      handle("launch-mahjong-soul", (id) =>
+        launchMahjongSoul(id, state.settings),
+      );
       handle("watch", async (id, enabled) => {
         await monitor.watch(id, enabled);
         await monitor.refresh();

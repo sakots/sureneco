@@ -47,6 +47,7 @@ function setup(
     saveSettings: vi.fn(async () => {}),
     openThread: vi.fn(async () => {}),
     copyRoomId: vi.fn(async () => {}),
+    launchMahjongSoul: vi.fn(async () => {}),
     subscribe: vi.fn(() => () => {}),
   };
   render(<App api={api} />);
@@ -216,5 +217,97 @@ it("通知を許可するワッチョイを一行一件で保存し、既定値�
   await user.click(screen.getByRole("button", { name: "設定を保存" }));
   expect(api.saveSettings).toHaveBeenLastCalledWith(
     expect.objectContaining({ allowed_watchois: [] }),
+  );
+});
+
+it("募集のIDを指定して雀魂を起動し、締め切り済みの募集は起動しない", async () => {
+  const api = setup([
+    {
+      ...recruitment,
+      body: ">>1 あと1人",
+      roomIds: ["01234"],
+      postedAt: Date.now(),
+    },
+    {
+      ...recruitment,
+      number: 13,
+      closed: true,
+      roomIds: ["23456"],
+      postedAt: Date.now(),
+    },
+    {
+      ...recruitment,
+      number: 14,
+      roomIds: ["34567"],
+      postedAt: Date.now() - 3600000,
+    },
+  ]);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /^友人戦募集/ }));
+  await user.click(
+    screen.getByRole("button", {
+      name: "ルームID 01234をコピーして雀魂を起動",
+    }),
+  );
+  expect(api.launchMahjongSoul).toHaveBeenCalledWith("01234");
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "ルームID 23456をコピーして雀魂を起動",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "ルームID 34567をコピーして雀魂を起動",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  vi.mocked(api.launchMahjongSoul).mockRejectedValueOnce(
+    new Error("実行ファイルが見つかりません"),
+  );
+  await user.click(
+    screen.getByRole("button", {
+      name: "ルームID 01234をコピーして雀魂を起動",
+    }),
+  );
+  expect(screen.getByRole("alert").textContent).toContain(
+    "実行ファイルが見つかりません",
+  );
+});
+
+it("ブラウザーの実行ファイルとプロファイルを保存し、アプリの引数は一行ずつ保存する", async () => {
+  const api = setup();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  await user.selectOptions(screen.getByLabelText("起動方法"), "browser");
+  await user.type(
+    screen.getByLabelText("実行ファイルのフルパス"),
+    "/opt/google/chrome",
+  );
+  await user.type(
+    screen.getByLabelText("プロファイルディレクトリー名"),
+    "Profile 1",
+  );
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      launcher_mode: "browser",
+      launcher_path: "/opt/google/chrome",
+      launcher_profile: "Profile 1",
+    }),
+  );
+  await user.selectOptions(screen.getByLabelText("起動方法"), "application");
+  await user.type(
+    screen.getByLabelText("起動引数（一行に一つ）"),
+    "-applaunch\n12345\nan argument with spaces",
+  );
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      launcher_mode: "application",
+      launcher_args: ["-applaunch", "12345", "an argument with spaces"],
+    }),
   );
 });

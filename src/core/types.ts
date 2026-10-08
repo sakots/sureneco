@@ -11,6 +11,11 @@ export interface Settings {
   ng_ids: string[];
   ng_watchois: string[];
   allowed_watchois: string[];
+  launcher_mode: "default" | "browser" | "application";
+  launcher_path: string;
+  launcher_args: string[];
+  launcher_profile: string;
+  launcher_user_data_dir: string;
 }
 export interface Thread {
   id: string;
@@ -76,5 +81,6 @@ export interface Api {
   saveSettings(settings: Settings): Promise<void>;
   openThread(id: string, post?: number): Promise<void>;
   copyRoomId(id: string): Promise<void>;
+  launchMahjongSoul(id: string): Promise<void>;
   subscribe(callback: (snapshot: Snapshot) => void): () => void;
 }

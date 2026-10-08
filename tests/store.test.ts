@@ -9,6 +9,9 @@ it("設定を保存・再読込し、破損したファイルを上書きしな�
     const store = new Store(dir);
     const state = await store.load();
     state.settings.allowed_watchois = ["ﾜｯﾁｮｲ allowed"];
+    state.settings.launcher_mode = "application";
+    state.settings.launcher_path = "/opt/Mahjong Soul/game";
+    state.settings.launcher_args = ["an argument with spaces"];
     state.watched = ["1791034502"];
     state.cursors = { "1791034502": 100 };
     await store.save(state);

@@ -13,6 +13,11 @@ export const defaults: Settings = {
   ng_ids: [],
   ng_watchois: [],
   allowed_watchois: [],
+  launcher_mode: "default",
+  launcher_path: "",
+  launcher_args: [],
+  launcher_profile: "",
+  launcher_user_data_dir: "",
 };
 export function boardUrl(value: string): string {
   const url = new URL(value);
@@ -85,6 +90,56 @@ export function validateSettings(input: unknown): Settings {
       throw new Error(`${key}の入力が不正です。`);
     result[key] = [...new Set(list.map((x) => x.trim()).filter(Boolean))];
   }
+  const mode =
+    value.launcher_mode === undefined
+      ? defaults.launcher_mode
+      : value.launcher_mode;
+  if (mode !== "default" && mode !== "browser" && mode !== "application")
+    throw new Error("雀魂の起動方法が不正です。");
+  result.launcher_mode = mode;
+  for (const key of [
+    "launcher_path",
+    "launcher_profile",
+    "launcher_user_data_dir",
+  ] as const) {
+    const text = value[key] === undefined ? defaults[key] : value[key];
+    if (typeof text !== "string" || text.length > 4096 || /[\0\r\n]/.test(text))
+      throw new Error("雀魂の起動設定が不正です。");
+    result[key] = text.trim();
+  }
+  const absolutePath = (path: string) =>
+    /^(?:\/|[a-zA-Z]:[\\/]|\\\\[^\\]+\\)/.test(path);
+  if (
+    (mode !== "default" && !result.launcher_path) ||
+    (result.launcher_path && !absolutePath(result.launcher_path))
+  )
+    throw new Error("実行ファイルはフルパスで指定してください。");
+  if (
+    result.launcher_user_data_dir &&
+    !absolutePath(result.launcher_user_data_dir)
+  )
+    throw new Error(
+      "ユーザーデータディレクトリーはフルパスで指定してください。",
+    );
+  if (
+    result.launcher_profile &&
+    (/[/\\]/.test(result.launcher_profile) ||
+      [".", ".."].includes(result.launcher_profile))
+  )
+    throw new Error(
+      "プロファイルにはDefaultやProfile 1などのディレクトリー名を指定してください。",
+    );
+  const args = value.launcher_args === undefined ? [] : value.launcher_args;
+  if (
+    !Array.isArray(args) ||
+    args.length > 64 ||
+    args.some(
+      (arg) =>
+        typeof arg !== "string" || arg.length > 4096 || /[\0\r\n]/.test(arg),
+    )
+  )
+    throw new Error("起動引数は一行に一つ、64個以内で指定してください。");
+  result.launcher_args = args.map((arg) => arg.trim()).filter(Boolean);
   return result;
 }
 export function validThreadId(id: unknown): id is string {

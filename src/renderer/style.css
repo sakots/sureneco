@@ -41,6 +41,7 @@ body {
 }
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -54,6 +55,7 @@ button:disabled {
 }
 button,
 input,
+select,
 textarea {
   outline-offset: 4px;
 }
@@ -319,6 +321,7 @@ label {
   margin-top: 10px;
 }
 input,
+select,
 textarea {
   display: block;
   width: 100%;
@@ -414,6 +417,7 @@ footer {
   font-size: 13px;
 }
 
+.recruitment-actions,
 .update-actions,
 .update-banner {
   display: flex;

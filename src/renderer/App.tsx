@@ -17,6 +17,11 @@ const labels: Record<keyof Settings, string> = {
   ng_ids: "NG ID",
   ng_watchois: "NGワッチョイ",
   allowed_watchois: "通知を許可するワッチョイ",
+  launcher_mode: "起動方法",
+  launcher_path: "実行ファイルのフルパス",
+  launcher_args: "起動引数（一行に一つ）",
+  launcher_profile: "プロファイルディレクトリー名",
+  launcher_user_data_dir: "ユーザーデータディレクトリー（任意）",
 };
 const numeric = ["update_sec", "elapsed_days", "emphasis_sec"] as const;
 const patterns = [
@@ -26,7 +31,7 @@ const patterns = [
   "closed_yujinsen_regex",
 ] as const;
 const ng = ["ng_words", "ng_ids", "ng_watchois"] as const;
-const lists = [...ng, "allowed_watchois"] as const;
+const lists = [...ng, "allowed_watchois", "launcher_args"] as const;
 export function App({ api }: { api: Api }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [page, setPage] = useState<"threads" | "recruitments" | "settings">(
@@ -301,16 +306,36 @@ export function App({ api }: { api: Api }) {
                         {referencedIds.map((id) => roomIdButton(id, id, id))}
                       </div>
                     )}
-                    <button
-                      className="secondary"
-                      onClick={() =>
-                        void act(() =>
-                          api.openThread(item.threadId, item.number),
-                        )
-                      }
-                    >
-                      レスを開く
-                    </button>
+                    <div className="recruitment-actions">
+                      {item.roomIds.map((id) => (
+                        <button
+                          key={id}
+                          className="secondary"
+                          disabled={busy || !active}
+                          aria-label={`ルームID ${id}をコピーして雀魂を起動`}
+                          onClick={() =>
+                            void act(async () => {
+                              await api.launchMahjongSoul(id);
+                              setNotice(
+                                `ルームID ${id}をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。`,
+                              );
+                            })
+                          }
+                        >
+                          雀魂を起動{item.roomIds.length > 1 ? `（${id}）` : ""}
+                        </button>
+                      ))}
+                      <button
+                        className="secondary"
+                        onClick={() =>
+                          void act(() =>
+                            api.openThread(item.threadId, item.number),
+                          )
+                        }
+                      >
+                        レスを開く
+                      </button>
+                    </div>
                     <p className="metadata">
                       {item.id ? `ID:${item.id}` : item.name} {item.watchoi}
                     </p>
@@ -439,6 +464,47 @@ function SettingsForm({
         <p className="help">
           板URLを変えると、監視対象と取得済みレス番号をリセットします。
         </p>
+      </section>
+      <section className="settings-card">
+        <h3>雀魂の起動</h3>
+        <p className="help">
+          募集のボタンからルームIDをコピーして起動します。入室はゲーム内でIDを貼り付けてください。
+        </p>
+        <label htmlFor="launcher_mode">
+          起動方法
+          <select
+            id="launcher_mode"
+            value={draft.launcher_mode}
+            onChange={(e) =>
+              setDraft({ ...draft, launcher_mode: e.target.value })
+            }
+          >
+            <option value="default">既定ブラウザー</option>
+            <option value="browser">Chrome / Edge（プロファイル指定）</option>
+            <option value="application">指定アプリ（雀魂・Steamなど）</option>
+          </select>
+        </label>
+        {draft.launcher_mode !== "default" && field("launcher_path")}
+        {draft.launcher_mode === "browser" && (
+          <>
+            {field("launcher_profile")}
+            {field("launcher_user_data_dir")}
+            <p className="help">
+              chrome://version または edge://version
+              のプロファイルパス末尾（Default、Profile
+              1など）を指定します。空欄ならブラウザーの既定設定を使います。ユーザーデータディレクトリーは通常空欄で構いません。
+            </p>
+          </>
+        )}
+        {draft.launcher_mode === "application" && (
+          <>
+            {field("launcher_args")}
+            <p className="help">
+              空白を含む引数も引用符で囲まず、一行に一つ入力します。Steam経由の場合はsteam.exeを指定し、-applaunchと対象ゲームのApp
+              IDを二行に分けて入力します。
+            </p>
+          </>
+        )}
       </section>
       <section className="settings-card">
         <h3>検出する正規表現</h3>

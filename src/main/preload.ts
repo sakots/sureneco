@@ -18,6 +18,7 @@ const api: Api = {
   saveSettings: (settings) => ipcRenderer.invoke("settings", settings),
   openThread: (id, post) => ipcRenderer.invoke("open-thread", id, post),
   copyRoomId: (id) => ipcRenderer.invoke("copy-room-id", id),
+  launchMahjongSoul: (id) => ipcRenderer.invoke("launch-mahjong-soul", id),
   subscribe: (callback) => {
     const listener = (_: Electron.IpcRendererEvent, value: Snapshot) =>
       callback(value);
