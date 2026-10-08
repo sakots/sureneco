@@ -63,6 +63,8 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 
 ## 検証
 
+開発起動と配布用ビルドではscripts/build-main.mjsを共用する。メインプロセスのESMバンドルにはelectronとelectron-updaterを取り込まず、実行時に読み込む。CommonJS形式の依存をバンドルすることで発生するDynamic requireエラーを防ぐ。
+
 Vitestで解析、設定検証、NG、締め検出、通知の重複抑止、取得失敗からの回復、保存を検証する。React画面の操作をテストする。TypeScript型チェック、Vite/Electronビルド、明暗テーマ診断、git diff --checkを実施する。ネットワークの実接続やOS通知・トレイの受け入れ確認は実機で別途行う。
 
 ## 配布物の作成
