@@ -7,7 +7,7 @@ windowsとLinux（Ubuntu）に対応します。
 
 ## コーディング
 
-Electron + TypeScript / Reactで実装します。Reactはtsxを使ってコードを書いてください。
+Tauri 2 + Rust + TypeScript / Reactで実装します。Reactはtsxを使ってコードを書いてください。
 Reactではpnpmを使用します。
 
 ## アプリの仕様

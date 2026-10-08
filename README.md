@@ -5,86 +5,95 @@
 ![Downloads](https://img.shields.io/github/downloads/sakots/sureneco/total)
 ![License](https://img.shields.io/github/license/sakots/sureneco)
 
-5ch麻雀板の雀魂スレッドから友人戦募集を通知する、Windows / Ubuntu向け常駐アプリです。Electron + TypeScript + Reactで実装しています。
+5ch麻雀板の雀魂スレッドから友人戦募集を通知する、Windows / Ubuntu向け常駐アプリです。Tauri 2 + Rust + TypeScript + Reactで実装しています。募集検出と監視はRustの専用スレッド上のQuickJSで動かし、ウィンドウを隠しても監視を続けます。Node.js・Electron・Chromiumは配布物に同梱しません。
 
-![alt text](images/app.png)
+![アプリ画面](images/app.png)
 
 ## 開発
 
-Node.js 22.12以上とpnpm 12.10.1を用意してください。
+Node.js 22.12以上、pnpm 12.10.1、Rust stableを用意してください。WindowsはMSVC版Rust、Visual Studio C++ Build Tools、WebView2が必要です。Ubuntuは以下をインストールします。
 
 ```sh
+sudo apt install libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 pnpm install
-pnpm exec install-electron
 pnpm dev
 ```
 
-`pnpm exec install-electron`はElectron本体を取得します。`pnpm dev`でViteとElectronを起動します。メインプロセスとpreloadを変更したときは開発コマンドを再起動してください。`pnpm check`でテスト、型チェック、ビルド、テーマ診断を実行します。
+`pnpm dev`でViteとTauriを起動します。バックエンドのTypeScriptを変更した場合は開発コマンドを再起動してください。`pnpm check`でTypeScript・Rustのテスト、フロントエンドと監視エンジンのビルド、Rust整形、テーマ診断、差分チェックを行います。初回はRust依存の取得・コンパイルに時間がかかります。
 
-```sh
-pnpm build
-pnpm start
-```
+詳しい環境構築は[Tauriの前提条件](https://v2.tauri.app/start/prerequisites/)を参照してください。
 
-Windows用のNSISインストーラーとZIP版は、WindowsのPowerShellで同時に作成します。
+## 配布物の作成
+
+Windows用はWindows、Linux用はUbuntu上で実行してください。WindowsとLinuxのnode_modulesは共有しません。
 
 ```powershell
 pnpm package:win
 ```
 
-release/にインストーラー（.exe）とZIP（.zip）を出力します。ZIP版は全ファイルを展開し、sureneco.exeを起動してください。設定の保存先はインストール版と同じuserDataディレクトリです。
-
-Linux用AppImage / debはUbuntu上で作成します。
-
 ```sh
 pnpm package:linux
 ```
 
-WindowsからLinux用配布物を作る場合は、WSLのUbuntuやLinuxコンテナー内で実行してください。WSLではUbuntu側のホームディレクトリにリポジトリを配置し、Linux側で`pnpm install`してから`pnpm package:linux`を実行します。Windows側のnode_modulesは共有しません。Dockerを使う方法は[electron-builderの公式手順](https://www.electron.build/docs/features/multi-platform-build/)を参照してください。プロジェクトで必要なNode.jsは22.12以上です。
+release/へ以下の形式で出力します。配布名とアプリのバージョンはpackage.jsonから反映します。リリース時はsrc-tauri/Cargo.tomlのバージョンも合わせて更新してください。
 
-パッケージはrelease/に出力します。v0.2.0のファイル名は次の形に統一します。
+- `sureneco_v0.5.2_Setup.exe`
+- `sureneco_v0.5.2_win.zip`
+- `sureneco_v0.5.2.AppImage`
+- `sureneco_v0.5.2_amd64.deb`
 
-- `sureneco_v0.2.0_amd64.deb`
-- `sureneco_v0.2.0.AppImage`
-- `sureneco_v0.2.0_Setup.exe`
-- `sureneco_v0.2.0_win.zip`
+ZIP版は展開してsureneco.exeを起動します。WindowsではWebView2ランタイムが必要です。インストーラーは必要に応じてWebView2を導入します。
 
-同じOS・CPU・Electronバージョン向けのパッケージ作成では、インストール済みElectronをコピーして使用します。[公式のelectronDist設定](https://www.electron.build/docs/configuration/#electrondist)を使い、`win-unpacked.tmp`や`linux-unpacked.tmp`の名前変更時に発生するEPERMを避けるための処理です。別OS・CPU向けには流用しません。
+署名鍵はこの開発端末の`.secrets/updater.key`に作成済みで、Gitには含めません。鍵を別の安全な場所にも保管してください。Windows等の別環境では同じ鍵を配置するか、`TAURI_SIGNING_PRIVATE_KEY`に鍵のフルパスを設定します。パスワード付きの鍵を使う場合は`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`も設定します。公開鍵はsrc-tauri/tauri.conf.jsonに設定済みです。
 
-更新後は通常の`pnpm package:win`または`pnpm package:linux`を再実行してください。引き続きEPERMが出る場合は新しいログで失敗箇所を確認します。パッケージ作成中は配布物や並行ビルドを終了してください。ファイル使用中・アクセス権・セキュリティソフトのどれが原因かは、元のログだけでは断定できません。
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = "D:\keys\sureneco-updater.key"
+pnpm package:win
+```
+
+ローカルの配布コマンドはGitHubへ公開しません。WindowsとLinuxの成果物・`.sig`を同じrelease/へ集めて、`pnpm release:manifest`で全形式を含む`latest.json`を生成してください。GitHub Releasesには配布物、`.sig`、この`latest.json`を添付します。Tauri版ではElectron用のlatest.yml・latest-linux.yml・blockmapを使いません。更新時の署名は[Tauri updater](https://v2.tauri.app/plugin/updater/)で検証します。
+
+## Electron版からの切り替え
+
+Tauri版の初回導入は手動で行ってください。Electron版をトレイから終了し、Tauri版を導入します。WindowsのElectronインストール版を削除する場合も設定フォルダーは残してください。Electron版とTauri版を同時起動しないでください。
+
+既存のstate.jsonを同じ場所から読み込み、設定・監視対象・取得済みレス番号を保持します。Windowsは`%APPDATA%/sureneco/state.json`、Ubuntuは`$XDG_CONFIG_HOME/sureneco/state.json`（未指定なら`~/.config/sureneco/state.json`）です。ウィンドウ状態はTauriの別ファイルに保存するため、切り替え直後は既定サイズで開きます。
 
 ## 使い方
 
-スレッド一覧のトグルをオンにすると監視します。オンにした時点とアプリ起動時に有効期間内の既存募集も確認・通知し、その後は新しい募集を通知します。締め切り済み・期限切れ・NG対象や、通知許可設定の対象外は通知しません。更新間隔の初期値は20秒で、設定画面から20秒以上の整数に変更できます。保存済みの更新間隔はそのまま使います。設定で検出用正規表現、NG本文・ID・ワッチョイも変更できます。NGは一行一件で入力します。「通知を許可するワッチョイ」に一行一件で指定すると、完全一致する投稿者の募集だけを通知します。空欄なら全投稿者が対象です。NG設定が優先され、募集一覧には通知対象外の募集も表示されます。5桁のルームIDが本文にも参照先にもないレスは募集として扱いません。本文にIDがない場合は、`>>レス番号`で指定された過去レスをたどります。締め切り済み・期限切れの募集への返信は通知しません。期限は設定の`emphasis_sec`で判定し、返信によって延長しません。募集本文または「参照先のルームID」の5桁の番号をクリックするとクリップボードにコピーできます。全角数字は半角にしてコピーします。「レスを開く」でブラウザーから該当レスを開けます。
+スレッド一覧のトグルをオンにすると監視します。起動時とトグルをオンにした時点で有効期間内の既存募集も確認・通知し、その後は新しい募集を通知します。更新間隔は既定20秒で、設定から20秒以上の整数に変更できます。スレッド候補は既定でスレ立てから14日以内です。
 
-通知をクリックするとアプリを再表示し、最小化中なら復元します。Windowsでは通知用の起動先を登録します。開発モードと配布版は別の登録先を使います。
+設定で検出用正規表現、NG本文・ID・ワッチョイを変更できます。NGは一行一件です。「通知を許可するワッチョイ」を指定すると完全一致する投稿者の募集だけを通知します。空欄なら全投稿者が対象で、NGが優先されます。通知許可の設定は募集一覧を絞り込みません。
 
-終了時のウィンドウサイズ・位置・最大化状態を記憶し、次回起動時に復元します。モニター構成が変わった場合は画面内に補正します。UbuntuのWayland環境では位置の復元がOSに制限される場合があります。
+5桁のルームIDが本文にも参照先にもないレスは募集として扱いません。本文にIDがない場合は過去レスへの`>>レス番号`をたどります。締め切り済み・期限切れの募集への返信は通知せず、返信で期限を延長しません。5桁のIDをクリックすると全角を半角にしてコピーします。「レスを開く」で該当レスをブラウザーから開けます。
 
-ウィンドウを閉じるとトレイに常駐します。終了はトレイメニューから選択してください。Ubuntuではトレイを表示できるデスクトップ環境が必要です。トレイを作成できない場合はウィンドウを閉じると終了します。OSの通知設定によって通知が表示されない場合があります。
+通知をクリックするとアプリを再表示し、最小化中なら復元します。終了時のウィンドウサイズ・位置・最大化状態を次回起動時に復元します。Waylandでは位置の取得・復元がOSに制限される場合があります。スレッド・友人戦募集・設定のタブはスクロール中も画面上部に残ります。
 
-設定と取得済みレス番号はElectronのuserDataディレクトリに保存します。通信失敗は画面に表示され、次回更新で再試行します。5ch側のアクセス制限や形式変更で取得できない場合があります。
+ウィンドウを閉じるとトレイに常駐します。終了はトレイメニューから選択してください。トレイを作成できない環境ではウィンドウを閉じると終了します。Ubuntuではトレイを表示できるデスクトップ環境が必要です。OSの通知設定や通知サービスによっては通知が利用できません。通信失敗・通知失敗は画面に表示します。通信は次回更新で再試行します。
 
-設定画面の「アプリの更新」で現在のバージョンと更新状況を確認できます。配布版は起動時と6時間ごとにGitHubの正式リリースを確認し、新版を通知します。NSIS・AppImage・DEB版では「ダウンロード」→「再起動して更新」で更新できます。DEB版はOSの認証が必要です。Windows ZIP版はリリース画面から手動で更新します。開発実行では更新を無効にします。
+設定画面の「アプリの更新」では起動時と6時間ごとにGitHubの正式リリースを確認します。NSIS・AppImage・DEB版は「ダウンロード」→「再起動して更新」で更新できます。DEB版はOSの認証が必要です。Windows ZIP版はリリース画面から手動で更新します。開発実行では更新を無効にします。
 
-リリースを公開する際は、配布ファイルと一緒に生成された`latest.yml`、`latest-linux.yml`、`.blockmap`もGitHub Releasesへ添付してください。ローカルのpackageコマンドは公開せず、ファイル生成だけを行います。この機能を含む版を一度手動導入すれば、次の新しいバージョンからアプリ内で更新できます。
+## 雀魂の起動
 
-## じゃんたまの起動
+設定の「雀魂の起動」で既定ブラウザー、Chrome / Edgeのプロファイル、指定アプリを選べます。「雀魂を起動」はルームIDをコピーして起動します。ゲーム内の友人戦でIDを貼り付けて入室してください。
 
-設定の「雀魂の起動」で、既定ブラウザー、Chrome / Edgeのプロファイル、指定アプリから起動方法を選べます。募集の「雀魂を起動」を押すとルームIDをコピーして起動します。ゲーム内の友人戦でIDを貼り付けて入室してください。
+Chrome / Edgeは実行ファイルのフルパスと`Default`や`Profile 1`等のプロファイルディレクトリー名を指定します。`chrome://version`または`edge://version`の「プロフィール パス」の末尾で確認できます。通常と異なるユーザーデータフォルダーを使う場合は、その親フォルダーを「ユーザーデータディレクトリー」に指定してください。
 
-Chrome / Edgeでは実行ファイルのフルパスと、`Default`や`Profile 1`などのプロファイルディレクトリー名を指定します。`chrome://version`または`edge://version`の「プロフィール パス」の末尾で確認できます。通常と異なるユーザーデータフォルダーを使う場合は、プロファイルディレクトリーの親（`User Data`など）を「ユーザーデータディレクトリー」にフルパスで指定します。
+指定アプリでは雀魂のexeを指定できます。Steam経由の場合はsteam.exeを指定し、起動引数を`-applaunch`と対象ゲームのApp IDの二行に分けます。引数は一行に一つ、引用符なしで入力します。起動直後の異常終了は実行ファイルのパスと終了コードをエラーに表示します。自動入室には対応していません。
 
-指定アプリでは雀魂のexeを指定できます。Steam経由で起動する場合は`steam.exe`を指定し、起動引数を`-applaunch`と対象ゲームのApp IDの二行に分けて入力します。各引数は一行に一つ、引用符なしで入力してください。ルームへの自動入室には対応していません。
-
-指定ブラウザー・アプリが起動直後に異常終了した場合は、実行ファイルのパスと終了コードをエラーに表示します。
-
-詳細は[仕様書](docs/specification.md)を参照してください。
+詳細は[仕様書](docs/specification.md)と[移行構成](docs/tauri-migration.md)を参照してください。
 
 ## 更新履歴
 
+### [2026/10/09] v0.6.0
+
+- TauriとRustでの実装に切り替え
+
 ### [2026/10/09] v0.5.2
 
+- 既存の画面・募集検出を保ち、ElectronからTauriへ実装を変更
+- 常駐監視・通知・設定保存・起動処理をTauriのバックエンドで実行するようにした
+- アプリの自動更新をTauriの署名付き更新に変更
 - Electron標準のメニューバーを非表示にするようにした
 - スクロール中もスレッド・友人戦募集・設定のタブを画面上部に残すようにした
 

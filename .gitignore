@@ -3,3 +3,6 @@ dist/
 release/
 coverage/
 *.log
+src-tauri/target/
+src-tauri/gen/
+.secrets/

@@ -1,87 +1,43 @@
 {
   "name": "sureneco",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "private": true,
   "description": "5ch雀魂スレッドの友人戦募集通知",
   "author": "sakots",
   "license": "MIT",
   "type": "module",
-  "main": "dist/main/main.js",
   "packageManager": "pnpm@12.10.1",
   "scripts": {
-    "dev": "node scripts/dev.mjs",
-    "start": "electron .",
-    "test": "vitest run",
+    "dev": "tauri dev",
+    "dev:frontend": "pnpm build:backend && vite --host 127.0.0.1 --port 5173 --strictPort",
+    "tauri": "tauri",
+    "test": "vitest run && pnpm build:backend && cargo test --manifest-path src-tauri/Cargo.toml",
     "typecheck": "tsc --noEmit",
-    "build": "pnpm typecheck && vite build && node scripts/build-main.mjs",
+    "build": "pnpm typecheck && vite build && pnpm build:backend",
+    "build:backend": "node scripts/build-backend.mjs",
     "theme:check": "node scripts/theme-check.mjs",
-    "check": "pnpm test && pnpm build && pnpm theme:check && pnpm format:check && git diff --check",
-    "package:linux": "pnpm check && pnpm exec install-electron && electron-builder --config electron-builder.config.mjs --linux --publish never",
-    "package:win": "pnpm check && pnpm exec install-electron && electron-builder --config electron-builder.config.mjs --win --publish never",
-    "format": "prettier --write src tests scripts vite.config.ts tsconfig.json package.json electron-builder.config.mjs",
-    "format:check": "prettier --check src tests scripts vite.config.ts tsconfig.json package.json electron-builder.config.mjs"
-  },
-  "build": {
-    "appId": "io.github.sakots.sureneco",
-    "productName": "sureneco",
-    "publish": {
-      "provider": "github",
-      "owner": "sakots",
-      "repo": "sureneco"
-    },
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "package.json"
-    ],
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Utility",
-      "icon": "resources/icon.png",
-      "maintainer": "sakots",
-      "syncDesktopName": true
-    },
-    "deb": {
-      "artifactName": "${name}_v${version}_${arch}.${ext}"
-    },
-    "appImage": {
-      "artifactName": "${name}_v${version}.${ext}"
-    },
-    "win": {
-      "artifactName": "${name}_v${version}_win.${ext}",
-      "target": [
-        "nsis",
-        "zip"
-      ],
-      "icon": "resources/icon.png"
-    },
-    "nsis": {
-      "include": "resources/installer.nsh",
-      "artifactName": "${name}_v${version}_Setup.${ext}",
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+    "check": "pnpm test && pnpm build && cargo fmt --manifest-path src-tauri/Cargo.toml --check && pnpm theme:check && pnpm format:check && git diff --check",
+    "package:linux": "pnpm check && node scripts/package.mjs linux",
+    "package:win": "pnpm check && node scripts/package.mjs win",
+    "format": "prettier --write src tests scripts vite.config.ts tsconfig.json package.json src-tauri/*.json src-tauri/capabilities/*.json && cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "format:check": "prettier --check src tests scripts vite.config.ts tsconfig.json package.json src-tauri/*.json src-tauri/capabilities/*.json",
+    "release:manifest": "node scripts/release-manifest.mjs"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9",
+    "@tauri-apps/api": "^2.12.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "electron": "^44.5.1",
-    "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
+    "fflate": "^0.8.3",
     "jsdom": "^30.1.1",
     "prettier": "^3.9.9",
     "typescript": "^7.0.2",
@@ -90,6 +46,5 @@
   },
   "engines": {
     "node": ">=22.12.0"
-  },
-  "desktopName": "sureneco.desktop"
+  }
 }
