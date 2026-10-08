@@ -1,14 +1,14 @@
-# sureneco 初版仕様
+# sureneco 仕様
 
 ## 目的と画面
 
-Electron標準のアプリケーションメニュー（File・Edit等）は開発時・配布版とも表示しない。トレイの操作メニューは利用できる。
+標準のアプリケーションメニュー（File・Edit等）は開発時・配布版とも表示しない。トレイの操作メニューは利用できる。
 
-Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。React / TypeScript、pnpmで開発する。スレッド一覧、募集一覧、設定を一つのウィンドウで表示する。監視するスレッドは個別のトグルで選ぶ。ウィンドウを閉じるとトレイに常駐し、トレイから再表示・終了できる。トレイを作成できない環境ではウィンドウを閉じると終了する。LinuxのdesktopNameとデスクトップエントリーをsureneco.desktopに統一する。OS起動時の自動起動は初版の範囲外。
+Windows / Ubuntuで5chの雀魂スレッドを監視するTauri 2アプリ。RustとReact / TypeScript、pnpmで開発する。既存のTypeScriptコアは専用スレッド上のQuickJSで実行し、WebViewの非表示・タイマー抑制に依存せず監視する。スレッド一覧、募集一覧、設定を一つのウィンドウで表示する。監視するスレッドは個別のトグルで選ぶ。ウィンドウを閉じるとトレイに常駐し、トレイから再表示・終了できる。トレイを作成できない環境ではウィンドウを閉じると終了する。Linuxのデスクトップエントリーはsureneco.desktopとする。OS起動時の自動起動は初版の範囲外。
 
 画面は14pxの本文文字を維持し、外周・見出し・カード・一覧行の余白を抑えたコンパクトな配置とする。NG入力欄は初期表示を3行とし、縦方向に拡張できる。ウィンドウの横幅は最小400pxまで縮められる。狭い画面では数値設定を1列にし、見出し・ボタン・タブは折り返して横にはみ出さないようにする。「スレッド」「友人戦募集」「設定」のタブはスクロールすると画面上端に固定し、下までスクロールしても切り替えられる。タブの背景は不透明にして、下の本文と重ならないようにする。
 
-終了時とウィンドウを閉じてトレイへ隠すときに、通常表示時の幅・高さ・座標と最大化状態をuserData/window-state.jsonへ保存し、次回起動時に復元する。最小化状態は復元しない。最大化・最小化中も通常表示のサイズを保存する。未保存・不正な保存値は既定サイズ1120×820で起動する。タスクバー等を除く作業領域に収まるようにサイズ・位置を補正する。接続がなくなったモニター上の座標はプライマリ画面へ移す。通常の最小サイズは400×600で、作業領域がそれより小さい場合は画面に合わせる。ウィンドウ状態は通知設定の保存とは独立して扱う。LinuxのWaylandではOSの制限により座標の取得・復元ができない場合がある。
+終了時とトレイへ隠すときにTauri window-stateプラグインでサイズ・位置・最大化状態を保存し、次回起動時に復元する。非表示・最小化状態は復元しない。状態がない場合の既定サイズは1120×820、通常の最小サイズは400×600。モニターの作業領域に収まるように補正する。ウィンドウ状態は設定の保存とは独立して扱い、Electron版の旧ウィンドウ状態は変換しない。LinuxのWaylandではOSの制限により座標の取得・復元ができない場合がある。
 
 ## 取得
 
@@ -28,11 +28,11 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 
 ## 通知のクリック
 
-通知をクリックするとsurenecoのウィンドウを再表示する。最小化している場合は復元してフォーカスする。スレッドをブラウザーで開く操作は画面内の「レスを開く」を使う。Windowsでは通知にprotocol activationを指定し、sureneco-notification://notificationsで実行ファイルを起動する。開発中はsureneco-notification-devを使い、Electron実行ファイルにアプリの絶対パスを引数として登録する。開発用AppUserModelIDも本番と分ける。登録に失敗した場合はデスクトップ通知を利用不可として表示する。既に起動している場合は多重起動せず既存ウィンドウを表示する。再起動後の通知クリックはWindowsのhandleActivationでも受け付ける。
+通知をクリックするとsurenecoのウィンドウを再表示し、最小化中なら復元してフォーカスする。Windowsはsureneco-notification://notificationsのprotocol activationとTauri deep-linkを使い、起動済みならsingle-instanceで既存ウィンドウを表示する。Linuxはデスクトップ通知のdefaultアクションを受け付ける。スレッドをブラウザーで開く操作は画面内の「レスを開く」を使う。
 
 ## ルームIDのコピー
 
-募集本文の独立した5桁の数字をクリック可能なルームIDとして表示する。参照先から取得したIDは「参照先のルームID」として表示し、同じ操作でコピーできる。レス参照番号はコピーボタンにしない。半角・全角に対応し、6桁以上の数値の一部は抽出しない。複数のIDはそれぞれクリックできる。クリックすると先頭のゼロを保持した半角5桁をクリップボードにコピーし、完了を画面に表示する。失敗時はエラーを表示する。コピー操作でブラウザーは開かない。該当レスは別の「レスを開く」ボタンから開く。コピーはpreloadの限定APIからIPCを通してElectronのclipboard.writeTextを呼び、メインプロセスで5桁の数字を検証する。
+募集本文の独立した5桁の数字をクリック可能なルームIDとして表示する。参照先から取得したIDは「参照先のルームID」として表示し、同じ操作でコピーできる。レス参照番号はコピーボタンにしない。半角・全角に対応し、6桁以上の数値の一部は抽出しない。複数のIDはそれぞれクリックできる。クリックすると先頭のゼロを保持した半角5桁をクリップボードにコピーし、完了を画面に表示する。失敗時はエラーを表示する。コピー操作でブラウザーは開かない。該当レスは別の「レスを開く」ボタンから開く。コピーは限定されたTauriコマンドからバックエンドで5桁の数字を検証し、RustのクリップボードAPIを呼ぶ。Linuxではクリップボードの所有権を保持する。
 
 ## 雀魂の起動
 
@@ -40,7 +40,7 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 
 起動方法は「既定ブラウザー」「Chrome / Edge」「指定アプリ」から選ぶ。既定は既定ブラウザーで [https://game.mahjongsoul.com/] を開く。Chrome / Edgeは実行ファイルの絶対パス、プロファイルのディレクトリー名（Default、Profile 1等）、必要ならユーザーデータディレクトリーの絶対パスを指定する。プロファイル名は表示名ではなくchrome://versionまたはedge://versionにあるプロファイルパスの末尾を使う。ブラウザーに--profile-directory、任意の--user-data-dir、固定のゲームURLを渡す。指定アプリは実行ファイルの絶対パスと任意の起動引数を指定する。Steam経由の場合はsteam.exeと-applaunch、対象ゲームのApp IDを指定できる。引数は一行に一つ入力し、空白を含む引数も引用符で囲まない。
 
-起動設定はlauncher_mode、launcher_path、launcher_args、launcher_profile、launcher_user_data_dirとして既存の設定ファイルへ保存する。公開済みの設定にこれらの項目がない場合だけ既定値を補う。不正な値は保存前に拒否する。実行ファイルはメインプロセスでシェルを介さず引数配列で起動し、作業ディレクトリーには実行ファイルの親を使う。起動要求はルームIDのみを受け取り、保存済み設定を使用する。起動先はsureneco終了後も継続する。
+起動設定はlauncher_mode、launcher_path、launcher_args、launcher_profile、launcher_user_data_dirとして既存の設定ファイルへ保存する。公開済みの設定にこれらの項目がない場合だけ既定値を補う。不正な値は保存前に拒否する。実行ファイルはRust側でシェルを介さず引数配列で起動し、作業ディレクトリーには実行ファイルの親を使う。起動要求はルームIDのみを受け取り、保存済み設定を使用する。起動先はsureneco終了後も継続する。
 
 指定ブラウザー・アプリは起動後1秒以内の異常終了も起動失敗として扱い、実行ファイルのパスと終了コードまたはシグナルを画面に表示する。既存プロセスへ起動要求を渡して正常終了する場合は成功とする。1秒経過後は起動処理を完了し、ゲームの終了を待たない。この確認はゲーム画面の表示やログイン完了を保証しない。
 
@@ -57,39 +57,26 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するElectronアプリ。Re
 - ng_words / ng_ids / ng_watchois: NG本文・ID・ワッチョイの文字列配列。
 - allowed_watchois: 通知を許可するワッチョイの文字列配列。既定は空。一行に一件入力し、前後の空白・空行・重複を除く。最大1000件・一件500文字。
 
-数値設定の上限は2147483。正規表現は1000文字まで、NGは各1000件・一件500文字まで。不正な値・正規表現は保存前に拒否する。ElectronのuserData/state.jsonに設定、監視対象、取得済みレス番号を一時ファイルからのrenameで保存する。破損した保存ファイルは上書きせず、起動時にエラーダイアログを表示して終了する。募集履歴はメモリ内だけに保持する。保存済み設定にallowed_watchoisがない場合は空として読み込み、既存の設定と監視対象を維持する。
+数値設定の上限は2147483。正規表現は1000文字まで、NGは各1000件・一件500文字まで。不正な値・正規表現は保存前に拒否する。Electron版と同じ設定ディレクトリーのstate.jsonに設定、監視対象、取得済みレス番号を一時ファイルからの置き換えで保存する。WindowsはAPPDATA/sureneco、LinuxはXDG_CONFIG_HOME/sureneco（未指定なら~/.config/sureneco）を使う。破損した保存ファイルは上書きせず、起動時にエラーダイアログを表示して終了する。募集履歴はメモリ内だけに保持する。保存済み設定にallowed_watchoisがない場合は空として読み込み、既存の設定と監視対象を維持する。
 
-## Electronの境界
+## Tauriの境界
 
-レンダラーはsandbox / contextIsolation有効、nodeIntegration無効。限定されたpreload APIのみ公開し、IPC送信元と入力を検証する。外部リンクは検証済み5chスレッドURL、雀魂の固定URL、更新用の固定リリースURLを既定ブラウザーで開く。雀魂の指定アプリ起動には保存済みの起動設定だけを使用する。ナビゲーションと新規ウィンドウを禁止する。多重起動を防止する。
+WebViewからはmainウィンドウの限定コマンドだけを受け付ける。設定・スレッドID・ルームIDをバックエンドでも検証する。HTTP取得先は5ch.io / 5ch.netの板データに限定する。外部リンクは検証済み5chスレッドURL、雀魂の固定URL、更新用の固定リリースURLを既定ブラウザーで開く。指定アプリ起動には保存済みの起動設定だけを使い、シェルに文字列を渡さない。ナビゲーションと新規ウィンドウを制限し、多重起動を防止する。
 
 ## 検証
 
-開発起動と配布用ビルドではscripts/build-main.mjsを共用する。メインプロセスのESMバンドルにはelectronとelectron-updaterを取り込まず、実行時に読み込む。CommonJS形式の依存をバンドルすることで発生するDynamic requireエラーを防ぐ。
-
-Vitestで解析、設定検証、NG、締め検出、通知の重複抑止、取得失敗からの回復、保存を検証する。React画面の操作をテストする。TypeScript型チェック、Vite/Electronビルド、明暗テーマ診断、git diff --checkを実施する。ネットワークの実接続やOS通知・トレイの受け入れ確認は実機で別途行う。
+Vitestで募集解析、設定検証、NG、締め検出、通知の重複抑止、取得失敗からの回復、React画面とTauri通信を検証する。RustテストではQuickJS上の実コア、保存の置き換えと破損拒否、HTTPの許可URL・文字コード・サイズ制限を確認する。TypeScript型チェック、Viteと監視エンジンのビルド、Rustテスト・整形、明暗テーマ診断、git diff --checkを実施する。OS通知・トレイ・各OSのインストーラーは実機で別途確認する。
 
 ## 配布物の作成
 
-配布ファイル名は`sureneco_v${version}`で始まる形に統一し、バージョンはpackage.jsonから反映する。v0.2.0の出力名は以下とする。
+WindowsはWindowsでpnpm package:win、LinuxはUbuntuでpnpm package:linuxを実行する。バージョンはpackage.jsonを正としてCargo.tomlも合わせる。生成物はrelease/へまとめ、配布名はsureneco_vVERSION_Setup.exe、sureneco_vVERSION_win.zip、sureneco_vVERSION.AppImage、sureneco_vVERSION_amd64.debに統一する。ZIPには実行ファイルを含め、NSISのpackage-typeマーカーは含めない。WindowsはWebView2を使用する。
 
-- `sureneco_v0.2.0_amd64.deb`
-- `sureneco_v0.2.0.AppImage`
-- `sureneco_v0.2.0_Setup.exe`
-- `sureneco_v0.2.0_win.zip`
-
-DEBのアーキテクチャ名は対象CPUに合わせて置き換える。
-
-Windows用はWindowsで`pnpm package:win`を実行し、NSISインストーラーとZIP版をrelease/に同時に出力する。ZIP版は全ファイルを展開してsureneco.exeを起動する。設定の保存先はインストール版と同じuserDataディレクトリで、ZIPの展開先には保存しない。Linux用はUbuntuで`pnpm package:linux`を実行する。パッケージ作成前にチェックと`install-electron`を実行する。electron-builder.config.mjsはpackage.jsonのbuild設定を読み込み、対象OS・CPU・Electronバージョンが開発環境と一致する場合、node_modules内の展開済みElectronをelectronDistに指定する。これによりelectron-builderのZIP展開後の`.tmp`ディレクトリrenameを使わず、コピーによって配布用ディレクトリを作る。別OS・CPU・バージョン向けのビルドは通常の取得処理を使い、ホストOSのバイナリを流用しない。WindowsのEPERMの原因自体はログだけでは断定できず、実機での再実行を必要とする。
-
-コピーしたElectronに含まれるresources/default_app.asarはafterPackで除去する。アプリ本体のapp.asarは保持する。開発環境のElectronのファイルは変更しない。
+Tauriの署名鍵はGit管理外の.secrets/updater.keyまたはTAURI_SIGNING_PRIVATE_KEYから読み、公開鍵をtauri.conf.jsonへ設定する。配布コマンドは公開せず生成だけを行う。
 
 ## アプリの更新
 
-公開GitHubリポジトリsakots/surenecoの正式リリースを起動時と6時間ごとに確認する。設定画面からも確認できる。新しいバージョンを画面とOS通知で知らせる。プレリリース・ダウングレードは対象外。確認やダウンロードの失敗は更新欄に表示し、スレッド監視を継続する。更新確認やダウンロードの重複実行を防ぐ。
+GitHub sakots/surenecoの正式リリースのlatest.jsonを起動時と6時間ごとに確認する。設定画面からも確認でき、新版を画面とOS通知で知らせる。現在より新しいバージョンだけを対象にし、更新失敗でも監視を続ける。確認・ダウンロードの重複実行を防ぐ。開発実行では更新を無効にする。
 
-WindowsのNSISインストール版、LinuxのAppImage版・DEBインストール版はelectron-updaterを使う。ユーザーが「ダウンロード」を押すと取得・検証し、進捗を表示する。「再起動して更新」を押した時だけインストールする。DEBなど管理者権限が必要な環境ではOSの認証画面が出る。終了時に勝手に更新しない。設定と監視対象はuserDataに保持する。Windows ZIP版は新リリースを確認・通知し、GitHubリリース画面から手動更新する。開発実行では更新処理を無効にする。
+NSIS・AppImage・DEB版はTauri updaterで署名を検証する。「ダウンロード」で取得し、「再起動して更新」を押したときだけ適用する。終了時には勝手に更新しない。DEBの適用ではOSの認証を受ける。NSISインストール時は実行ファイルと同じ場所へpackage-typeを作成し、Windows ZIP版ではGitHubリリースから手動更新する。
 
-更新APIはpreloadを通した限定IPCとし、配布元は固定する。NSISインストール時にresources/package-typeへnsisを記録し、ZIP版と区別する。Linuxでは既存のpackage-typeとAPPIMAGE環境変数を使う。
-
-ローカルのpackageコマンドは--publish neverを指定し、GitHubへ自動公開しない。electron-builderのGitHub publish設定によりapp-update.ymlと更新メタデータを生成する。リリースには全OSの配布ファイルに加え、latest.yml、latest-linux.ymlおよび生成されたblockmapファイルを添付する。新機能を含む版を一度手動で導入した後、それより新しいバージョンから自動更新できる。同じバージョンの差し替えは更新として検出しない。
+全OSの配布物・.sigを同じrelease/へ集めてpnpm release:manifestでlatest.jsonを生成し、配布物・署名・latest.jsonを同じGitHub Releaseへ添付する。Electron用latest.yml・latest-linux.yml・blockmapは使用しない。Electron版からの初回導入は手動で行い、同じstate.jsonを読み込む。Electron版とTauri版は同時起動しない。同じバージョンの差し替えは更新として検出しない。

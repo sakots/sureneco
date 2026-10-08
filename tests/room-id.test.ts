@@ -1,8 +1,5 @@
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { splitRoomIds, normalizeRoomId } from "../src/core/room-id";
-vi.mock("electron", () => ({ clipboard: { writeText: vi.fn() } }));
-import { clipboard } from "electron";
-import { copyRoomId } from "../src/main/clipboard";
 
 it("独立した5桁を抽出し、長い数値からは抽出しない", () => {
   const parts = splitRoomIds(
@@ -29,11 +26,6 @@ it("先頭ゼロと全角を扱い、不正なコピー要求を拒否する", (
   ]) {
     expect(() => normalizeRoomId(input)).toThrow();
   }
-  copyRoomId("０１２３４");
-  expect(clipboard.writeText).toHaveBeenCalledWith("01234");
-  vi.mocked(clipboard.writeText).mockClear();
-  expect(() => copyRoomId("invalid")).toThrow();
-  expect(clipboard.writeText).not.toHaveBeenCalled();
 });
 
 it("レス参照番号はルームIDにしない", () => {
