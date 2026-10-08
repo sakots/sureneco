@@ -3,6 +3,36 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { artifactName, createManifest } from "../scripts/release-manifest.mjs";
+import { packagePlan } from "../scripts/package.mjs";
+
+it("WSLからWindows版を作るときはMSVCターゲットの成果物を使用する", () => {
+  const plan = packagePlan("win", "linux", "/tmp/sureneco-target");
+  expect(plan.arguments).toEqual([
+    "build",
+    "--bundles",
+    "nsis",
+    "--runner",
+    "cargo-xwin",
+    "--target",
+    "x86_64-pc-windows-msvc",
+  ]);
+  expect(plan.output).toBe(
+    join("/tmp/sureneco-target", "x86_64-pc-windows-msvc", "release"),
+  );
+});
+
+it("Windows上のWindows版とLinux版はネイティブの成果物を使用する", () => {
+  expect(packagePlan("win", "win32", "target")).toEqual({
+    arguments: ["build", "--bundles", "nsis"],
+    output: join("target", "release"),
+  });
+  expect(packagePlan("linux", "linux", "target")).toEqual({
+    arguments: ["build", "--bundles", "deb,appimage"],
+    output: join("target", "release"),
+  });
+  expect(() => packagePlan("linux", "win32", "target")).toThrow();
+  expect(() => packagePlan("win", "darwin", "target")).toThrow();
+});
 
 it("バージョン付きの共通配布名と形式ごとの更新先を作る", async () => {
   const directory = await mkdtemp(join(tmpdir(), "sureneco-release-"));

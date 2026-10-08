@@ -25,7 +25,7 @@ pnpm dev
 
 ## 配布物の作成
 
-Windows用はWindows、Linux用はUbuntu上で実行してください。WindowsとLinuxのnode_modulesは共有しません。
+Windows版はWindowsまたはUbuntu・WSL2（Ubuntu）、Linux版はUbuntu・WSL2（Ubuntu）で作成できます。WindowsとLinuxのnode_modulesは共有しません。WSLではWSL側のNode.js・pnpm・Rustを使い、プロジェクトをLinux側のホームディレクトリーに置いてください。
 
 ```powershell
 pnpm package:win
@@ -35,19 +35,41 @@ pnpm package:win
 pnpm package:linux
 ```
 
+Ubuntu・WSLからWindows版も作る場合は、次の準備を一度行います。Windows x64向けにcargo-xwinでクロスコンパイルし、Setup.exeとZIPを生成します。Windows版の動作確認はWindowsで行ってください。
+
+```sh
+sudo apt install clang llvm lld nsis cmake ninja-build
+rustup target add x86_64-pc-windows-msvc
+cargo install --locked cargo-xwin
+pnpm package:win
+```
+
+WSLでのチェック・ビルドには「開発」に記載したUbuntu用ライブラリーも必要です。Windows版だけを作る場合も、ビルド前にLinux側のRustテストを実行するため必要になります。同じWSL上で`pnpm package:linux`、`pnpm package:win`を実行すると、両方の配布物と更新用のlatest.jsonがrelease/に揃います。クロスコンパイルの構成は[Tauri公式の手順](https://v2.tauri.app/distribute/windows-installer/#build-windows-apps-on-linux-and-macos)に沿っています。
+
 release/へ以下の形式で出力します。配布名とアプリのバージョンはpackage.jsonから反映します。リリース時はsrc-tauri/Cargo.tomlのバージョンも合わせて更新してください。
 
-- `sureneco_v0.5.2_Setup.exe`
-- `sureneco_v0.5.2_win.zip`
-- `sureneco_v0.5.2.AppImage`
-- `sureneco_v0.5.2_amd64.deb`
+- `sureneco_v0.6.0_Setup.exe`
+- `sureneco_v0.6.0_win.zip`
+- `sureneco_v0.6.0.AppImage`
+- `sureneco_v0.6.0_amd64.deb`
 
 ZIP版は展開してsureneco.exeを起動します。WindowsではWebView2ランタイムが必要です。インストーラーは必要に応じてWebView2を導入します。
 
-署名鍵はこの開発端末の`.secrets/updater.key`に作成済みで、Gitには含めません。鍵を別の安全な場所にも保管してください。Windows等の別環境では同じ鍵を配置するか、`TAURI_SIGNING_PRIVATE_KEY`に鍵のフルパスを設定します。パスワード付きの鍵を使う場合は`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`も設定します。公開鍵はsrc-tauri/tauri.conf.jsonに設定済みです。
+`TAURI_SIGNING_PRIVATE_KEY`は、自動更新用の配布ファイルに署名する秘密鍵の場所（または鍵の内容）を指定する環境変数です。アプリは対応する公開鍵で署名を検証してから更新します。OSやバージョンが変わっても同じ鍵を使います。
+
+この更新用の署名とWindowsのAuthenticode署名は別です。クロスコンパイルでインストーラーの署名をスキップする警告が出ても、更新用の`.sig`は生成します。
+
+署名鍵はこの開発端末の`.secrets/updater.key`に作成済みで、Gitには含めません。鍵を別の安全な場所にも保管してください。別のWindows・WSL環境へcloneしただけでは鍵は付いてこないので、既存の鍵を同じ場所へコピーしてください。この場所なら環境変数の設定は不要です。別の場所に置く場合は`TAURI_SIGNING_PRIVATE_KEY`に鍵のフルパスを設定します。パスワード付きの鍵を使う場合は`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`も設定します。公開鍵はsrc-tauri/tauri.conf.jsonに設定済みです。鍵の内容をGitHubやチャットへ貼り付けないでください。`pnpm dev`には署名鍵は不要です。
 
 ```powershell
 $env:TAURI_SIGNING_PRIVATE_KEY = "D:\keys\sureneco-updater.key"
+pnpm package:win
+```
+
+WSLのBashでは次のように設定します。例ではWindows側のD:\keysに保管した既存の鍵を使います。
+
+```sh
+export TAURI_SIGNING_PRIVATE_KEY="/mnt/d/keys/sureneco-updater.key"
 pnpm package:win
 ```
 
@@ -88,6 +110,7 @@ Chrome / Edgeは実行ファイルのフルパスと`Default`や`Profile 1`等�
 ### [2026/10/09] v0.6.0
 
 - TauriとRustでの実装に切り替え
+- Ubuntu・WSLからWindows版のインストーラーとZIPを作成できるようにした
 
 ### [2026/10/09] v0.5.2
 

@@ -69,7 +69,7 @@ Vitestで募集解析、設定検証、NG、締め検出、通知の重複抑止
 
 ## 配布物の作成
 
-WindowsはWindowsでpnpm package:win、LinuxはUbuntuでpnpm package:linuxを実行する。バージョンはpackage.jsonを正としてCargo.tomlも合わせる。生成物はrelease/へまとめ、配布名はsureneco_vVERSION_Setup.exe、sureneco_vVERSION_win.zip、sureneco_vVERSION.AppImage、sureneco_vVERSION_amd64.debに統一する。ZIPには実行ファイルを含め、NSISのpackage-typeマーカーは含めない。WindowsはWebView2を使用する。
+Windows版はWindowsまたはUbuntu・WSL2でpnpm package:win、Linux版はUbuntu・WSL2でpnpm package:linuxを実行する。LinuxホストからWindows版を作るときはcargo-xwinをランナーにし、x86_64-pc-windows-msvcターゲットでNSISとZIPを作る。ZIPも同じWindowsターゲットの実行ファイルを使う。バージョンはpackage.jsonを正としてCargo.tomlも合わせる。生成物はrelease/へまとめ、配布名はsureneco_vVERSION_Setup.exe、sureneco_vVERSION_win.zip、sureneco_vVERSION.AppImage、sureneco_vVERSION_amd64.debに統一する。ZIPには実行ファイルを含め、NSISのpackage-typeマーカーは含めない。WindowsはWebView2を使用する。
 
 Tauriの署名鍵はGit管理外の.secrets/updater.keyまたはTAURI_SIGNING_PRIVATE_KEYから読み、公開鍵をtauri.conf.jsonへ設定する。配布コマンドは公開せず生成だけを行う。
 

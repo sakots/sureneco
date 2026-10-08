@@ -20,6 +20,6 @@
 
 既存の募集検出・監視・UIテストに加え、QuickJS上での実行、保存失敗・破損、許可URL、起動引数、ネイティブHTTPのサイズ制限を確認する。Rustの整形・テスト・ビルド、テーマ診断、差分チェックを通す。Windowsの通知クリックとインストーラー、UbuntuのトレイとWebKit表示は実機で確認する。
 
-Ubuntuにはlibwebkit2gtk-4.1-dev、build-essential、libxdo-dev、libssl-dev、libayatana-appindicator3-dev、librsvg2-devが必要。WindowsにはRust MSVC、C++ Build Tools、WebView2が必要。
+Ubuntu・WSL2（Ubuntu）にはlibwebkit2gtk-4.1-dev、build-essential、libxdo-dev、libssl-dev、libayatana-appindicator3-dev、librsvg2-devが必要。WindowsにはRust MSVC、C++ Build Tools、WebView2が必要。Ubuntu・WSLからWindows x64版を作る場合はclang、llvm、lld、nsis、cmake、ninja-build、Rustのx86_64-pc-windows-msvcターゲット、cargo-xwinを用意し、pnpm package:winでクロスコンパイルする。出力先にはWindowsターゲットのサブディレクトリーを使い、ホストのLinux実行ファイルをZIPへ混ぜない。
 
 参照: [Tauri前提条件](https://v2.tauri.app/start/prerequisites/)、[Tauri更新](https://v2.tauri.app/plugin/updater/)、[rquickjs](https://docs.rs/rquickjs/)。
