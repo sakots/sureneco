@@ -58,6 +58,7 @@ if (!app.requestSingleInstanceLock()) {
   app
     .whenReady()
     .then(async () => {
+      Menu.setApplicationMenu(null);
       const notificationProtocol = registerNotificationProtocol(app);
       const notificationAvailable =
         Notification.isSupported() &&
