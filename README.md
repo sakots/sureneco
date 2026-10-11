@@ -48,10 +48,10 @@ WSLでのチェック・ビルドには「開発」に記載したUbuntu用ラ�
 
 release/へ以下の形式で出力します。配布名とアプリのバージョンはpackage.jsonから反映します。リリース時はsrc-tauri/Cargo.tomlのバージョンも合わせて更新してください。
 
-- `sureneco_v0.6.0_Setup.exe`
-- `sureneco_v0.6.0_win.zip`
-- `sureneco_v0.6.0.AppImage`
-- `sureneco_v0.6.0_amd64.deb`
+- `sureneco_v0.6.1_Setup.exe`
+- `sureneco_v0.6.1_win.zip`
+- `sureneco_v0.6.1.AppImage`
+- `sureneco_v0.6.1_amd64.deb`
 
 ZIP版は展開してsureneco.exeを起動します。WindowsではWebView2ランタイムが必要です。インストーラーは必要に応じてWebView2を導入します。
 
@@ -108,6 +108,11 @@ Chrome / Edgeは実行ファイルのフルパスと`Default`や`Profile 1`等�
 詳細は[仕様書](docs/specification.md)と[移行構成](docs/tauri-migration.md)を参照してください。
 
 ## 更新履歴
+
+### [2026/10/12] v0.6.2（未リリース）
+
+- Windowsの通知処理で未使用引数の警告が出る問題を修正
+- Rust側のバージョン番号を配布物と同じ0.6.1に修正
 
 ### [2026/10/11] v0.6.1
 

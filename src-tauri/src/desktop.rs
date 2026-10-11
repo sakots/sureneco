@@ -133,7 +133,7 @@ fn fit_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     Ok(())
 }
 
-pub fn notify(app: &AppHandle, title: String, body: String) -> Result<(), String> {
+pub fn notify(_app: &AppHandle, title: String, body: String) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
         let notification = notify_rust::Notification::new()
@@ -144,7 +144,7 @@ pub fn notify(app: &AppHandle, title: String, body: String) -> Result<(), String
             .action("default", "surenecoを開く")
             .show()
             .map_err(|e| e.to_string())?;
-        let app = app.clone();
+        let app = _app.clone();
         thread::spawn(move || {
             notification.wait_for_action(|action| {
                 if action == "default" {
