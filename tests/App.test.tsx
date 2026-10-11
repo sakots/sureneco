@@ -107,12 +107,15 @@ it("ルームIDをクリックすると半角でコピーし、レスは別の�
   expect(api.copyRoomId).toHaveBeenCalledWith("01234");
   expect(api.openThread).not.toHaveBeenCalled();
   expect(screen.getByRole("status").textContent).toContain(
-    "01234をコピーしました",
+    "レス 12：ルームID 01234をコピーしました。",
   );
   await user.click(
     screen.getByRole("button", { name: "ルームID 56789をコピー" }),
   );
   expect(api.copyRoomId).toHaveBeenCalledWith("56789");
+  expect(screen.getByRole("status").textContent).toContain(
+    "レス 12：ルームID 56789をコピーしました。",
+  );
   expect(screen.queryByRole("button", { name: /12345をコピー/ })).toBeNull();
   await user.click(screen.getByRole("button", { name: "レスを開く" }));
   expect(api.openThread).toHaveBeenCalledWith("1791034502", 12);
@@ -135,7 +138,7 @@ it("コピーに失敗した場合はエラーを表示する", async () => {
 
 it("参照先から得たルームIDもコピーできる", async () => {
   const api = setup([
-    { ...recruitment, body: ">>1 あと1人", roomIds: ["01234"] },
+    { ...recruitment, number: 34, body: ">>1 あと1人", roomIds: ["01234"] },
   ]);
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: /^友人戦募集/ }));
@@ -144,6 +147,9 @@ it("参照先から得たルームIDもコピーできる", async () => {
     screen.getByRole("button", { name: "ルームID 01234をコピー" }),
   );
   expect(api.copyRoomId).toHaveBeenCalledWith("01234");
+  expect(screen.getByRole("status").textContent).toContain(
+    "レス 34：ルームID 01234をコピーしました。",
+  );
 });
 
 it("募集カードにレス番号を明示し、参照先の番号と区別する", async () => {
@@ -250,6 +256,9 @@ it("募集のIDを指定して雀魂を起動し、締め切り済みの募集�
     }),
   );
   expect(api.launchMahjongSoul).toHaveBeenCalledWith("01234");
+  expect(screen.getByRole("status").textContent).toContain(
+    "レス 12：ルームID 01234をコピーして雀魂を起動しました。",
+  );
   expect(
     (
       screen.getByRole("button", {

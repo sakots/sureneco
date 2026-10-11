@@ -86,7 +86,12 @@ export function App({ api }: { api: Api }) {
       setBusy(false);
     }
   }
-  const roomIdButton = (roomId: string, text: string, key: number | string) => (
+  const roomIdButton = (
+    roomId: string,
+    text: string,
+    key: number | string,
+    post: number,
+  ) => (
     <button
       key={key}
       className="room-id"
@@ -96,7 +101,7 @@ export function App({ api }: { api: Api }) {
       onClick={() =>
         void act(async () => {
           await api.copyRoomId(roomId);
-          setNotice(`ルームID ${roomId}をコピーしました。`);
+          setNotice(`レス ${post}：ルームID ${roomId}をコピーしました。`);
         })
       }
     >
@@ -296,14 +301,21 @@ export function App({ api }: { api: Api }) {
                     <div className="recruitment-body">
                       {splitRoomIds(item.body).map((part, index) =>
                         part.roomId
-                          ? roomIdButton(part.roomId, part.text, index)
+                          ? roomIdButton(
+                              part.roomId,
+                              part.text,
+                              index,
+                              item.number,
+                            )
                           : part.text,
                       )}
                     </div>
                     {referencedIds.length > 0 && (
                       <div className="referenced-rooms">
                         <span>参照先のルームID</span>{" "}
-                        {referencedIds.map((id) => roomIdButton(id, id, id))}
+                        {referencedIds.map((id) =>
+                          roomIdButton(id, id, id, item.number),
+                        )}
                       </div>
                     )}
                     <div className="recruitment-actions">
@@ -317,7 +329,7 @@ export function App({ api }: { api: Api }) {
                             void act(async () => {
                               await api.launchMahjongSoul(id);
                               setNotice(
-                                `ルームID ${id}をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。`,
+                                `レス ${item.number}：ルームID ${id}をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。`,
                               );
                             })
                           }
