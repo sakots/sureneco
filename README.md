@@ -48,10 +48,10 @@ WSLでのチェック・ビルドには「開発」に記載したUbuntu用ラ�
 
 release/へ以下の形式で出力します。配布名とアプリのバージョンはpackage.jsonから反映します。リリース時はsrc-tauri/Cargo.tomlのバージョンも合わせて更新してください。
 
-- `sureneco_v0.6.1_Setup.exe`
-- `sureneco_v0.6.1_win.zip`
-- `sureneco_v0.6.1.AppImage`
-- `sureneco_v0.6.1_amd64.deb`
+- `sureneco_vx.x.x_Setup.exe`
+- `sureneco_vx.x.x_win.zip`
+- `sureneco_vx.x.x.AppImage`
+- `sureneco_vx.x.x_amd64.deb`
 
 ZIP版は展開してsureneco.exeを起動します。WindowsではWebView2ランタイムが必要です。インストーラーは必要に応じてWebView2を導入します。
 
