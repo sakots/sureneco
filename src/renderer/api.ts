@@ -21,6 +21,10 @@ export const api: Api = {
   refresh: () => request("refresh"),
   watch: (id, enabled) => request("watch", { id, enabled }),
   saveSettings: (settings) => request("settings", { settings }),
+  getConfigDirectory: () => request<string>("config_directory"),
+  chooseConfigDirectory: () => invoke<string | null>("choose_config_directory"),
+  changeConfigDirectory: (path) =>
+    request<string>("set_config_directory", { path }),
   openThread: (id, post) => request("open_thread", { id, post }),
   copyRoomId: (id) => request("copy_room_id", { id }),
   launchMahjongSoul: (id) => request("launch", { id }),

@@ -79,6 +79,9 @@ export interface Api {
   refresh(): Promise<void>;
   watch(id: string, enabled: boolean): Promise<void>;
   saveSettings(settings: Settings): Promise<void>;
+  getConfigDirectory(): Promise<string>;
+  chooseConfigDirectory(): Promise<string | null>;
+  changeConfigDirectory(path: string): Promise<string>;
   openThread(id: string, post?: number): Promise<void>;
   copyRoomId(id: string): Promise<void>;
   launchMahjongSoul(id: string): Promise<void>;

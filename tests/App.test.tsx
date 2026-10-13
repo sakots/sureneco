@@ -45,6 +45,9 @@ function setup(
     refresh: vi.fn(async () => {}),
     watch: vi.fn(async () => {}),
     saveSettings: vi.fn(async () => {}),
+    getConfigDirectory: vi.fn(async () => "/config/current"),
+    chooseConfigDirectory: vi.fn(async () => null),
+    changeConfigDirectory: vi.fn(async (path: string) => path),
     openThread: vi.fn(async () => {}),
     copyRoomId: vi.fn(async () => {}),
     launchMahjongSoul: vi.fn(async () => {}),
@@ -84,6 +87,60 @@ it("設定の検証エラーを表示し、NGを一行一件で保存する", as
       expect.objectContaining({ update_sec: 20, ng_ids: ["abc", "xyz"] }),
     ),
   );
+});
+
+it("設定フォルダの変更に失敗しても現在の保存先と入力を保持する", async () => {
+  const api = setup();
+  vi.mocked(api.changeConfigDirectory).mockRejectedValueOnce(
+    new Error("変更先に state.json が既に存在します"),
+  );
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  const path = screen.getByLabelText("設定フォルダのパス");
+  await waitFor(() =>
+    expect((path as HTMLInputElement).value).toBe("/config/current"),
+  );
+  await user.clear(path);
+  await user.type(path, "/config/existing");
+  await user.click(screen.getByRole("button", { name: "保存先を変更" }));
+  expect(screen.getByRole("alert")).toBeTruthy();
+  expect(screen.getByText("/config/current")).toBeTruthy();
+  expect((path as HTMLInputElement).value).toBe("/config/existing");
+});
+
+it("フォルダ選択をキャンセルしても入力と現在の保存先を保持する", async () => {
+  setup();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  const path = screen.getByLabelText("設定フォルダのパス");
+  await waitFor(() =>
+    expect((path as HTMLInputElement).value).toBe("/config/current"),
+  );
+  await user.clear(path);
+  await user.type(path, "/config/draft");
+  await user.click(screen.getByRole("button", { name: "フォルダを選択" }));
+  expect((path as HTMLInputElement).value).toBe("/config/draft");
+  expect(screen.getByText("/config/current")).toBeTruthy();
+});
+
+it("選択したフォルダは明示的に変更するまで保存先にせず、変更後は確定したパスを表示する", async () => {
+  const api = setup();
+  vi.mocked(api.chooseConfigDirectory).mockResolvedValueOnce(
+    "/config/selected",
+  );
+  vi.mocked(api.changeConfigDirectory).mockResolvedValueOnce(
+    "/config/resolved",
+  );
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  const path = screen.getByLabelText("設定フォルダのパス");
+  await user.click(screen.getByRole("button", { name: "フォルダを選択" }));
+  expect((path as HTMLInputElement).value).toBe("/config/selected");
+  expect(screen.getByText("/config/current")).toBeTruthy();
+  expect(screen.queryByText("/config/resolved")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "保存先を変更" }));
+  expect(screen.getByText("/config/resolved")).toBeTruthy();
+  expect((path as HTMLInputElement).value).toBe("/config/resolved");
 });
 
 const recruitment = {

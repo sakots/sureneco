@@ -22,6 +22,7 @@ encoding_rs = "0.8"
 url = "2"
 dirs = "6"
 tempfile = "3"
+parking_lot = "0.12"
 tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico"], optional = true }
 tauri-plugin-single-instance = { version = "2", optional = true }
 tauri-plugin-window-state = { version = "2", optional = true }

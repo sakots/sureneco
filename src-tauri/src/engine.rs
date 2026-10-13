@@ -133,6 +133,77 @@ mod tests {
         assert_eq!(engine.interval(), 35);
     }
     #[test]
+    fn folder_cutover_keeps_live_state_and_restarts_with_subsequent_changes() {
+        let root = tempfile::tempdir().unwrap();
+        let base = root.path().join("default");
+        let target = root.path().join("selected");
+        let storage = Rc::new(RefCell::new(
+            crate::storage::ConfigStorage::load(base.clone()).unwrap(),
+        ));
+        let writer = storage.clone();
+        let engine = Engine::new(
+            None,
+            |url| {
+                Ok(if url.ends_with("subject.txt") {
+                    "1791471600.dat<>【雀魂】じゃんたま (1)".into()
+                } else {
+                    "名無し<>sage<>2026/10/09(金) 00:00:00 ID:test<>Ⅲ東 ０１２３４<>タイトル".into()
+                })
+            },
+            move |text| writer.borrow().save(&text),
+            |_| {},
+            |_| Ok(()),
+        )
+        .unwrap();
+        engine.context.with(|ctx| {
+            ctx.eval::<(), _>("Date.now = () => new Date('2026-10-09T00:00:10+09:00').getTime()")
+                .unwrap();
+        });
+        engine
+            .request("watch", json!({"id":"1791471600","enabled":true}))
+            .unwrap();
+        let old = storage.borrow().read().unwrap().unwrap();
+        let saved = engine.request("saved_state", json!({})).unwrap();
+        assert_eq!(saved["cursors"]["1791471600"], 1);
+        storage
+            .borrow_mut()
+            .change(&target, &saved.to_string())
+            .unwrap();
+        let mut settings = saved["settings"].clone();
+        settings["update_sec"] = json!(45);
+        engine
+            .request("settings", json!({"settings":settings}))
+            .unwrap();
+        assert_eq!(
+            engine.request("snapshot", json!({})).unwrap()["recruitments"][0]["roomIds"][0],
+            "01234"
+        );
+        assert_eq!(
+            crate::storage::read(&base.join("state.json"))
+                .unwrap()
+                .unwrap(),
+            old
+        );
+        let reopened = crate::storage::ConfigStorage::load(base).unwrap();
+        let restarted = Engine::new(
+            reopened.read().unwrap(),
+            |_| Ok(String::new()),
+            |_| Ok(()),
+            |_| {},
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(restarted.interval(), 45);
+        assert_eq!(
+            restarted.request("saved_state", json!({})).unwrap()["cursors"]["1791471600"],
+            1
+        );
+        assert_eq!(
+            restarted.request("snapshot", json!({})).unwrap()["watched"],
+            json!(["1791471600"])
+        );
+    }
+    #[test]
     fn corrupt_saved_state_is_rejected() {
         assert!(Engine::new(
             Some("broken".into()),

@@ -62,6 +62,9 @@ export async function request(text: string): Promise<string> {
     case "snapshot":
       result = monitor.snapshot();
       break;
+    case "saved_state":
+      result = state;
+      break;
     case "refresh":
       await monitor.refresh();
       break;

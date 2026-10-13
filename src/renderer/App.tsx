@@ -38,6 +38,8 @@ export function App({ api }: { api: Api }) {
     "threads",
   );
   const [update, setUpdate] = useState<UpdateState | null>(null);
+  const [configDirectory, setConfigDirectory] = useState<string | null>(null);
+  const [configDirectoryDraft, setConfigDirectoryDraft] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,6 +64,17 @@ export function App({ api }: { api: Api }) {
       .getUpdateState()
       .then((value) => {
         if (alive) setUpdate(value);
+      })
+      .catch((err) => {
+        if (alive) setError(String(err));
+      });
+    void api
+      .getConfigDirectory()
+      .then((value) => {
+        if (alive) {
+          setConfigDirectory(value);
+          setConfigDirectoryDraft(value);
+        }
       })
       .catch((err) => {
         if (alive) setError(String(err));
@@ -369,6 +382,63 @@ export function App({ api }: { api: Api }) {
           {page === "settings" && (
             <>
               {update && <UpdatePanel api={api} state={update} />}
+              <section className="settings-card">
+                <h3>設定フォルダ</h3>
+                <p className="metadata">
+                  現在の保存先： <span>{configDirectory ?? "読み込み中…"}</span>
+                </p>
+                <label htmlFor="config-directory">
+                  設定フォルダのパス
+                  <input
+                    id="config-directory"
+                    type="text"
+                    value={configDirectoryDraft}
+                    disabled={busy || configDirectory === null}
+                    aria-describedby="config-directory-help"
+                    onChange={(event) =>
+                      setConfigDirectoryDraft(event.target.value)
+                    }
+                  />
+                </label>
+                <p className="help" id="config-directory-help">
+                  絶対パスを入力するか、フォルダを選択してください。「保存先を変更」で保存済みの設定、監視対象、取得済みレス番号を変更先にコピーし、以後の保存先にします。元のフォルダのデータは残ります。state.json
+                  が既にあるフォルダには変更できません。ウィンドウの位置・サイズは移しません。
+                </p>
+                <div className="form-actions">
+                  <button
+                    className="secondary"
+                    disabled={busy || configDirectory === null}
+                    onClick={() =>
+                      void act(async () => {
+                        const selected = await api.chooseConfigDirectory();
+                        if (selected !== null)
+                          setConfigDirectoryDraft(selected);
+                      })
+                    }
+                  >
+                    フォルダを選択
+                  </button>
+                  <button
+                    className="primary"
+                    disabled={
+                      busy ||
+                      configDirectory === null ||
+                      !configDirectoryDraft.trim()
+                    }
+                    onClick={() =>
+                      void act(async () => {
+                        const directory =
+                          await api.changeConfigDirectory(configDirectoryDraft);
+                        setConfigDirectory(directory);
+                        setConfigDirectoryDraft(directory);
+                        setNotice("設定フォルダを変更しました。");
+                      })
+                    }
+                  >
+                    保存先を変更
+                  </button>
+                </div>
+              </section>
               <SettingsForm
                 initial={snapshot.settings}
                 busy={busy}

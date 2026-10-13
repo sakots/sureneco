@@ -1,8 +1,12 @@
 use crate::{engine::Engine, http, storage};
+use parking_lot::Mutex;
 use serde_json::{json, Value};
 use std::{
+    cell::RefCell,
+    path::Path,
     process::{Command, Stdio},
-    sync::{mpsc, Arc, Mutex},
+    rc::Rc,
+    sync::{mpsc, Arc},
     thread,
     time::{Duration, Instant},
 };
@@ -28,7 +32,7 @@ pub struct Backend {
 struct Clipboard(Mutex<Option<arboard::Clipboard>>);
 fn copy(app: &AppHandle, id: &str) -> Result<(), String> {
     let state = app.state::<Clipboard>();
-    let mut clipboard = state.0.lock().unwrap();
+    let mut clipboard = state.0.lock();
     if clipboard.is_none() {
         *clipboard = Some(arboard::Clipboard::new().map_err(|e| e.to_string())?);
     }
@@ -183,8 +187,14 @@ pub fn notify(_app: &AppHandle, title: String, body: String) -> Result<(), Strin
 }
 
 fn start(app: &AppHandle, available: bool) -> Result<Backend, String> {
-    let path = storage::directory()?.join("state.json");
-    let saved = storage::read(&path)?;
+    let base = storage::directory()?;
+    let storage = storage::ConfigStorage::load(base.clone()).map_err(|error| {
+        format!(
+            "{error}\n保存先の指定: {}",
+            base.join("config-location.json").display()
+        )
+    })?;
+    let saved = storage.read()?;
     let (sender, receiver) = mpsc::channel::<Message>();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     let snapshot = Arc::new(Mutex::new(Value::Null));
@@ -192,15 +202,17 @@ fn start(app: &AppHandle, available: bool) -> Result<Backend, String> {
     let frontend_snapshot = snapshot.clone();
     let app = app.clone();
     thread::spawn(move || {
+        let storage = Rc::new(RefCell::new(storage));
+        let writer = storage.clone();
         let event_app = app.clone();
         let notification_app = app.clone();
         let engine = Engine::new(
             saved,
             |url| http::fetch(&url),
-            move |text| storage::write(&path, &text),
+            move |text| writer.borrow().save(&text),
             move |text| {
                 if let Ok(value) = serde_json::from_str::<Value>(&text) {
-                    *cached.lock().unwrap() = value.clone();
+                    *cached.lock() = value.clone();
                     let _ = event_app.emit("state", value);
                 }
             },
@@ -216,7 +228,10 @@ fn start(app: &AppHandle, available: bool) -> Result<Backend, String> {
         let engine = match engine {
             Ok(engine) => engine,
             Err(error) => {
-                let _ = ready_tx.send(Err(error));
+                let _ = ready_tx.send(Err(format!(
+                    "{error}\n設定ファイル: {}",
+                    storage.borrow().directory().join("state.json").display()
+                )));
                 return;
             }
         };
@@ -229,7 +244,7 @@ fn start(app: &AppHandle, available: bool) -> Result<Backend, String> {
             json!({"available": notification_available}),
         ) {
             Ok(value) => {
-                *snapshot.lock().unwrap() = value;
+                *snapshot.lock() = value;
                 let _ = ready_tx.send(Ok(()));
             }
             Err(error) => {
@@ -241,7 +256,20 @@ fn start(app: &AppHandle, available: bool) -> Result<Backend, String> {
         loop {
             match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
                 Ok(message) => {
-                    let result = engine.request(&message.command, message.payload);
+                    let result = match message.command.as_str() {
+                        "config_directory" => Ok(json!(storage.borrow().directory())),
+                        "set_config_directory" => (|| {
+                            let path = message.payload["path"]
+                                .as_str()
+                                .ok_or("設定フォルダのパスが不正です。")?;
+                            let saved = engine.request("saved_state", json!({}))?;
+                            storage
+                                .borrow_mut()
+                                .change(Path::new(path), &saved.to_string())?;
+                            Ok(json!(storage.borrow().directory()))
+                        })(),
+                        _ => engine.request(&message.command, message.payload),
+                    };
                     if ["refresh", "watch", "settings"].contains(&message.command.as_str()) {
                         deadline = Instant::now() + Duration::from_secs(engine.interval());
                     }
@@ -381,6 +409,24 @@ mod tests {
 }
 
 #[tauri::command]
+async fn choose_config_directory(app: AppHandle) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("設定フォルダを選択")
+            .blocking_pick_folder()
+            .map(|path| {
+                path.into_path()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .map_err(|error| error.to_string())
+            })
+            .transpose()
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 async fn request(
     app: AppHandle,
     backend: tauri::State<'_, Backend>,
@@ -388,12 +434,14 @@ async fn request(
     payload: Value,
 ) -> Result<Value, String> {
     if command == "snapshot" {
-        return Ok(backend.snapshot.lock().unwrap().clone());
+        return Ok(backend.snapshot.lock().clone());
     }
     if ![
         "refresh",
         "watch",
         "settings",
+        "config_directory",
+        "set_config_directory",
         "open_thread",
         "copy_room_id",
         "launch",
@@ -440,6 +488,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             request,
+            choose_config_directory,
             updates::update_state,
             updates::check_update,
             updates::download_update,
@@ -467,13 +516,7 @@ pub fn run() {
                 Err(error) => {
                     let error_app = handle.clone();
                     app.dialog()
-                        .message(format!(
-                            "{error}\n設定ファイル: {}",
-                            storage::directory()
-                                .unwrap_or_default()
-                                .join("state.json")
-                                .display()
-                        ))
+                        .message(error)
                         .title("surenecoを起動できません")
                         .kind(tauri_plugin_dialog::MessageDialogKind::Error)
                         .show(move |_| error_app.exit(1));

@@ -4016,6 +4016,7 @@ dependencies = [
  "encoding_rs",
  "notify-rust",
  "open",
+ "parking_lot",
  "reqwest",
  "rquickjs",
  "serde",
