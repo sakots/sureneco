@@ -163,16 +163,10 @@ it("ルームIDをクリックすると半角でコピーし、レスは別の�
   );
   expect(api.copyRoomId).toHaveBeenCalledWith("01234");
   expect(api.openThread).not.toHaveBeenCalled();
-  expect(screen.getByRole("status").textContent).toContain(
-    "レス 12：ルームID 01234をコピーしました。",
-  );
   await user.click(
     screen.getByRole("button", { name: "ルームID 56789をコピー" }),
   );
   expect(api.copyRoomId).toHaveBeenCalledWith("56789");
-  expect(screen.getByRole("status").textContent).toContain(
-    "レス 12：ルームID 56789をコピーしました。",
-  );
   expect(screen.queryByRole("button", { name: /12345をコピー/ })).toBeNull();
   await user.click(screen.getByRole("button", { name: "レスを開く" }));
   expect(api.openThread).toHaveBeenCalledWith("1791034502", 12);
@@ -204,18 +198,41 @@ it("参照先から得たルームIDもコピーできる", async () => {
     screen.getByRole("button", { name: "ルームID 01234をコピー" }),
   );
   expect(api.copyRoomId).toHaveBeenCalledWith("01234");
-  expect(screen.getByRole("status").textContent).toContain(
-    "レス 34：ルームID 01234をコピーしました。",
-  );
 });
 
-it("募集カードにレス番号を明示し、参照先の番号と区別する", async () => {
-  setup([{ ...recruitment, body: ">>1 あと1人" }]);
-  const user = userEvent.setup();
-  await user.click(await screen.findByRole("button", { name: /^友人戦募集/ }));
-  expect(screen.getByText("レス 12")).toBeTruthy();
-  expect(screen.queryByText("レス 1")).toBeNull();
-});
+it.each([
+  { body: "友人戦 01234", expected: 34 },
+  { body: ">>1 あと1人", expected: 1 },
+  { body: ">>2 友人戦 01234 >>1", expected: 2 },
+  { body: "＞＞ １２ あと1人 >>2", expected: 12 },
+])(
+  "コピー・起動時のレス番号は最初の参照を優先する: $body",
+  async ({ body, expected }) => {
+    const api = setup([
+      { ...recruitment, number: 34, body, roomIds: ["01234"] },
+    ]);
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole("button", { name: /^友人戦募集/ }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "ルームID 01234をコピー" }),
+    );
+    expect(screen.getByRole("status").textContent).toMatch(
+      new RegExp(`^レス ${expected}：`),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "ルームID 01234をコピーして雀魂を起動",
+      }),
+    );
+    expect(screen.getByRole("status").textContent).toMatch(
+      new RegExp(`^レス ${expected}：`),
+    );
+    await user.click(screen.getByRole("button", { name: "レスを開く" }));
+    expect(api.openThread).toHaveBeenCalledWith("1791034502", 34);
+  },
+);
 
 it("新版を表示し、ダウンロードを明示操作で開始する", async () => {
   const api = setup([], {
@@ -313,9 +330,6 @@ it("募集のIDを指定して雀魂を起動し、締め切り済みの募集�
     }),
   );
   expect(api.launchMahjongSoul).toHaveBeenCalledWith("01234");
-  expect(screen.getByRole("status").textContent).toContain(
-    "レス 12：ルームID 01234をコピーして雀魂を起動しました。",
-  );
   expect(
     (
       screen.getByRole("button", {

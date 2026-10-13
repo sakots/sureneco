@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { defaults, validateSettings } from "../core/settings";
 import { isRecent } from "../core/detection";
-import { extractRoomIds, splitRoomIds } from "../core/room-id";
+import { extractRoomIds, postReferences, splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot, UpdateState } from "../core/types";
 import { UpdatePanel } from "./UpdatePanel";
 const labels: Record<keyof Settings, string> = {
@@ -291,6 +291,7 @@ export function App({ api }: { api: Api }) {
                 const referencedIds = item.roomIds.filter(
                   (id) => !directIds.includes(id),
                 );
+                const noticePost = postReferences(item.body)[0] ?? item.number;
                 return (
                   <article
                     className={`recruitment ${active ? "fresh" : ""}`}
@@ -318,7 +319,7 @@ export function App({ api }: { api: Api }) {
                               part.roomId,
                               part.text,
                               index,
-                              item.number,
+                              noticePost,
                             )
                           : part.text,
                       )}
@@ -327,7 +328,7 @@ export function App({ api }: { api: Api }) {
                       <div className="referenced-rooms">
                         <span>参照先のルームID</span>{" "}
                         {referencedIds.map((id) =>
-                          roomIdButton(id, id, id, item.number),
+                          roomIdButton(id, id, id, noticePost),
                         )}
                       </div>
                     )}
@@ -342,7 +343,7 @@ export function App({ api }: { api: Api }) {
                             void act(async () => {
                               await api.launchMahjongSoul(id);
                               setNotice(
-                                `レス ${item.number}：ルームID ${id}をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。`,
+                                `レス ${noticePost}：ルームID ${id}をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。`,
                               );
                             })
                           }
