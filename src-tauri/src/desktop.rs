@@ -276,7 +276,7 @@ fn start(app: &AppHandle, available: bool) -> Result<Backend, String> {
                     let _ = message.reply.send(result);
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    if let Err(error) = engine.request("refresh", json!({})) {
+                    if let Err(error) = engine.request("refresh", json!({"automatic": true})) {
                         eprintln!("監視エラー: {error}");
                     }
                     deadline = Instant::now() + Duration::from_secs(engine.interval());

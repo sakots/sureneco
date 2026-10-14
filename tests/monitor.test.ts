@@ -336,3 +336,203 @@ it("保存済みのレス番号があっても、起動時の取得失敗後に�
   await monitor.refresh();
   expect(notify).toHaveBeenCalledTimes(1);
 });
+
+function pollingFixture(count = 1) {
+  const clock = { now: Date.parse("2026-10-04T12:00:00+09:00") };
+  const id = String(clock.now / 1000 - 3600);
+  const nextId = String(clock.now / 1000 - 60);
+  const state: SavedState = {
+    settings: { ...defaults, update_sec: 20, thread_update_sec: 300 },
+    watched: [id],
+    cursors: {},
+  };
+  const data = {
+    count,
+    subject: `${id}.dat<>雀魂 (1)`,
+  };
+  const client = {
+    subject: vi.fn(async () => data.subject),
+    dat: vi.fn(async () =>
+      Array(data.count)
+        .fill("名無し<>sage<>2026/10/04(日) 10:00:00 ID:abc<>雑談<>")
+        .join("\n"),
+    ),
+  };
+  const monitor = new Monitor(
+    state,
+    client,
+    async () => {},
+    () => {},
+    () => clock.now,
+  );
+  return { monitor, client, state, clock, data, id, nextId };
+}
+
+it("募集は毎回取得し、一覧だけ独立した間隔で取得してdatのレス数を表示する", async () => {
+  const { monitor, client, clock, data, id } = pollingFixture();
+  await monitor.refresh();
+  expect(client.subject).toHaveBeenCalledTimes(1);
+  data.count = 2;
+  clock.now += 20_000;
+  await monitor.refresh();
+  expect(
+    monitor.snapshot().threads.find((thread) => thread.id === id)?.count,
+  ).toBe(2);
+  clock.now += 279_999;
+  await monitor.refresh();
+  expect(client.subject).toHaveBeenCalledTimes(1);
+  clock.now += 1;
+  await monitor.refresh();
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  expect(client.dat).toHaveBeenCalledTimes(4);
+  expect(monitor.snapshot().threads[0].count).toBe(2);
+});
+
+it("900レスを超えても一覧は設定間隔まで取得せず、datのレス数だけ更新する", async () => {
+  const { monitor, client, clock, data, id, nextId } = pollingFixture(900);
+  await monitor.refresh(false, true);
+  data.count = 901;
+  data.subject += `\n${nextId}.dat<>雀魂 次スレ (1)`;
+  clock.now += 20_000;
+  await monitor.refresh(false, true);
+  expect(client.subject).toHaveBeenCalledTimes(1);
+  expect(monitor.snapshot().threads.map((thread) => thread.id)).not.toContain(
+    nextId,
+  );
+  expect(
+    monitor.snapshot().threads.find((thread) => thread.id === id)?.count,
+  ).toBe(901);
+  clock.now += 280_000;
+  await monitor.refresh(false, true);
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  expect(monitor.snapshot().threads.map((thread) => thread.id)).toContain(
+    nextId,
+  );
+});
+
+it("一覧取得の失敗は間隔を待たず次の募集更新で再試行する", async () => {
+  const { monitor, client } = pollingFixture();
+  client.subject.mockRejectedValueOnce(new Error("HTTP 403"));
+  await monitor.refresh();
+  expect(monitor.snapshot().errors.join("")).toContain("403");
+  await monitor.refresh();
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  expect(monitor.snapshot().errors).toEqual([]);
+  await monitor.refresh();
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  expect(client.dat).toHaveBeenCalledTimes(3);
+});
+
+it("強制更新は間隔内でも一覧を取得し、通常更新との同時呼び出しを併合する", async () => {
+  const { monitor, client } = pollingFixture();
+  await monitor.refresh();
+  await Promise.all([
+    monitor.refresh(),
+    monitor.refresh(true),
+    monitor.refresh(true),
+  ]);
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  expect(client.dat).toHaveBeenCalledTimes(2);
+  await monitor.refresh();
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  await monitor.refresh(true);
+  expect(client.subject).toHaveBeenCalledTimes(3);
+});
+
+it("dat取得中の強制更新も進行中の更新へ併合して一覧を取得する", async () => {
+  const { monitor, client } = pollingFixture();
+  await monitor.refresh();
+  let release!: (text: string) => void;
+  let started!: () => void;
+  const datStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  client.dat.mockImplementationOnce(() => {
+    started();
+    return new Promise<string>((resolve) => {
+      release = resolve;
+    });
+  });
+  const automatic = monitor.refresh();
+  await datStarted;
+  const manual = monitor.refresh(true);
+  release("名無し<>sage<>2026/10/04(日) 10:00:00 ID:abc<>雑談<>");
+  await Promise.all([automatic, manual]);
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  expect(client.dat).toHaveBeenCalledTimes(2);
+});
+
+it("板変更時に一覧の取得間隔をリセットする", async () => {
+  const { monitor, client, data, state, id } = pollingFixture();
+  await monitor.refresh();
+  await monitor.saveSettings({
+    ...state.settings,
+    url: "https://egg.5ch.net/mj/",
+  });
+  data.subject = `${id}.dat<>雀魂 別の板 (1)`;
+  await monitor.watch(id, true);
+  await monitor.refresh();
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  expect(client.subject).toHaveBeenLastCalledWith("https://egg.5ch.net/mj/");
+  await monitor.refresh();
+  expect(client.subject).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  { recruitmentSec: 20, threadSec: 300, datCalls: 16, subjectCalls: 2 },
+  { recruitmentSec: 300, threadSec: 20, datCalls: 2, subjectCalls: 16 },
+])(
+  "自動更新では募集$recruitmentSec秒・一覧$threadSec秒を独立して判定する",
+  async ({ recruitmentSec, threadSec, datCalls, subjectCalls }) => {
+    const { monitor, client, state, clock } = pollingFixture();
+    state.settings.update_sec = recruitmentSec;
+    state.settings.thread_update_sec = threadSec;
+    await monitor.refresh(false, true);
+    for (let i = 0; i < 15; i++) {
+      clock.now += 20_000;
+      await monitor.refresh(false, true);
+    }
+    expect(client.dat).toHaveBeenCalledTimes(datCalls);
+    expect(client.subject).toHaveBeenCalledTimes(subjectCalls);
+    await monitor.refresh(true);
+    expect(client.dat).toHaveBeenCalledTimes(datCalls + 1);
+    expect(client.subject).toHaveBeenCalledTimes(subjectCalls + 1);
+  },
+);
+
+it("自動更新で募集の間隔を待っていても監視変更後の通常呼び出しはdatを取得する", async () => {
+  const { monitor, client, state, nextId } = pollingFixture();
+  state.settings.update_sec = 300;
+  state.settings.thread_update_sec = 20;
+  await monitor.refresh(false, true);
+  await monitor.refresh(false, true);
+  expect(client.dat).toHaveBeenCalledTimes(1);
+  await monitor.watch(nextId, true);
+  await monitor.refresh();
+  expect(client.dat).toHaveBeenCalledTimes(3);
+  expect(client.subject).toHaveBeenCalledTimes(1);
+});
+
+it("定期的な一覧取得中に手動更新が来ても一覧と募集の取得を重複しない", async () => {
+  const { monitor, client, data, clock } = pollingFixture();
+  await monitor.refresh();
+  clock.now += 300_000;
+  let release!: (text: string) => void;
+  let started!: () => void;
+  const subjectStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  client.subject.mockImplementationOnce(() => {
+    started();
+    return new Promise<string>((resolve) => {
+      release = resolve;
+    });
+  });
+  const automatic = monitor.refresh();
+  await subjectStarted;
+  const manual = monitor.refresh(true);
+  release(data.subject);
+  await Promise.all([automatic, manual]);
+  expect(client.subject).toHaveBeenCalledTimes(2);
+  expect(client.dat).toHaveBeenCalledTimes(2);
+});

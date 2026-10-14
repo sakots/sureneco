@@ -1,5 +1,6 @@
 export interface Settings {
   update_sec: number;
+  thread_update_sec: number;
   elapsed_days: number;
   emphasis_sec: number;
   thread_title_regex: string;

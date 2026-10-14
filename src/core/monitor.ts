@@ -20,6 +20,11 @@ export class Monitor {
   private refreshing = false;
   private queue: Promise<unknown> = Promise.resolve();
   private pending: Promise<void> | null = null;
+  private forceThreads = false;
+  private forceRecruitments = false;
+  private lastThreadsAt: number | null = null;
+  private lastRecruitmentsAt: number | null = null;
+  private retryThreads = false;
   private startupChecks: Set<string>;
   onChange: (snapshot: Snapshot) => void = () => {};
   notificationAvailable = true;
@@ -55,9 +60,15 @@ export class Monitor {
     this.queue = next.catch(() => {});
     return next;
   }
-  refresh(): Promise<void> {
+  refresh(forceThreads = false, scheduled = false): Promise<void> {
+    this.forceThreads ||= forceThreads;
+    this.forceRecruitments ||= !scheduled;
     if (this.pending) return this.pending;
-    this.pending = this.serialize(() => this.poll()).finally(() => {
+    this.pending = this.serialize(async () => {
+      do {
+        await this.poll();
+      } while (this.forceThreads || this.forceRecruitments);
+    }).finally(() => {
       this.pending = null;
     });
     return this.pending;
@@ -68,62 +79,98 @@ export class Monitor {
     this.emit();
     try {
       const settings = this.state.settings;
-      try {
-        const all = parseSubject(await this.client.subject(settings.url));
-        this.threads = all.filter(
-          (t) =>
-            this.state.watched.includes(t.id) ||
-            candidates([t], settings, this.now()).length,
-        );
-      } catch (error) {
-        this.errors.push(`スレッド一覧: ${errorMessage(error)}`);
-      }
-      for (const id of this.state.watched) {
-        try {
-          const posts = parseDat(await this.client.dat(settings.url, id));
-          const cursor = this.state.cursors[id];
-          const now = this.now();
-          const rescan = this.startupChecks.has(id) || cursor === 0;
-          const nextCursors = {
-            ...this.state.cursors,
-            [id]: Math.max(cursor ?? 0, posts.length),
-          };
-          const detected = scanPosts(
-            id,
-            rescan
-              ? posts.filter((p) => isRecent(p, settings, now))
-              : posts.filter((p) => p.number > (cursor ?? 0)),
-            rescan
-              ? this.items.filter((item) => item.threadId !== id)
-              : this.items,
-            settings,
-            now,
-            posts,
-          );
-          await this.save({ ...this.state, cursors: nextCursors });
-          this.state.cursors = nextCursors;
-          this.items = detected.items;
-          this.startupChecks.delete(id);
-          for (const item of detected.notifications) {
-            try {
-              this.notify(
-                item,
-                this.threads.find((t) => t.id === id),
-              );
-            } catch (error) {
-              this.errors.push(`通知: ${errorMessage(error)}`);
+      const datCounts = new Map<string, number>();
+      const listDue =
+        this.forceThreads ||
+        this.retryThreads ||
+        this.lastThreadsAt === null ||
+        this.now() - this.lastThreadsAt >= settings.thread_update_sec * 1000;
+      // 起動時だけ先に一覧を取得し、初回通知にもスレッド名を使う。
+      const initialList = this.lastThreadsAt === null;
+      if (initialList) await this.refreshThreads(settings, datCounts);
+      const recruitmentsDue =
+        this.forceRecruitments ||
+        this.lastRecruitmentsAt === null ||
+        this.now() - this.lastRecruitmentsAt >= settings.update_sec * 1000;
+      if (recruitmentsDue) {
+        this.lastRecruitmentsAt = this.now();
+        for (const id of this.state.watched) {
+          try {
+            const posts = parseDat(await this.client.dat(settings.url, id));
+            datCounts.set(id, posts.length);
+            const thread = this.threads.find((t) => t.id === id);
+            if (thread) thread.count = posts.length;
+            const cursor = this.state.cursors[id];
+            const now = this.now();
+            const rescan = this.startupChecks.has(id) || cursor === 0;
+            const nextCursors = {
+              ...this.state.cursors,
+              [id]: Math.max(cursor ?? 0, posts.length),
+            };
+            const detected = scanPosts(
+              id,
+              rescan
+                ? posts.filter((p) => isRecent(p, settings, now))
+                : posts.filter((p) => p.number > (cursor ?? 0)),
+              rescan
+                ? this.items.filter((item) => item.threadId !== id)
+                : this.items,
+              settings,
+              now,
+              posts,
+            );
+            await this.save({ ...this.state, cursors: nextCursors });
+            this.state.cursors = nextCursors;
+            this.items = detected.items;
+            this.startupChecks.delete(id);
+            for (const item of detected.notifications) {
+              try {
+                this.notify(
+                  item,
+                  this.threads.find((t) => t.id === id),
+                );
+              } catch (error) {
+                this.errors.push(`通知: ${errorMessage(error)}`);
+              }
             }
+          } catch (error) {
+            this.errors.push(
+              `${this.threads.find((t) => t.id === id)?.title ?? id}: ${errorMessage(error)}`,
+            );
           }
-        } catch (error) {
-          this.errors.push(
-            `${this.threads.find((t) => t.id === id)?.title ?? id}: ${errorMessage(error)}`,
-          );
         }
       }
+      if (this.forceThreads || (!initialList && listDue))
+        await this.refreshThreads(settings, datCounts);
+      if (recruitmentsDue) this.forceRecruitments = false;
       this.updatedAt = this.now();
     } finally {
       this.refreshing = false;
       this.emit();
+    }
+  }
+  private async refreshThreads(
+    settings: Settings,
+    datCounts: Map<string, number>,
+  ): Promise<void> {
+    try {
+      const all = parseSubject(await this.client.subject(settings.url));
+      this.threads = all.filter(
+        (t) =>
+          this.state.watched.includes(t.id) ||
+          candidates([t], settings, this.now()).length,
+      );
+      for (const thread of this.threads) {
+        const count = datCounts.get(thread.id);
+        if (count !== undefined) thread.count = count;
+      }
+      this.lastThreadsAt = this.now();
+      this.retryThreads = false;
+    } catch (error) {
+      this.retryThreads = true;
+      this.errors.push(`スレッド一覧: ${errorMessage(error)}`);
+    } finally {
+      this.forceThreads = false;
     }
   }
   watch(id: string, enabled: boolean): Promise<void> {
@@ -160,6 +207,9 @@ export class Monitor {
         this.startupChecks.clear();
         this.threads = [];
         this.items = [];
+        this.lastThreadsAt = null;
+        this.lastRecruitmentsAt = null;
+        this.retryThreads = false;
       }
       this.emit();
     });

@@ -45,6 +45,40 @@ describe("設定", () => {
       `https://egg.5ch.io/test/read.cgi/mj/${id}/12`,
     );
   });
+  it("スレッド一覧の更新間隔を検証し、未設定のときだけ既定値を補う", () => {
+    expect(defaults.thread_update_sec).toBe(300);
+    for (const thread_update_sec of [20, 300, 600, 2147483]) {
+      expect(
+        validateSettings({ ...defaults, thread_update_sec }).thread_update_sec,
+      ).toBe(thread_update_sec);
+    }
+    for (const thread_update_sec of [
+      19,
+      20.5,
+      2147484,
+      NaN,
+      Infinity,
+      null,
+      "300",
+    ]) {
+      expect(() =>
+        validateSettings({ ...defaults, thread_update_sec }),
+      ).toThrow("thread_update_secは20以上2147483以下の整数にしてください。");
+    }
+    const { thread_update_sec: _interval, ...saved } = {
+      ...defaults,
+      update_sec: 35,
+      thread_title_regex: "ユーザー設定",
+      ng_ids: ["saved-id"],
+    };
+    expect(validateSettings(saved)).toEqual({
+      ...saved,
+      thread_update_sec: 300,
+    });
+    expect(
+      validateSettings({ ...saved, thread_update_sec: undefined }),
+    ).toEqual({ ...saved, thread_update_sec: 300 });
+  });
 });
 
 describe("5ch解析", () => {

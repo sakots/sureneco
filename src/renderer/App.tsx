@@ -5,7 +5,8 @@ import { extractRoomIds, postReferences, splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot, UpdateState } from "../core/types";
 import { UpdatePanel } from "./UpdatePanel";
 const labels: Record<keyof Settings, string> = {
-  update_sec: "更新間隔（秒）",
+  update_sec: "友人戦募集の更新間隔（秒）",
+  thread_update_sec: "スレッド一覧の更新間隔（秒）",
   elapsed_days: "候補の経過日数（日）",
   emphasis_sec: "新規募集の有効期間（秒）",
   thread_title_regex: "スレッド名の正規表現",
@@ -23,7 +24,12 @@ const labels: Record<keyof Settings, string> = {
   launcher_profile: "プロファイルディレクトリー名",
   launcher_user_data_dir: "ユーザーデータディレクトリー（任意）",
 };
-const numeric = ["update_sec", "elapsed_days", "emphasis_sec"] as const;
+const numeric = [
+  "update_sec",
+  "thread_update_sec",
+  "elapsed_days",
+  "emphasis_sec",
+] as const;
 const patterns = [
   "thread_title_regex",
   "ng_thread_title_regex",
@@ -459,7 +465,9 @@ export function App({ api }: { api: Api }) {
           {snapshot?.updatedAt
             ? `最終更新 ${new Date(snapshot.updatedAt).toLocaleTimeString("ja-JP")}`
             : "未更新"}{" "}
-          {snapshot ? `· ${snapshot.settings.update_sec}秒ごとに更新` : ""}
+          {snapshot
+            ? `· 友人戦募集：${snapshot.settings.update_sec}秒ごと · スレッド一覧：${snapshot.settings.thread_update_sec}秒ごと`
+            : ""}
         </span>
         <span>閉じるとトレイに常駐します</span>
       </footer>
@@ -503,7 +511,12 @@ function SettingsForm({
               ? "number"
               : "text"
           }
-          min={key === "update_sec" ? 20 : 1}
+          min={key === "update_sec" || key === "thread_update_sec" ? 20 : 1}
+          max={
+            numeric.includes(key as (typeof numeric)[number])
+              ? 2147483
+              : undefined
+          }
           step={1}
           value={draft[key]}
           onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
@@ -543,6 +556,10 @@ function SettingsForm({
       <section className="settings-card">
         <h3>取得と通知</h3>
         <div className="numeric-grid">{numeric.map(field)}</div>
+        <p className="help">
+          スレッド一覧は起動時と設定した間隔で更新します。
+          今すぐ更新と設定保存時は、友人戦募集とスレッド一覧の両方を更新します。
+        </p>
         {field("url")}
         <p className="help">
           板URLを変えると、監視対象と取得済みレス番号をリセットします。

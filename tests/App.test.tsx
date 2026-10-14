@@ -16,9 +16,10 @@ function setup(
     progress: 0,
     error: null,
   },
+  settings: Snapshot["settings"] = defaults,
 ) {
   const snapshot: Snapshot = {
-    settings: defaults,
+    settings,
     watched: [],
     threads: [
       {
@@ -71,7 +72,7 @@ it("設定の検証エラーを表示し、NGを一行一件で保存する", as
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: "設定" }));
   expect(screen.getByLabelText("NG ID").getAttribute("rows")).toBe("3");
-  const interval = screen.getByLabelText("更新間隔（秒）");
+  const interval = screen.getByLabelText("友人戦募集の更新間隔（秒）");
   expect((interval as HTMLInputElement).value).toBe("20");
   expect(interval.getAttribute("min")).toBe("20");
   await user.clear(interval);
@@ -84,8 +85,80 @@ it("設定の検証エラーを表示し、NGを一行一件で保存する", as
   await user.click(screen.getByRole("button", { name: "設定を保存" }));
   await waitFor(() =>
     expect(api.saveSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ update_sec: 20, ng_ids: ["abc", "xyz"] }),
+      expect.objectContaining({
+        update_sec: 20,
+        thread_update_sec: 300,
+        ng_ids: ["abc", "xyz"],
+      }),
     ),
+  );
+});
+
+it("一覧の更新間隔の既定値と境界を表示し、不正な値を保存しない", async () => {
+  const api = setup();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  const interval = screen.getByLabelText("スレッド一覧の更新間隔（秒）");
+  expect((interval as HTMLInputElement).value).toBe("300");
+  expect(interval.getAttribute("min")).toBe("20");
+  expect(interval.getAttribute("max")).toBe("2147483");
+  expect(interval.getAttribute("step")).toBe("1");
+  expect(
+    screen.getByText(/友人戦募集：20秒ごと.*スレッド一覧：300秒ごと/),
+  ).toBeTruthy();
+  for (const value of ["19", "20.5", "2147484"]) {
+    await user.clear(interval);
+    await user.type(interval, value);
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe(
+      "thread_update_secは20以上2147483以下の整数にしてください。",
+    );
+  }
+  for (const thread_update_sec of [20, 2147483]) {
+    await user.clear(interval);
+    await user.type(interval, String(thread_update_sec));
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ update_sec: 20, thread_update_sec }),
+      ),
+    );
+  }
+});
+
+it("保存済みの両更新間隔を表示し、一覧間隔を変更しても他の設定を保持する", async () => {
+  const saved = {
+    ...defaults,
+    update_sec: 45,
+    thread_update_sec: 600,
+    thread_title_regex: "保存済みの検索条件",
+    yujinsen_regex: "保存済みの募集条件",
+    ng_ids: ["saved-id"],
+    launcher_mode: "application" as const,
+    launcher_path: "/usr/bin/mahjong",
+    launcher_args: ["--saved-profile"],
+  };
+  const api = setup([], undefined, saved);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  expect(
+    (screen.getByLabelText("友人戦募集の更新間隔（秒）") as HTMLInputElement)
+      .value,
+  ).toBe("45");
+  const interval = screen.getByLabelText("スレッド一覧の更新間隔（秒）");
+  expect((interval as HTMLInputElement).value).toBe("600");
+  expect(
+    screen.getByText(/友人戦募集：45秒ごと.*スレッド一覧：600秒ごと/),
+  ).toBeTruthy();
+  await user.clear(interval);
+  await user.type(interval, "900");
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  await waitFor(() =>
+    expect(api.saveSettings).toHaveBeenCalledWith({
+      ...saved,
+      thread_update_sec: 900,
+    }),
   );
 });
 

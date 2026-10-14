@@ -66,7 +66,7 @@ export async function request(text: string): Promise<string> {
       result = state;
       break;
     case "refresh":
-      await monitor.refresh();
+      await monitor.refresh(!payload.automatic, !!payload.automatic);
       break;
     case "watch":
       await monitor.watch(payload.id, payload.enabled);
@@ -74,7 +74,7 @@ export async function request(text: string): Promise<string> {
       break;
     case "settings":
       await monitor.saveSettings(payload.settings as Settings);
-      await monitor.refresh();
+      await monitor.refresh(true);
       break;
     case "open_thread":
       result = threadUrl(state.settings.url, payload.id, payload.post);
@@ -92,5 +92,5 @@ export async function request(text: string): Promise<string> {
 }
 
 export function interval(): number {
-  return state.settings.update_sec;
+  return Math.min(state.settings.update_sec, state.settings.thread_update_sec);
 }

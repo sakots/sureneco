@@ -1,6 +1,7 @@
 import type { Settings } from "./types";
 export const defaults: Settings = {
   update_sec: 20,
+  thread_update_sec: 300,
   elapsed_days: 14,
   emphasis_sec: 600,
   thread_title_regex: "雀魂|じゃんたま|ジャンタマ|mahjongsoul|majsoul",
@@ -39,16 +40,26 @@ export function validateSettings(input: unknown): Settings {
   if (!input || typeof input !== "object") throw new Error("設定が不正です。");
   const value = input as Record<string, unknown>;
   const result = {} as Settings;
-  for (const key of ["update_sec", "elapsed_days", "emphasis_sec"] as const) {
-    const n = value[key];
+  for (const key of [
+    "update_sec",
+    "thread_update_sec",
+    "elapsed_days",
+    "emphasis_sec",
+  ] as const) {
+    const n =
+      key === "thread_update_sec" && value[key] === undefined
+        ? defaults[key]
+        : value[key];
+    const minimum =
+      key === "update_sec" || key === "thread_update_sec" ? 20 : 1;
     if (
       typeof n !== "number" ||
       !Number.isSafeInteger(n) ||
-      n < (key === "update_sec" ? 20 : 1) ||
+      n < minimum ||
       n > 2147483
     )
       throw new Error(
-        `${key}は${key === "update_sec" ? 20 : 1}以上2147483以下の整数にしてください。`,
+        `${key}は${minimum}以上2147483以下の整数にしてください。`,
       );
     result[key] = n;
   }
