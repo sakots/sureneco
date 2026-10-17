@@ -275,6 +275,28 @@ describe("ルームIDが必須の募集判定", () => {
 });
 
 describe("数字表記の対局形式", () => {
+  it.each(["三人半荘　29400", "三人半荘 29400", "三人半荘<br>29400"])(
+    "初期フィルタで三人半荘の募集を通知する: %s",
+    (body) => {
+      const result = scanPosts(id, parseDat(line(body)), [], defaults, now);
+      expect(result.items.map((item) => item.roomIds)).toEqual([["29400"]]);
+      expect(result.notifications.map((item) => item.roomIds)).toEqual([
+        ["29400"],
+      ]);
+    },
+  );
+  it.each([
+    "四人半莊　29400",
+    "四人半莊 29400",
+    "四人半莊<br>29400",
+    "四人半荘　29400",
+  ])("初期フィルタで四人半荘の募集を通知する: %s", (body) => {
+    const result = scanPosts(id, parseDat(line(body)), [], defaults, now);
+    expect(result.items.map((item) => item.roomIds)).toEqual([["29400"]]);
+    expect(result.notifications.map((item) => item.roomIds)).toEqual([
+      ["29400"],
+    ]);
+  });
   it("3・4とローマ数字の東・南を初期フィルタで検出する", () => {
     for (const prefix of [
       "3",
@@ -309,6 +331,10 @@ describe("数字表記の対局形式", () => {
       "V南 12345",
       "3東",
       "IV南 123456",
+      "三人半荘",
+      "三人半荘 294000",
+      "四人半莊",
+      "四人半莊 294000",
     ]) {
       expect(
         scanPosts(id, parseDat(line(body)), [], defaults, now).items,
