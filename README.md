@@ -23,6 +23,20 @@ pnpm dev
 
 詳しい環境構築は[Tauriの前提条件](https://v2.tauri.app/start/prerequisites/)を参照してください。
 
+### 仕様と変更管理（OpenSpec）
+
+現行仕様は [`openspec/specs/`](openspec/specs/) に機能別で管理しています。[仕様の目次](docs/specification.md)から各仕様と検証手順を参照できます。`openspec/config.yaml` に日本語での記述と資料ファーストの開発ルールを設定しています。
+
+OpenSpec CLIを利用できる環境で、次のコマンドから状態と仕様の形式を確認できます。
+
+```sh
+openspec list
+openspec list --specs
+openspec validate --all --strict --no-interactive
+```
+
+変更は `/opsx:propose` で提案・仕様差分・タスクを整理し、内容を確認してから `/opsx:apply` で実装します。完了後は `/opsx:archive` で現行仕様に反映して記録します。要件の調査には `/opsx:explore` を使います。アプリの動作確認には別途 `pnpm check` と変更した経路の実行が必要です。
+
 ## 配布物の作成
 
 Windows版はWindowsまたはUbuntu・WSL2（Ubuntu）、Linux版はUbuntu・WSL2（Ubuntu）で作成できます。WindowsとLinuxのnode_modulesは共有しません。WSLではWSL側のNode.js・pnpm・Rustを使い、プロジェクトをLinux側のホームディレクトリーに置いてください。
@@ -110,6 +124,11 @@ Chrome / Edgeは実行ファイルのフルパスと`Default`や`Profile 1`等�
 詳細は[仕様書](docs/specification.md)と[移行構成](docs/tauri-migration.md)を参照してください。
 
 ## 更新履歴
+
+### [2026/10/17] v0.8.0
+
+- 既存仕様をOpenSpecの機能別仕様へ整理し、仕様書を参照用の目次に変更
+- OpenSpecの日本語記述ルールと、提案・実装・検証・アーカイブの開発手順を追加
 
 ### [2026/10/14] v0.8.0
 
