@@ -17,7 +17,7 @@ use tauri::{
 };
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 mod updates;
 
 struct Message {
@@ -87,12 +87,22 @@ fn register_windows_notifications(app: &AppHandle) -> Result<(), String> {
 
 fn fit_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     use crate::window::{fit, Bounds};
-    let was_maximized = window.is_maximized()?;
-    if was_maximized {
-        window.unmaximize()?;
-    }
-    let position = window.outer_position()?;
-    let size = window.outer_size()?;
+    // 最大化解除はWindowsで表示を伴うため、復元済みの最大化状態を維持する。
+    let scale = window.scale_factor()?;
+    // Taoの位置・サイズのキャッシュは、非表示中のGTKウィンドウでは更新されない。
+    #[cfg(target_os = "linux")]
+    let (position, size) = {
+        use gtk::prelude::GtkWindowExt;
+        let native = window.gtk_window()?;
+        let (x, y) = native.position();
+        let (width, height) = native.size();
+        (
+            tauri::LogicalPosition::new(x, y).to_physical::<i32>(scale),
+            tauri::LogicalSize::new(width, height).to_physical::<u32>(scale),
+        )
+    };
+    #[cfg(not(target_os = "linux"))]
+    let (position, size) = (window.outer_position()?, window.outer_size()?);
     let mut monitors = window.available_monitors()?;
     if let Some(primary) = window.primary_monitor()? {
         monitors.sort_by_key(|monitor| monitor.position() != primary.position());
@@ -118,12 +128,14 @@ fn fit_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
         },
         &areas,
     );
-    let scale = window.scale_factor()?;
     window.set_min_size(Some(tauri::PhysicalSize::new(
         ((400.0 * scale) as u32).min(bounds.width),
         ((600.0 * scale) as u32).min(bounds.height),
     )))?;
     if bounds.width != size.width || bounds.height != size.height {
+        #[cfg(target_os = "linux")]
+        let inner = size;
+        #[cfg(not(target_os = "linux"))]
         let inner = window.inner_size()?;
         window.set_size(tauri::PhysicalSize::new(
             bounds.width.saturating_sub(size.width - inner.width),
@@ -131,9 +143,6 @@ fn fit_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
         ))?;
     }
     window.set_position(tauri::PhysicalPosition::new(bounds.x, bounds.y))?;
-    if was_maximized {
-        window.maximize()?;
-    }
     Ok(())
 }
 
@@ -409,6 +418,15 @@ mod tests {
 }
 
 #[tauri::command]
+fn show_main_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    if !window.is_visible().map_err(|error| error.to_string())? {
+        let _ = fit_window(&window);
+        window.show().map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn choose_config_directory(app: AppHandle) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
@@ -482,12 +500,14 @@ pub fn run() {
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
+                .skip_initial_state("main")
                 .build(),
         )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             request,
+            show_main_window,
             choose_config_directory,
             updates::update_state,
             updates::check_update,
@@ -504,7 +524,8 @@ pub fn run() {
                     })
                     .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
                     .build()?;
-            let _ = fit_window(&window);
+            // プラグインの自動復元を使わず、非表示のまま復元してから補正する。
+            let _ = window.restore_state(StateFlags::all() & !StateFlags::VISIBLE);
             #[cfg(windows)]
             let notification_available = register_windows_notifications(&handle).is_ok();
             #[cfg(not(windows))]

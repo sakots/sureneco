@@ -8,7 +8,7 @@ authors = ["sakots"]
 
 [features]
 default = ["desktop"]
-desktop = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-window-state", "dep:tauri-plugin-updater", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-dialog", "dep:arboard", "dep:open", "dep:notify-rust"]
+desktop = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-window-state", "dep:tauri-plugin-updater", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-dialog", "dep:arboard", "dep:open", "dep:notify-rust", "dep:gtk"]
 
 [build-dependencies]
 tauri-build = { version = "2", optional = true , features = [] }
@@ -32,6 +32,9 @@ tauri-plugin-dialog = { version = "2", optional = true }
 arboard = { version = "3", optional = true }
 open = { version = "5", optional = true }
 notify-rust = { version = "4", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = { version = "0.18", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Data_Xml_Dom", "UI_Notifications", "Win32_UI_Shell"] }

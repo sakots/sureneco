@@ -14,6 +14,7 @@
       {
         "create": false,
         "label": "main",
+        "visible": false,
         "title": "sureneco",
         "width": 1120,
         "height": 820,
