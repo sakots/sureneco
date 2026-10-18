@@ -4009,11 +4009,12 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sureneco"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "arboard",
  "dirs 6.0.0",
  "encoding_rs",
+ "gtk",
  "notify-rust",
  "open",
  "parking_lot",
