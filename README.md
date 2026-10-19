@@ -5,233 +5,48 @@
 ![Downloads](https://img.shields.io/github/downloads/sakots/sureneco/total)
 ![License](https://img.shields.io/github/license/sakots/sureneco)
 
-5ch麻雀板の雀魂スレッドから友人戦募集を通知する、Windows / Ubuntu向け常駐アプリです。Tauri 2 + Rust + TypeScript + Reactで実装しています。募集検出と監視はRustの専用スレッド上のQuickJSで動かし、ウィンドウを隠しても監視を続けます。Node.js・Electron・Chromiumは配布物に同梱しません。
+5ch麻雀板の雀魂スレッドから友人戦募集を通知する、Windows / Ubuntu向け常駐アプリです。ウィンドウを閉じてもトレイで監視を続けます。
 
 ![アプリ画面](images/app.png)
 
-## 開発
+## ダウンロード
 
-Node.js 22.12以上、pnpm 12.10.1、Rust stableを用意してください。WindowsはMSVC版Rust、Visual Studio C++ Build Tools、WebView2が必要です。Ubuntuは以下をインストールします。
+[GitHub Releases](https://github.com/sakots/sureneco/releases/latest)からダウンロードできます。
 
-```sh
-sudo apt install libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-pnpm install
-pnpm dev
-```
+- Windows：インストーラー（`Setup.exe`）またはポータブル版（`win.zip`）
+- Ubuntu：DEB（`amd64.deb`）またはAppImage
 
-`pnpm dev`でViteとTauriを起動します。バックエンドのTypeScriptを変更した場合は開発コマンドを再起動してください。`pnpm check`でTypeScript・Rustのテスト、フロントエンドと監視エンジンのビルド、Rust整形、テーマ診断、差分チェックを行います。初回はRust依存の取得・コンパイルに時間がかかります。
-
-詳しい環境構築は[Tauriの前提条件](https://v2.tauri.app/start/prerequisites/)を参照してください。
-
-### 仕様と変更管理（OpenSpec）
-
-現行仕様は [`openspec/specs/`](openspec/specs/) に機能別で管理しています。[仕様の目次](docs/specification.md)から各仕様と検証手順を参照できます。`openspec/config.yaml` に日本語での記述と資料ファーストの開発ルールを設定しています。
-
-OpenSpec CLIを利用できる環境で、次のコマンドから状態と仕様の形式を確認できます。
-
-```sh
-openspec list
-openspec list --specs
-openspec validate --all --strict --no-interactive
-```
-
-変更は `/opsx:propose` で提案・仕様差分・タスクを整理し、内容を確認してから `/opsx:apply` で実装します。完了後は `/opsx:archive` で現行仕様に反映して記録します。要件の調査には `/opsx:explore` を使います。アプリの動作確認には別途 `pnpm check` と変更した経路の実行が必要です。
-
-## 配布物の作成
-
-Windows版はWindowsまたはUbuntu・WSL2（Ubuntu）、Linux版はUbuntu・WSL2（Ubuntu）で作成できます。WindowsとLinuxのnode_modulesは共有しません。WSLではWSL側のNode.js・pnpm・Rustを使い、プロジェクトをLinux側のホームディレクトリーに置いてください。
-
-```powershell
-pnpm package:win
-```
-
-```sh
-pnpm package:linux
-```
-
-Ubuntu・WSLからWindows版も作る場合は、次の準備を一度行います。Windows x64向けにcargo-xwinでクロスコンパイルし、Setup.exeとZIPを生成します。Windows版の動作確認はWindowsで行ってください。
-
-```sh
-sudo apt install clang llvm lld nsis cmake ninja-build
-rustup target add x86_64-pc-windows-msvc
-cargo install --locked cargo-xwin
-pnpm package:win
-```
-
-WSLでのチェック・ビルドには「開発」に記載したUbuntu用ライブラリーも必要です。Windows版だけを作る場合も、ビルド前にLinux側のRustテストを実行するため必要になります。同じWSL上で`pnpm package:linux`、`pnpm package:win`を実行すると、両方の配布物と更新用のlatest.jsonがrelease/に揃います。クロスコンパイルの構成は[Tauri公式の手順](https://v2.tauri.app/distribute/windows-installer/#build-windows-apps-on-linux-and-macos)に沿っています。
-
-release/へ以下の形式で出力します。配布名とアプリのバージョンはpackage.jsonから反映します。リリース時はsrc-tauri/Cargo.tomlのバージョンも合わせて更新してください。
-
-- `sureneco_vx.x.x_Setup.exe`
-- `sureneco_vx.x.x_win.zip`
-- `sureneco_vx.x.x.AppImage`
-- `sureneco_vx.x.x_amd64.deb`
-
-ZIP版は展開してsureneco.exeを起動します。WindowsではWebView2ランタイムが必要です。インストーラーは必要に応じてWebView2を導入します。
-
-`TAURI_SIGNING_PRIVATE_KEY`は、自動更新用の配布ファイルに署名する秘密鍵の場所（または鍵の内容）を指定する環境変数です。アプリは対応する公開鍵で署名を検証してから更新します。OSやバージョンが変わっても同じ鍵を使います。
-
-この更新用の署名とWindowsのAuthenticode署名は別です。クロスコンパイルでインストーラーの署名をスキップする警告が出ても、更新用の`.sig`は生成します。
-
-署名鍵はこの開発端末の`.secrets/updater.key`に作成済みで、Gitには含めません。鍵を別の安全な場所にも保管してください。別のWindows・WSL環境へcloneしただけでは鍵は付いてこないので、既存の鍵を同じ場所へコピーしてください。この場所なら環境変数の設定は不要です。別の場所に置く場合は`TAURI_SIGNING_PRIVATE_KEY`に鍵のフルパスを設定します。パスワード付きの鍵を使う場合は`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`も設定します。公開鍵はsrc-tauri/tauri.conf.jsonに設定済みです。鍵の内容をGitHubやチャットへ貼り付けないでください。`pnpm dev`には署名鍵は不要です。
-
-```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY = "D:\keys\sureneco-updater.key"
-pnpm package:win
-```
-
-WSLのBashでは次のように設定します。例ではWindows側のD:\keysに保管した既存の鍵を使います。
-
-```sh
-export TAURI_SIGNING_PRIVATE_KEY="/mnt/d/keys/sureneco-updater.key"
-pnpm package:win
-```
-
-ローカルの配布コマンドはGitHubへ公開しません。WindowsとLinuxの成果物・`.sig`を同じrelease/へ集めて、`pnpm release:manifest`で全形式を含む`latest.json`を生成してください。GitHub Releasesには配布物、`.sig`、この`latest.json`を添付します。Tauri版ではElectron用のlatest.yml・latest-linux.yml・blockmapを使いません。更新時の署名は[Tauri updater](https://v2.tauri.app/plugin/updater/)で検証します。
-
-### SSH先でLinux版をビルドしてWindowsへ取得する
-
-Windows側でNode.jsとWindowsのOpenSSHクライアント（`ssh`・`scp`）を用意し、次のコマンドを実行します。スクリプト自体には追加のnpmパッケージは不要です。
-
-```powershell
-node .\scripts\package-linux-ssh.mjs build-linux /home/user/dev/sureneco "D:\sureneco\release"
-```
-
-- 第1引数：SSH接続先（`user@hostname`、または`~/.ssh/config`のHost名）。ポート・鍵・踏み台はSSH設定で指定します。
-- 第2引数：Linux側にあるsurenecoリポジトリの絶対パス。空白を含むパスは引用符で囲みます。`~`は使わず、`/home/user/...`と指定してください。
-- 第3引数：Windows側の保存先。省略時は、このスクリプトがあるリポジトリの`release/`です。
-
-Linux側では、上記のビルド依存、Node.js・pnpm・Rust、更新用の署名鍵を準備してください。SSH先のログインシェルから`pnpm`・`cargo`を実行できる必要があります。鍵はLinux側に置き、スクリプトでは転送しません。パスワード付きの署名鍵を使う場合は、Linux側のログイン環境で`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`を設定してください。
-
-Linux側で`pnpm install --frozen-lockfile`、`pnpm package:linux`を順に実行し、成功した場合だけ、そのバージョンのAppImage・DEBと各`.sig`をSFTP経由の`scp`で取得します。既存の同名ファイルは上書きします。保存先のWindows版成果物は残し、取得したバージョンについて`latest.json`をローカルで再生成します。ビルド失敗時は取得せず、転送失敗時はエラーで終了します。
-
-ソースの同期・`git pull`・GitHubへの公開は行いません。ビルドする変更は事前にLinux側へ反映してください。OpenSSH 9以降（SFTP対応のSSHサーバー）が必要です。初回接続時のホスト鍵確認とSSH認証は通常の`ssh`と同じです。
-
-## Electron版からの切り替え
-
-Tauri版の初回導入は手動で行ってください。Electron版をトレイから終了し、Tauri版を導入します。WindowsのElectronインストール版を削除する場合も設定フォルダーは残してください。Electron版とTauri版を同時起動しないでください。
-
-既存のstate.jsonを同じ場所から読み込み、設定・監視対象・取得済みレス番号を保持します。Windowsは`%APPDATA%/sureneco/state.json`、Ubuntuは`$XDG_CONFIG_HOME/sureneco/state.json`（未指定なら`~/.config/sureneco/state.json`）です。ウィンドウ状態はTauriの別ファイルに保存するため、切り替え直後は既定サイズで開きます。
+WindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
 ## 使い方
 
-スレッド一覧のトグルをオンにすると監視します。起動時とトグルをオンにした時点で有効期間内の既存募集も確認・通知し、その後は新しい募集を通知します。友人戦募集の更新間隔は既定20秒、スレッド一覧の更新間隔は既定300秒で、それぞれ設定から20秒以上の整数に変更できます。スレッド一覧はレス数にかかわらず設定した間隔で更新します。手動更新では両方を更新します。スレッド候補は既定でスレ立てから14日以内です。
+1. 通知を受けたいスレッドのトグルをオンにします。
+2. 友人戦募集が見つかると通知します。検出用正規表現やNG条件は設定で変更できます。
+3. 募集のルームIDをクリックしてコピーするか、「雀魂を起動」でコピーしてゲームを開きます。
 
-設定で検出用正規表現、NG本文・ID・ワッチョイを変更できます。NGは一行一件です。「通知を許可するワッチョイ」を指定すると完全一致する投稿者の募集だけを通知します。空欄なら全投稿者が対象で、NGが優先されます。通知許可の設定は募集一覧を絞り込みません。
+ウィンドウを閉じるとトレイに常駐し、トレイメニューから終了できます。Ubuntuではトレイに対応したデスクトップ環境が必要です。トレイを作成できない環境ではウィンドウを閉じると終了します。
 
-設定の「設定フォルダ」で保存先を指定・変更できます。絶対パスを入力するか「フォルダを選択」で指定し、「保存先を変更」を押してください。現在の設定・監視対象・取得済みレス番号を新しいフォルダへコピーし、再起動なしで切り替えます。次回起動時も指定したフォルダを使います。元のファイルは残り、変更先に既存の`state.json`がある場合は上書きしません。ウィンドウの位置・サイズは移しません。保存先の指定は既定の設定フォルダ内の`config-location.json`に記録します。指定したフォルダを削除した場合や外部ドライブが接続されていない場合は、起動時にエラーになります。
+設定の保存先、通知条件、アプリの更新、ブラウザー・Steamの指定などは[使い方](docs/usage.md)を参照してください。
 
-5桁のルームIDが本文にも参照先にもないレスは募集として扱いません。本文にIDがない場合は過去レスへの`>>レス番号`をたどります。締め切り済み・期限切れの募集への返信は通知せず、返信で期限を延長しません。5桁のIDをクリックすると全角を半角にしてコピーします。「レスを開く」で該当レスをブラウザーから開けます。
+## 資料
 
-通知をクリックするとアプリを再表示し、最小化中なら復元します。終了時のウィンドウサイズ・位置・最大化状態を次回起動時に復元します。起動時はウィンドウを非表示で作成し、状態の復元・作業領域への補正と画面の初期描画を済ませてから表示します。Waylandでは位置の取得・復元がOSに制限される場合があります。スレッド・友人戦募集・設定のタブはスクロール中も画面上部に残ります。
-
-ウィンドウを閉じるとトレイに常駐します。終了はトレイメニューから選択してください。トレイを作成できない環境ではウィンドウを閉じると終了します。Ubuntuではトレイを表示できるデスクトップ環境が必要です。OSの通知設定や通知サービスによっては通知が利用できません。通信失敗・通知失敗は画面に表示します。通信は次回更新で再試行します。
-
-設定画面の「アプリの更新」では起動時と6時間ごとにGitHubの正式リリースを確認します。NSIS・AppImage・DEB版は「ダウンロード」→「再起動して更新」で更新できます。DEB版はOSの認証が必要です。Windows ZIP版はリリース画面から手動で更新します。開発実行では更新を無効にします。
-
-ルームIDのコピー時と「雀魂を起動」時の上部メッセージには、本文に`>>番号`または`＞＞番号`があれば、そのレス番号を優先して表示します。複数の指定がある場合は最初の番号を使い、指定がなければ操作した募集カードのレス番号を使います。コピーする内容は引き続きルームIDです。
-
-## 雀魂の起動
-
-設定の「雀魂の起動」で既定ブラウザー、Chrome / Edgeのプロファイル、指定アプリを選べます。「雀魂を起動」はルームIDをコピーして起動します。ゲーム内の友人戦でIDを貼り付けて入室してください。
-
-Chrome / Edgeは実行ファイルのフルパスと`Default`や`Profile 1`等のプロファイルディレクトリー名を指定します。`chrome://version`または`edge://version`の「プロフィール パス」の末尾で確認できます。通常と異なるユーザーデータフォルダーを使う場合は、その親フォルダーを「ユーザーデータディレクトリー」に指定してください。
-
-指定アプリでは雀魂のexeを指定できます。Steam経由の場合はsteam.exeを指定し、起動引数を`-applaunch`と対象ゲームのApp IDの二行に分けます。引数は一行に一つ、引用符なしで入力します。起動直後の異常終了は実行ファイルのパスと終了コードをエラーに表示します。自動入室には対応していません。
-
-詳細は[仕様書](docs/specification.md)と[移行構成](docs/tauri-migration.md)を参照してください。
+- [使い方](docs/usage.md)：監視・通知、設定フォルダ、雀魂の起動、更新、Electron版からの切り替え
+- [開発](docs/development.md)：構成、環境構築、起動とチェック
+- [配布物の作成](docs/packaging.md)：Windows / Linuxビルド、署名、SSH先でのビルドと取得
+- [仕様と変更管理](docs/specification.md)：機能別仕様、OpenSpecの手順、検証
+- [Tauri移行時の構成](docs/tauri-migration.md)：技術選択と移行時の記録
 
 ## 更新履歴
+
+### [2026/10/19] v0.8.3
+
+- Ubuntuのアプリセンターでパッケージの説明が文字化けし、`(none)`が表示される問題を修正
 
 ### [2026/10/19] v0.8.2
 
 - 起動時に空のウィンドウが表示されてから位置・サイズが変わる問題を修正
 - WindowsからSSH先のLinuxで配布物をビルドし、署名とともに取得するスクリプトを追加
 - リリースノートのDEBファイル名を実際の配布名に合わせて修正
+- READMEの詳細手順を用途別の資料へ移し、過去の更新履歴をchangelog.mdに集約
 
-### [2026/10/17] v0.8.1
-
-- 既存仕様をOpenSpecの機能別仕様へ整理し、仕様書を参照用の目次に変更
-- OpenSpecの日本語記述ルールと、提案・実装・検証・アーカイブの開発手順を追加
-- 募集検出の初期値に「三人半荘」を追加し、「三人半荘　29400」の形式も通知するようにした
-- 募集検出の初期値に「四人半莊」「四人半荘」を追加し、「友人戦」の文字がなくても通知するようにした
-
-### [2026/10/14] v0.8.0
-
-- スレッド一覧と友人戦募集の更新間隔を個別に設定する機能を追加
-
-### [2026/10/13] v0.7.1
-
-- ルームIDのコピー時と雀魂の起動時のメッセージで、本文のレス参照番号を優先するようにした
-
-### [2026/10/13] v0.7.0
-
-- 設定フォルダの場所を指定・変更し、現在の設定と監視状態を新しい保存先へ引き継ぐ機能を追加
-- Windowsの通知処理で未使用引数の警告が出る問題を修正
-
-### [2026/10/11] v0.6.1
-
-- ルームIDのコピー時と雀魂の起動時のメッセージに募集レスの番号を表示するようにした
-
-### [2026/10/09] v0.6.0
-
-- TauriとRustでの実装に切り替え
-- Ubuntu・WSLからWindows版のインストーラーとZIPを作成できるようにした
-
-### [2026/10/09] v0.5.2
-
-- 既存の画面・募集検出を保ち、ElectronからTauriへ実装を変更
-- 常駐監視・通知・設定保存・起動処理をTauriのバックエンドで実行するようにした
-- アプリの自動更新をTauriの署名付き更新に変更
-- Electron標準のメニューバーを非表示にするようにした
-- スクロール中もスレッド・友人戦募集・設定のタブを画面上部に残すようにした
-
-### [2026/10/08] v0.5.1
-
-- 開発起動時にelectron-updaterの読み込みでDynamic requireエラーになる問題を修正
-- 開発に使用するpnpmを12.10.1に更新
-- 指定ブラウザー・アプリが起動直後に異常終了しても起動成功と表示する問題を修正
-
-### [2026/10/08] v0.5.0
-
-- じゃんたまを起動するオプションを追加
-
-### [2026/10/06] v0.4.0
-
-- アプリ起動時にも保存済みの監視スレッドから有効期間内の募集を確認・通知
-- 監視トグルをオンにした時点で、有効期間内の既存募集も確認・通知
-
-### [2026/10/06] v0.3.0
-
-- 指定したワッチョイの募集だけを通知する設定を追加
-- ウィンドウサイズ・位置・最大化状態の保存と復元を追加
-
-### [2026/10/05] v0.2.1
-
-- ウィンドウの最小幅を400pxに変更し、狭い画面の表示を調整
-- 更新間隔の初期値と下限を20秒に変更。設定画面から変更可能
-
-### [2026/10/04] v0.2.0
-
-- GitHubリリースの更新通知と、インストール版・AppImage版のアプリ内更新を追加
-- 配布ファイル名の接頭辞を`sureneco_vバージョン`に統一
-- 友人戦募集カードの上部にレス番号を明示
-- 画面全体の余白と一覧・設定欄の高さを抑え、GUIをコンパクトに調整
-- 締め切り済み・期限切れの募集への返信通知を抑止
-- Windows通知の起動先を明示し、クリックでアプリを復元する処理と既定画面用ファイルの除去を追加
-- デフォルトの友人戦通知フィルタに`数字+東|南`を追加
-
-### [2026/10/04] v0.1.0
-
-- スレッド選択、募集通知、締め検出、NG設定、トレイ常駐を実装
-- Windows / Ubuntu向けビルド設定と検証コマンドを追加
-- 募集本文の5桁のルームIDをクリックでコピーする機能を追加
-- 募集検出の初期値に「四東・四南・三東・三南」と5桁の番号を含む条件を追加
-- 初期フィルタに3・4、III・IV、Ⅲ・Ⅳと東・南を組み合わせた表記を追加
-- 募集判定に5桁のルームIDを必須とし、レス参照をたどってIDを取得できるように変更
-- 同じ環境向けのパッケージ作成で展開済みElectronを使用し、ZIP展開後のフォルダー名変更を回避
-- Windows用インストーラーとZIP版の同時生成に対応
-
-### [2026/10/04] v0.0.0
-
-- リポジトリを作成
+過去の更新履歴は[changelog.md](changelog.md)を参照してください。
