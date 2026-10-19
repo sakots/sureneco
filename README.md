@@ -89,6 +89,24 @@ pnpm package:win
 
 ローカルの配布コマンドはGitHubへ公開しません。WindowsとLinuxの成果物・`.sig`を同じrelease/へ集めて、`pnpm release:manifest`で全形式を含む`latest.json`を生成してください。GitHub Releasesには配布物、`.sig`、この`latest.json`を添付します。Tauri版ではElectron用のlatest.yml・latest-linux.yml・blockmapを使いません。更新時の署名は[Tauri updater](https://v2.tauri.app/plugin/updater/)で検証します。
 
+### SSH先でLinux版をビルドしてWindowsへ取得する
+
+Windows側でNode.jsとWindowsのOpenSSHクライアント（`ssh`・`scp`）を用意し、次のコマンドを実行します。スクリプト自体には追加のnpmパッケージは不要です。
+
+```powershell
+node .\scripts\package-linux-ssh.mjs build-linux /home/user/dev/sureneco "D:\sureneco\release"
+```
+
+- 第1引数：SSH接続先（`user@hostname`、または`~/.ssh/config`のHost名）。ポート・鍵・踏み台はSSH設定で指定します。
+- 第2引数：Linux側にあるsurenecoリポジトリの絶対パス。空白を含むパスは引用符で囲みます。`~`は使わず、`/home/user/...`と指定してください。
+- 第3引数：Windows側の保存先。省略時は、このスクリプトがあるリポジトリの`release/`です。
+
+Linux側では、上記のビルド依存、Node.js・pnpm・Rust、更新用の署名鍵を準備してください。SSH先のログインシェルから`pnpm`・`cargo`を実行できる必要があります。鍵はLinux側に置き、スクリプトでは転送しません。パスワード付きの署名鍵を使う場合は、Linux側のログイン環境で`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`を設定してください。
+
+Linux側で`pnpm install --frozen-lockfile`、`pnpm package:linux`を順に実行し、成功した場合だけ、そのバージョンのAppImage・DEBと各`.sig`をSFTP経由の`scp`で取得します。既存の同名ファイルは上書きします。保存先のWindows版成果物は残し、取得したバージョンについて`latest.json`をローカルで再生成します。ビルド失敗時は取得せず、転送失敗時はエラーで終了します。
+
+ソースの同期・`git pull`・GitHubへの公開は行いません。ビルドする変更は事前にLinux側へ反映してください。OpenSSH 9以降（SFTP対応のSSHサーバー）が必要です。初回接続時のホスト鍵確認とSSH認証は通常の`ssh`と同じです。
+
 ## Electron版からの切り替え
 
 Tauri版の初回導入は手動で行ってください。Electron版をトレイから終了し、Tauri版を導入します。WindowsのElectronインストール版を削除する場合も設定フォルダーは残してください。Electron版とTauri版を同時起動しないでください。
@@ -128,6 +146,7 @@ Chrome / Edgeは実行ファイルのフルパスと`Default`や`Profile 1`等�
 ### [2026/10/19] v0.8.2
 
 - 起動時に空のウィンドウが表示されてから位置・サイズが変わる問題を修正
+- WindowsからSSH先のLinuxで配布物をビルドし、署名とともに取得するスクリプトを追加
 
 ### [2026/10/17] v0.8.1
 
