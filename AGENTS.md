@@ -68,7 +68,34 @@ chore: ビルド、補助ツール、ライブラリ関連
 
 ## リリース
 
+- 「リリースして」と依頼があった場合にのみ、Githubのreleaseページに公開する。
+- 対象ブランチはmain。タグは、`vx.x.x`。
+- 公開形式は正式公開とする。
+- Windows実機確認は必須としない。
+- リリースノートの元資料は`changelog.md`の該当バージョンとする。
+- 同名タグ・添付ファイルがあれば上書きせず停止する。
 - リリース前にテスト・差分チェックを通す。
+
+### リリースノートの形式
+
+```txt
+## vx.x.x
+
+- (changelog.mdから更新履歴を記入する)
+- (箇条書きで変更点を記入する)
+
+## ダウンロード
+
+### windows
+
+- [sureneco_v0.x.x_Setup.exe](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_v0.x.x_Setup.exe) インストーラー
+- [sureneco_v0.x.x_win.zip](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_v0.x.x_win.zip) ポータブル版
+
+### Linux
+
+- [sureneco_v0.x.x.amd64.deb](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_v0.x.x.amd64.deb)  deb
+- [sureneco_v0.x.x.AppImage](https://github.com/sakots/sureneco/releases/download/v0.x.x/sureneco_v0.x.x.AppImage) AppImage
+```
 
 ## 作業上の注意
 
