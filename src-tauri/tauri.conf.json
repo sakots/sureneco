@@ -32,6 +32,8 @@
     "targets": ["deb", "appimage", "nsis"],
     "icon": ["icons/icon.png", "icons/icon.ico"],
     "createUpdaterArtifacts": true,
+    "shortDescription": "Notifications for Mahjong Soul friend matches on 5ch",
+    "longDescription": "sureneco monitors Mahjong Soul threads on the 5ch mahjong board and notifies you when players recruit for friend matches. Choose threads to watch and customize recruitment patterns and notification filters.",
     "linux": {
       "deb": {
         "section": "utils"

@@ -67,6 +67,8 @@ release/へ以下の形式で出力します。配布名とアプリのバージ
 - `sureneco_vx.x.x.AppImage`
 - `sureneco_vx.x.x_amd64.deb`
 
+Ubuntuのアプリセンターで説明が文字化けしたり、`(none)`が表示されたりしないよう、配布パッケージの短い説明と長い説明は`src-tauri/tauri.conf.json`の`bundle.shortDescription`・`bundle.longDescription`に英語（ASCII）で指定します。アプリ内の日本語表示には影響しません。
+
 ZIP版は展開してsureneco.exeを起動します。WindowsではWebView2ランタイムが必要です。インストーラーは必要に応じてWebView2を導入します。
 
 `TAURI_SIGNING_PRIVATE_KEY`は、自動更新用の配布ファイルに署名する秘密鍵の場所（または鍵の内容）を指定する環境変数です。アプリは対応する公開鍵で署名を検証してから更新します。OSやバージョンが変わっても同じ鍵を使います。
@@ -148,6 +150,7 @@ Chrome / Edgeは実行ファイルのフルパスと`Default`や`Profile 1`等�
 - 起動時に空のウィンドウが表示されてから位置・サイズが変わる問題を修正
 - WindowsからSSH先のLinuxで配布物をビルドし、署名とともに取得するスクリプトを追加
 - リリースノートのDEBファイル名を実際の配布名に合わせて修正
+- Ubuntuのアプリセンターでパッケージの説明が文字化けし、`(none)`が表示される問題を修正
 
 ### [2026/10/17] v0.8.1
 
