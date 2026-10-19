@@ -93,7 +93,7 @@ chore: ビルド、補助ツール、ライブラリ関連
 
 ### Linux
 
-- [sureneco_v0.x.x.amd64.deb](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_v0.x.x.amd64.deb)  deb
+- [sureneco_v0.x.x_amd64.deb](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_v0.x.x_amd64.deb)  deb
 - [sureneco_v0.x.x.AppImage](https://github.com/sakots/sureneco/releases/download/v0.x.x/sureneco_v0.x.x.AppImage) AppImage
 ```
 
