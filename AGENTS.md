@@ -88,13 +88,13 @@ chore: ビルド、補助ツール、ライブラリ関連
 
 ### windows
 
-- [sureneco_v0.x.x_Setup.exe](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_v0.x.x_Setup.exe) インストーラー
-- [sureneco_v0.x.x_win.zip](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_v0.x.x_win.zip) ポータブル版
+- [sureneco_vx.x.x_Setup.exe](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_vx.x.x_Setup.exe) インストーラー
+- [sureneco_vx.x.x_win.zip](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_vx.x.x_win.zip) ポータブル版
 
 ### Linux
 
-- [sureneco_v0.x.x_amd64.deb](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_v0.x.x_amd64.deb)  deb
-- [sureneco_v0.x.x.AppImage](https://github.com/sakots/sureneco/releases/download/v0.x.x/sureneco_v0.x.x.AppImage) AppImage
+- [sureneco_vx.x.x_amd64.deb](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_vx.x.x_amd64.deb) deb
+- [sureneco_vx.x.x.AppImage](https://github.com/sakots/sureneco/releases/download/vx.x.x/sureneco_vx.x.x.AppImage) AppImage
 ```
 
 ## 作業上の注意
