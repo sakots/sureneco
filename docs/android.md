@@ -1,22 +1,24 @@
 # Android版の開発と配布準備
 
-現在は実装中です。ARM64のデバッグAPK生成とローカルサーバーの起動・復旧は確認済みです。Android版のAAB生成、Firebaseからの実配信、Google Play公開はまだ確認していません。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
+現在は実装中です。ARM64のデバッグAPK生成は確認済みですが、PHP＋cronのサーバーは未実装です。誤って追加したNodeサーバーの起動確認は、PHPサーバーの検証結果には含めません。Android版のAAB生成、Firebaseからの実配信、Google Play公開も未確認です。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
 
 ## 完成時の構成
 
-Node.jsの常駐サーバーが5chの板・監視スレッドを取得し、既存の募集判定・NG・許可ワッチョイを端末ごとに適用します。SQLiteへ監視条件、取得済みレス番号、通知イベントと送信待ちを保存し、Firebase Cloud Messaging（FCM）でAndroidへ配信します。
+PHPのHTTPS APIで端末の設定を受け付け、毎分cronで起動するPHPのCLIバッチが5chの板・監視スレッドの取得、判定、FCM送信を1回処理して終了します。常駐Node.jsや、バッチ内で20秒間隔に繰り返す方式は使いません。SQLiteへ監視条件、取得済みレス番号、通知イベントと送信待ちを保存し、次回のバッチで復元します。
 
 Androidは別アプリの利用中・画面消灯中もプッシュを受け取ります。端末内で20秒ごとに常駐取得する方式ではありません。表示中の一覧取得とOS通知を分離し、通知はプッシュへ統一します。圏外、通知拒否、Android設定での強制停止、FCMの配送遅延等では受信できない場合があります。
+
+Androidのサーバー監視は最短約1分です。`update_sec`は既定60秒、`thread_update_sec`は既定300秒で、どちらも60秒以上の整数を受け付けます。実際には設定間隔を経過した後のcron実行回で処理するため、70秒設定なら通常約120秒間隔となり、負荷やcron・FCMの遅延でさらに遅れる場合があります。PC版の20秒更新は変更しません。
 
 PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、GitHub経由の更新はAndroidに持ち込みません。Androidのアプリ更新はGoogle Playから行います。
 
 ## 必要な環境
 
-- Node.js、pnpm、Rust。バージョンと既存のチェック手順は[開発手順](development.md)を参照。
+- アプリ開発用のNode.js、pnpm、Rust。バージョンと既存のチェック手順は[開発手順](development.md)を参照。運用サーバーにはNode.jsを要求しません。
 - Java 21、Android SDK Command-line Tools、Platform Tools、API 36以上、NDK、ARM64用Rustターゲット。
 - 実機またはエミュレーター。ネイティブ依存を含む16KBページサイズの動作も確認。
 - Google Playのアプリ登録と、Android用アップロード署名鍵。PC版の更新署名鍵は使いません。
-- 常時Node.jsを動かせるサーバー、SQLiteの永続保存領域、HTTPSのAPI公開先。
+- PHPのWeb・CLI実行環境、毎分cron、SQLiteの永続保存領域、HTTPSのAPI公開先。SQLite・HTTPS通信・署名検証に必要なPHP拡張と実行時間制限を確認。
 - Firebaseプロジェクト。Androidアプリ登録、Cloud Messaging、匿名認証、App Check（公開時はPlay Integrity）を設定。
 
 現在用意されているのはAndroid端末です。Firebaseプロジェクトと運用先は未設定です。ローカル検証と実際のFirebase接続を必要とする確認は分けて記録します。
@@ -41,15 +43,15 @@ pnpm tauri android build --debug --apk --target aarch64 --ci --features mobile -
 
 生成先は`src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`です。生成物からアプリID`io.github.sakots.sureneco`、versionName `0.8.3`、versionCode `1`、minSdk 24、target/compileSdk 36、ARM64のみであることを確認しました。QuickJSを含む`libsureneco.so`のLOADセグメントは16KB整列、APKも`zipalign -c -P 16 4`に合格しています。接続端末がなく、端末上の起動・募集判定と16KBページサイズ端末の動作は未確認です。
 
-## Nodeサーバーのローカル基盤
+## PHPサーバーとcronの構成
 
-Firebase設定と固定HTTPS API先の準備を待つ間は、接続先設定を未完了としてNodeサーバーを先行実装します。ローカル基盤はループバックでのみ公開し、SQLiteへワーカーの状態を保存します。同じDBのワーカーを別プロセスから起動すると、SQLiteの排他ロックで拒否します。プロセス停止時にはOSがロックを解放し、ロック用ファイルは削除しません。
+cronのスケジュールは`* * * * *`です。各起動で期限を迎えた取得・判定と送信可能なoutboxを処理し、次回まで待機せず終了します。再試行待ちと未処理分は永続DBへ残し、次回以降に期限と設定リビジョンを再確認します。同じ板・スレッドの取得はバッチ内で共有します。
 
-この基盤だけでは5chの取得・認証・通知配信は行いません。ヘルスチェックの応答はプロセスの生存確認であり、通知配送の成功を意味しません。
+同じDBを使うバッチの重複実行は固定ロックファイルの非ブロッキング`flock`でスキップします。ロックファイルを削除せず、正常終了・異常終了時のOSによる解放を使います。DB・ロック・資格情報はWeb公開領域の外へ置き、PHP APIとCLIが同じ永続データへアクセスできるようにします。
 
-ローカル起動には`pnpm server:start`を使います。`SURENECO_SERVER_DB`でSQLiteファイルを指定し、未指定時はGit管理外の`server/data/monitor.sqlite`へ保存します。`PORT`は既定8787、待受先は`127.0.0.1`固定です。`GET /healthz`は保存済みの`lastTickAt`と`monitoringReady: false`を返します。20秒周期のワーカー実行時刻だけを記録し、未実装の募集監視を稼働中とは表示しません。
+APIの応答成功だけでcron監視が正常とは扱いません。バッチの最終開始・終了、最終取得成功、取得・配信エラーと送信待ちの滞留を確認します。PHP実装とcron実行は未検証のため、実行可能な登録コマンドや正常稼働の案内はまだ提供しません。
 
-停止はSIGINTまたはSIGTERMで行い、HTTP待受とタイマー、DBを閉じます。DBと隣接する`.worker-lock`は一組としてローカルの永続領域へ置きます。ロックは別のSQLite接続の排他トランザクションで保持するため、ロックファイルの存在だけでは起動を拒否せず、異常終了後も再起動できます。SQLiteのロックを保証しないネットワーク共有上には置きません。
+既存の`server/main.ts`、`server/service.ts`とNode専用のテスト・ビルド／起動コマンドは誤った方針で追加したものです。PHPへの切り替え時に撤去する対象であり、`pnpm server:start`をAndroidの運用手順として使わないでください。Androidのビルド基盤はそのまま維持します。
 
 ## 認証・保存と停止
 
