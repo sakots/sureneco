@@ -20,7 +20,7 @@ Android版はFirebase Cloud Messaging（FCM）で通知を受信します。利�
 
 1. [Firebase Console](https://console.firebase.google.com/)でプロジェクトを作成します。初めは検証用プロジェクトを用意し、本番と区別してください。
 2. プロジェクト設定の「全般」でプロジェクトIDとプロジェクト番号を確認します。表示名とプロジェクトIDは別の値です。
-3. Androidアプリを追加し、パッケージ名を **`io.github.sakots.sureneco`** にします。現行のデバッグ版も同じパッケージ名です。
+3. Androidアプリを追加し、パッケージ名を **`sureneco.sakots`** にします。現行のデバッグ版も同じパッケージ名です。PHPサーバーのFCM送信先もこのパッケージ名に制限しています。
 4. 登録したAndroidアプリのFirebaseアプリIDと、設定ファイル`google-services.json`を取得します。FirebaseアプリIDは`1:123456789012:android:...`の形式で、Androidのパッケージ名とは異なります。
 
 [FirebaseのAndroid設定](https://firebase.google.com/docs/android/setup)に沿って登録します。この構成ではFirestore・Realtime Database・Cloud Functionsを使わないため、それらの作成は不要です。Google Analyticsも募集通知の必須機能にはしていません。

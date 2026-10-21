@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readFileSync } from "node:fs";
 const execute = promisify(execFile);
 const now = 1800000000;
 const payload = {
@@ -23,7 +24,11 @@ interface Output {
       notification?: unknown;
       token: string;
       data: Record<string, string>;
-      android: { priority: string; ttl: string };
+      android: {
+        priority: string;
+        ttl: string;
+        restricted_package_name: string;
+      };
     };
   }[];
   claims: { iss: string; aud: string; scope: string; iat: number; exp: number };
@@ -63,6 +68,15 @@ it("signs short-lived OAuth claims and sends bounded data-only Android messages 
   const message = result.messages[0].message;
   expect(message.notification).toBeUndefined();
   expect(message.android).toMatchObject({ ttl: "120s", priority: "HIGH" });
+  const androidBuild = readFileSync(
+    "src-tauri/gen/android/app/build.gradle.kts",
+    "utf8",
+  );
+  const applicationId = androidBuild.match(
+    /applicationId\s*=\s*"([^"]+)"/,
+  )?.[1];
+  expect(applicationId).toBeTruthy();
+  expect(message.android.restricted_package_name).toBe(applicationId);
   expect(message.data).toMatchObject({
     eventId: "event-1",
     revision: "12",
