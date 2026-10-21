@@ -23,6 +23,7 @@ $exitCode = 0;
 try {
     require __DIR__ . '/bootstrap.php';
     require __DIR__ . '/monitor.php';
+    require __DIR__ . '/delivery.php';
     $database = openDatabase();
     $lockPath = workerLockPath($database);
     $mask = umask(0077);
@@ -47,7 +48,13 @@ try {
         $statement->execute([$startedAt]);
         $statement = null;
 
-        runMonitoringBatch($database);
+        $batchStarted = hrtime(true);
+        runMonitoringBatch($database, budgetMs: 35000);
+        $sender = createFcmSenderFromEnvironment();
+        if ($sender !== null) {
+            $remainingMs = max(0, (int) (50000 - (hrtime(true) - $batchStarted) / 1000000));
+            runDeliveryBatch($database, $sender, budgetMs: $remainingMs);
+        }
         $finishedAt = (int) floor(microtime(true) * 1000);
         $statement = $database->prepare('UPDATE worker_state SET last_finished_at = ? WHERE id = 1');
         $statement->execute([$finishedAt]);

@@ -4,13 +4,17 @@
 
 ### [2026/10/21] v0.8.3
 
+- FirebaseプロジェクトとAndroid・PHPサーバーの設定、接続確認の手順を追加。
+
+- PHPのFCM HTTP v1送信と、期限・リビジョン確認、最大5回の永続再試行を追加。実際のFirebase・Androidへの配送は未確認。
+
 - Android版の実装開始にあたり、環境・認証・保存・配布の準備手順を追加。
 - Android版の実装に向けて、モバイル用Cargo構成とAndroidプロジェクトの基盤を追加。
 - Androidサーバーの誤ったNode.js常駐前提をPHP＋毎分cronへ訂正し、単発CLI・状態API・SQLite保存・重複実行防止を実装。Node専用コードを撤去。
 - PHPにFirebase IDトークン・App Checkの署名検証と、本人の購読登録・更新・停止・削除を追加。ローカル署名とHTTP操作を検証し、実Firebase接続は未確認。
 - PHPから専用QuickJSプロセスで既存の募集判定を実行し、JavaScript正規表現の構文検証・時間とメモリの制限を追加。
 - Androidビルド時のデスクトップ依存混入とQuickJSのバインディング生成を修正し、ARM64のデバッグAPKを生成できるようにした。端末上の動作とプッシュ受信は未確認。
-- cronの板・dat共有取得と購読別更新周期、初回・再開の通知基準、募集イベントと送信待ちの永続保存を追加。FCM配送・再試行は未実装。
+- cronの板・dat共有取得と購読別更新周期、初回・再開の通知基準、募集イベントと送信待ちの永続保存を追加。FCM実配信は未確認。
 - SSH先で生成したAndroidデバッグAPKをWindowsへ転送し、Windows側のADBで実機へインストールする手順を追加。
 - WindowsからAndroid実機をデバッグするため、ADBの準備、起動、Logcat保存、ChromeによるWebView調査とエラーの対処手順を追加。
 - Android版の表示名を「スレネコアラート」、パッケージ名を`sureneco.sakots`へ変更し、ビルド設定と実機デバッグ手順を統一。
