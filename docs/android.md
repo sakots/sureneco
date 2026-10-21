@@ -25,6 +25,10 @@ PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウ
 
 ## Androidビルドの基盤
 
+Android版の表示名は「スレネコアラート」、パッケージ名（applicationId）は`sureneco.sakots`です。TauriのAndroid専用設定、Gradleのnamespace/applicationId、Kotlinのパッケージと表示文字列を一致させます。PC版の名称・識別子、Rust crate名と配布ファイル名の`sureneco`は変更しません。Firebaseへ登録するAndroidパッケージ名も`sureneco.sakots`に合わせてください。
+
+旧パッケージでインストールしたAPKとは別アプリになります。`install -r`で旧アプリが置き換わったり、保存データが自動移行されたりはしません。旧アプリの削除やデータ移行は自動では行いません。
+
 モバイル用のCargo featureは`mobile`です。Android CLIへ`--features mobile -- --no-default-features`を渡し、PC版の既定featureを無効にします。QuickJSはAndroid向けの生成済みバインディングを含まないため、Androidビルド時だけ`bindgen`で生成します。ホストにlibclangが必要です。Androidプロジェクトは`src-tauri/gen/android`に置き、SDKのローカルパス、生成物、署名設定はGitへ含めません。GradleからのRustビルドにもPATH上の`pnpm`を使います。
 
 開発環境ではJava 21、API 36、Build Tools 36.0.0、NDK 28.2.13676358と`aarch64-linux-android`を準備します。SDK規約への同意が必要です。SDKをプロジェクト内に置く場合は、Git管理外の`.android-sdk/`を使えます。
@@ -50,7 +54,7 @@ cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-deb
 
 この段階のAndroidエントリーポイントは起動用の基盤です。画面のコマンド接続、Firebase認証、バックグラウンド通知は別項目で実装・検証します。デバッグAPKはGoogle Play提出用の署名付きAABとは区別します。
 
-生成先は`src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`です。生成物からアプリID`io.github.sakots.sureneco`、versionName `0.8.3`、versionCode `1`、minSdk 24、target/compileSdk 36、ARM64のみであることを確認しました。QuickJSを含む`libsureneco.so`のLOADセグメントは16KB整列、APKも`zipalign -c -P 16 4`に合格しています。接続端末がなく、端末上の起動・募集判定と16KBページサイズ端末の動作は未確認です。
+生成先は`src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`です。生成APKから表示名「スレネコアラート」、アプリID`sureneco.sakots`、versionName `0.8.3`、versionCode `1`、minSdk 24、target/compileSdk 36、ARM64のみであることを確認しました。起動ActivityとFileProvider、APK内のDEX・ネイティブJNIも新しいパッケージ名に一致しています。QuickJSを含む`libsureneco.so`のLOADセグメントは16KB整列で、APKの署名検証と`zipalign -c -P 16 4`にも合格しました。接続端末がなく、端末上の起動・募集判定と16KBページサイズ端末の動作は未確認です。
 
 ## WindowsからAndroid実機をデバッグする
 
@@ -68,7 +72,7 @@ PowerShellでパスとアプリIDを設定します。変数はそのPowerShell�
 
 ```powershell
 $adb = "C:\Android\platform-tools\adb.exe"
-$appId = "io.github.sakots.sureneco"
+$appId = "sureneco.sakots"
 $apk = "$HOME\Downloads\sureneco_v0.8.3_android_debug.apk"
 & $adb version
 & $adb devices -l
@@ -124,7 +128,7 @@ ABI一覧に`arm64-v8a`が必要です。ページサイズは通常4096また�
 
 ### 4. Logcatで起動時のログとクラッシュを保存する
 
-起動直後に落ちる場合はPIDを絞らず、まず次でログの取得を始めてから、**実機のホーム画面でsurenecoのアイコンをタップして起動**します。症状を再現したらPowerShellで`Ctrl+C`を押して取得を終了します。端末に保持されている直前のログも含まれます。
+起動直後に落ちる場合はPIDを絞らず、まず次でログの取得を始めてから、**実機のホーム画面でスレネコアラートのアイコンをタップして起動**します。症状を再現したらPowerShellで`Ctrl+C`を押して取得を終了します。端末に保持されている直前のログも含まれます。
 
 ```powershell
 $log = "$HOME\Downloads\sureneco-logcat-$(Get-Date -Format yyyyMMdd-HHmmss).txt"
@@ -157,7 +161,7 @@ PowerShellの`$PID`は予約済みの自動変数なので、ここでは`$appPi
 
 1. 実機でデバッグAPKを起動し、WindowsのChromeで`chrome://inspect/#devices`を開きます。
 2. **Discover USB devices**を有効にします。
-3. surenecoのWebViewが表示されたら、その下の**inspect**を開きます。
+3. スレネコアラートのWebViewが表示されたら、その下の**inspect**を開きます。
 4. **Console**でJavaScriptの例外、**Network**で通信失敗、**Elements**で画面のレイアウトを確認します。
 
 WebViewの検査にはアプリ側でWebViewデバッグが有効である必要があります。APKが`debuggable`なだけで必ず表示されるとは限りません。出てこない場合はADB接続、実機でアプリが表示中か、デバッグAPKかを確認し、アプリ側のWebViewデバッグ設定を調べます。今回の環境ではChromeからの実機検査は未確認です。公開用APKへ無条件にWebViewデバッグを有効にする設定は追加しません。

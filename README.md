@@ -36,7 +36,7 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 - [仕様と変更管理](docs/specification.md)：機能別仕様、OpenSpecの手順、検証
 - [Tauri移行時の構成](docs/tauri-migration.md)：技術選択と移行時の記録
 
-Android版は[開発と配布準備](docs/android.md)に現在の対応状況、[Windowsからの実機デバッグ](docs/android.md#windowsからandroid実機をデバッグする)にAPK転送・インストール・ログ取得・WebView調査の手順を記載しています。
+Android版「スレネコアラート」は[開発と配布準備](docs/android.md)に現在の対応状況、[Windowsからの実機デバッグ](docs/android.md#windowsからandroid実機をデバッグする)にAPK転送・インストール・ログ取得・WebView調査の手順を記載しています。
 
 ## 更新履歴
 
@@ -51,6 +51,7 @@ Android版は[開発と配布準備](docs/android.md)に現在の対応状況、
 - cronの板・dat共有取得と購読別更新周期、初回・再開の通知基準、募集イベントと送信待ちの永続保存を追加。FCM配送・再試行は未実装。
 - SSH先で生成したAndroidデバッグAPKをWindowsへ転送し、Windows側のADBで実機へインストールする手順を追加。
 - WindowsからAndroid実機をデバッグするため、ADBの準備、起動、Logcat保存、ChromeによるWebView調査とエラーの対処手順を追加。
+- Android版の表示名を「スレネコアラート」、パッケージ名を`sureneco.sakots`へ変更し、ビルド設定と実機デバッグ手順を統一。
 - Android版をGoogle Playへ配布するための提案・仕様差分・設計・作業項目を追加。公開は未実施。
 - Android版の監視方針をサーバー監視＋プッシュ通知へ変更し、バックグラウンド受信、設定同期、監視停止・登録解除の計画を追加。
 

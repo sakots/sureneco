@@ -50,10 +50,10 @@ if (releaseBuild && listOf(
 
 android {
     compileSdk = 36
-    namespace = "io.github.sakots.sureneco"
+    namespace = "sureneco.sakots"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "io.github.sakots.sureneco"
+        applicationId = "sureneco.sakots"
         minSdk = 24
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

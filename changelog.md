@@ -13,6 +13,7 @@
 - cronの板・dat共有取得と購読別更新周期、初回・再開の通知基準、募集イベントと送信待ちの永続保存を追加。FCM配送・再試行は未実装。
 - SSH先で生成したAndroidデバッグAPKをWindowsへ転送し、Windows側のADBで実機へインストールする手順を追加。
 - WindowsからAndroid実機をデバッグするため、ADBの準備、起動、Logcat保存、ChromeによるWebView調査とエラーの対処手順を追加。
+- Android版の表示名を「スレネコアラート」、パッケージ名を`sureneco.sakots`へ変更し、ビルド設定と実機デバッグ手順を統一。
 - Android版をGoogle Playへ配布するための提案・仕様差分・設計・作業項目を追加。公開は未実施。
 - Android配布設定にアプリID・API 36・ARM64・公開用Firebase識別子・固定HTTPS APIのビルド検証を追加。
 

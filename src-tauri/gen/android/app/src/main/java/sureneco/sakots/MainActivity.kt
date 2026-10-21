@@ -1,4 +1,4 @@
-package io.github.sakots.sureneco
+package sureneco.sakots
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
