@@ -12,6 +12,7 @@
     "dev:frontend": "pnpm build:backend && vite --host 127.0.0.1 --port 5173 --strictPort",
     "tauri": "tauri",
     "test": "vitest run && pnpm build:backend && cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:server": "vitest run tests/server.test.ts tests/php-auth.test.ts tests/php-subscriptions.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "pnpm typecheck && vite build && pnpm build:backend",
     "build:backend": "node scripts/build-backend.mjs",
