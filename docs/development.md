@@ -18,7 +18,7 @@ pnpm dev
 
 `pnpm dev`でViteとTauriを起動します。バックエンドのTypeScriptを変更した場合は開発コマンドを再起動してください。`pnpm check`でTypeScript・Rustのテスト、フロントエンドと監視エンジンのビルド、Rust整形、テーマ診断、差分チェックを行います。初回はRust依存の取得・コンパイルに時間がかかります。
 
-`pnpm test`と`pnpm check`にはAndroidサーバーのPHPプロセステストも含まれます。PATH上のPHP CLI、PDO SQLite拡張、外部プロセスの起動許可が必要です（Ubuntuでは`sudo apt install php-cli php-sqlite3`）。WindowsでもPHP CLIと`pdo_sqlite`を有効にしてください。テスト前に`pnpm build:worker`がRust＋QuickJSの専用実行ファイルを生成します。PHPサーバーだけの確認は`pnpm test:server`、起動・cronと実行ファイルの配置手順は[Android開発](android.md)を参照してください。PC版アプリの配布物にPHPやサーバー用実行ファイルを同梱するものではありません。
+`pnpm test`と`pnpm check`にはAndroidサーバーのPHPプロセステストも含まれます。PATH上のPHP CLI、PDO SQLite・cURL・mbstring拡張、外部プロセスの起動許可が必要です（Ubuntuでは`sudo apt install php-cli php-sqlite3 php-curl php-mbstring`）。WindowsでもPHP CLIと`pdo_sqlite`・`curl`・`mbstring`を有効にしてください。テスト前に`pnpm build:worker`がRust＋QuickJSの専用実行ファイルを生成します。PHPサーバーだけの確認は`pnpm test:server`、起動・cronと実行ファイルの配置手順は[Android開発](android.md)を参照してください。PC版アプリの配布物にPHPやサーバー用実行ファイルを同梱するものではありません。
 
 詳しい環境構築は[Tauriの前提条件](https://v2.tauri.app/start/prerequisites/)を参照してください。
 

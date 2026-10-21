@@ -41,6 +41,16 @@ function initializeSubscriptionSchema(PDO $database): void
             needs_baseline INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (uid, board_url, thread_id)
         );
+        CREATE TABLE IF NOT EXISTS subscription_fetch_state (
+            uid TEXT NOT NULL REFERENCES subscriptions(uid) ON DELETE CASCADE,
+            board_url TEXT NOT NULL,
+            resource TEXT NOT NULL,
+            last_attempt_at INTEGER NOT NULL,
+            last_success_at INTEGER,
+            threads_json TEXT,
+            error_code TEXT,
+            PRIMARY KEY (uid, board_url, resource)
+        );
         CREATE TABLE IF NOT EXISTS notification_events (
             event_id TEXT PRIMARY KEY,
             uid TEXT NOT NULL REFERENCES subscriptions(uid) ON DELETE CASCADE,
@@ -289,6 +299,28 @@ function subscriptionRequest(PDO $database, string $verifiedUid, string $method,
                         watched_json = excluded.watched_json, fcm_token = excluded.fcm_token, updated_at = excluded.updated_at
                 ')->execute([$verifiedUid, $revision, $settingsJson, $watchedJson, $token, $now, $now, $now]);
                 $database->prepare('DELETE FROM notification_outbox WHERE uid = ?')->execute([$verifiedUid]);
+                // Preserve cursors for unchanged targets, but re-added targets need a new baseline.
+                $cursors = $database->prepare('SELECT board_url, thread_id FROM subscription_cursors WHERE uid = ?');
+                $cursors->execute([$verifiedUid]);
+                $obsolete = $cursors->fetchAll();
+                $cursors->closeCursor();
+                foreach ($obsolete as $cursor) {
+                    if ($cursor['board_url'] !== $settings['url'] || !in_array($cursor['thread_id'], $watched, true)) {
+                        $database->prepare('DELETE FROM subscription_cursors WHERE uid = ? AND board_url = ? AND thread_id = ?')
+                            ->execute([$verifiedUid, $cursor['board_url'], $cursor['thread_id']]);
+                    }
+                }
+                $fetches = $database->prepare('SELECT board_url, resource FROM subscription_fetch_state WHERE uid = ?');
+                $fetches->execute([$verifiedUid]);
+                $obsoleteFetches = $fetches->fetchAll();
+                $fetches->closeCursor();
+                foreach ($obsoleteFetches as $fetch) {
+                    if ($fetch['board_url'] !== $settings['url'] || $fetch['resource'] === 'subject.txt'
+                        || !in_array(substr($fetch['resource'], 4, -4), $watched, true) || ($current !== false && !(bool) $current['active'])) {
+                        $database->prepare('DELETE FROM subscription_fetch_state WHERE uid = ? AND board_url = ? AND resource = ?')
+                            ->execute([$verifiedUid, $fetch['board_url'], $fetch['resource']]);
+                    }
+                }
                 if ($current !== false && !(bool) $current['active']) {
                     $database->prepare('UPDATE subscription_cursors SET needs_baseline = 1 WHERE uid = ?')->execute([$verifiedUid]);
                 }

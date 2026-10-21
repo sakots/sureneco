@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { defaults } from "../src/core/settings";
 import { scanPosts } from "../src/core/detection";
+import { candidates, parseDat, parseSubject } from "../src/core/parser";
 import type { Post, Settings } from "../src/core/types";
 const executeFile = promisify(execFile);
 
@@ -112,6 +113,122 @@ it("rejects JavaScript syntax errors and PCRE-only syntax without executing call
   expect(await php({ operation: "eval", code: "while(true){}" })).toEqual({
     ok: false,
     error: "invalid_request",
+  });
+});
+
+it("parses fetched dat with the exact core post semantics", async () => {
+  for (const dat of [
+    "",
+    " \r\n",
+    "名無し (ﾜｯﾁｮｲ abcd-1234)<>sage<>2026/10/21(水) 12:00:00.12 ID:author<>友人戦 &amp; １２３４５<br>次の行<>題名\r\n" +
+      "&#x1f600;<>mail<>不明<> &lt;b&gt;本文&lt;/b&gt; <>",
+  ]) {
+    expect(await php({ operation: "dat", dat })).toEqual({
+      ok: true,
+      result: parseDat(dat),
+    });
+  }
+});
+
+it("filters subject candidates exactly as the core while retaining watched threads", async () => {
+  const recent = String(Math.floor(now / 1000) - 60);
+  const excluded = String(Number(recent) - 1);
+  const old = String(Number(recent) - 30 * 86400);
+  const future = String(Number(recent) + 120);
+  const unrelated = String(Number(recent) - 2);
+  const subject = [
+    `${recent}.dat<>雀魂 &amp; 募集 (25)`,
+    `${excluded}.dat<>雀魂 除外 (30)`,
+    `${old}.dat<>別の話題 (100)`,
+    `${future}.dat<>雀魂 未来 (1)`,
+    `${unrelated}.dat<>別の話題 (2)`,
+    "ignored line",
+  ].join("\r\n");
+  const settings = { ...defaults, ng_thread_title_regex: "除外" };
+  const threads = parseSubject(subject);
+  const eligible = candidates(threads, settings, now);
+  expect(eligible.map((thread) => thread.id)).toEqual([recent]);
+  for (const watched of [[], [old, excluded, future, old, "1000000000"]]) {
+    expect(
+      await php({ operation: "subject", subject, settings, watched, now }),
+    ).toEqual({
+      ok: true,
+      result: threads.filter(
+        (thread) => watched.includes(thread.id) || eligible.includes(thread),
+      ),
+    });
+  }
+  expect(
+    await php({
+      operation: "subject",
+      subject: "",
+      settings,
+      watched: [],
+      now,
+    }),
+  ).toEqual({ ok: true, result: [] });
+});
+
+it("rejects malformed parser operations and invalid title patterns", async () => {
+  const subject = {
+    operation: "subject",
+    subject: `${threadId}.dat<>雀魂 (1)`,
+    settings: defaults,
+    watched: [],
+    now,
+  };
+  for (const request of [
+    { operation: "dat" },
+    { operation: "dat", dat: 12 },
+    { operation: "dat", dat: "malformed" },
+    { ...subject, subject: null },
+    { ...subject, subject: "malformed" },
+    { ...subject, watched: null },
+    { ...subject, watched: [123] },
+    { ...subject, watched: ["not-an-id"] },
+    { ...subject, now: "123" },
+    { ...subject, now: 1.5 },
+    { ...subject, settings: null },
+    { ...subject, settings: { ...defaults, elapsed_days: "14" } },
+    { ...subject, settings: { ...defaults, elapsed_days: 0 } },
+    { ...subject, settings: { ...defaults, thread_title_regex: 1 } },
+    { ...subject, settings: { ...defaults, ng_thread_title_regex: null } },
+    {
+      ...subject,
+      settings: { ...defaults, thread_title_regex: "a".repeat(1001) },
+    },
+  ]) {
+    expect(await php(request)).toEqual({ ok: false, error: "invalid_request" });
+  }
+  for (const key of ["thread_title_regex", "ng_thread_title_regex"]) {
+    expect(
+      await php({ ...subject, settings: { ...defaults, [key]: "[" } }),
+    ).toEqual({ ok: false, error: "invalid_pattern" });
+  }
+});
+
+it("bounds pathological title regex execution and recovers for the next request", async () => {
+  const subject = `${threadId}.dat<>${"a".repeat(100)}! (1)`;
+  expect(
+    await php({
+      operation: "subject",
+      subject,
+      settings: { ...defaults, thread_title_regex: "^(a+)+$" },
+      watched: [threadId],
+      now,
+    }),
+  ).toEqual({ ok: false, error: "execution_limit" });
+  const dat = "名無し<><>不明<>友人戦 12345<>";
+  expect(await php({ operation: "dat", dat })).toEqual({
+    ok: true,
+    result: parseDat(dat),
+  });
+  const settings = { ...defaults, thread_title_regex: "." };
+  expect(
+    await php({ operation: "subject", subject, settings, watched: [], now }),
+  ).toEqual({
+    ok: true,
+    result: candidates(parseSubject(subject), settings, now),
   });
 });
 
