@@ -3,6 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { startServer } from "../server/service";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -28,7 +30,9 @@ it("APIとワーカーを起動し、再起動後も最終実行時刻を保持�
   await first.close();
   const second = await startServer({ databasePath: path, port: 0 });
   cleanup.push(() => second.close());
-  expect(await fetch(`${second.url}/healthz`).then((r) => r.json())).toEqual(health);
+  expect(await fetch(`${second.url}/healthz`).then((r) => r.json())).toEqual(
+    health,
+  );
 });
 
 it("同じDBを使う二つ目のワーカーを拒否し、停止後は起動できる", async () => {
@@ -48,4 +52,61 @@ it("公開アドレスへの直接バインドを拒否する", async () => {
   await expect(
     startServer({ databasePath: path, port: 0, host: "0.0.0.0" }),
   ).rejects.toThrow("ループバック");
+});
+
+it("別プロセスの二重起動を拒否し、強制終了後は保存済み基準で再起動できる", async () => {
+  const path = await databasePath();
+  const serviceUrl = new URL("../server/service.ts", import.meta.url).href;
+  const child = spawn(
+    process.execPath,
+    [
+      "--experimental-strip-types",
+      "--input-type=module",
+      "--eval",
+      `import { startServer } from ${JSON.stringify(serviceUrl)};
+       const server = await startServer({ databasePath: process.argv[1], port: 0 });
+       server.tick();
+       process.send("ready");`,
+      path,
+    ],
+    { stdio: ["ignore", "ignore", "inherit", "ipc"] },
+  );
+  cleanup.push(async () => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    const exited = once(child, "exit");
+    child.kill("SIGKILL");
+    await exited;
+  });
+  await once(child, "message", { signal: AbortSignal.timeout(10_000) });
+  await expect(startServer({ databasePath: path, port: 0 })).rejects.toThrow(
+    "このDBのワーカーは既に起動しています",
+  );
+  const exited = once(child, "exit");
+  child.kill("SIGKILL");
+  await exited;
+
+  const restarted = await startServer({ databasePath: path, port: 0 });
+  cleanup.push(() => restarted.close());
+  const health = await fetch(`${restarted.url}/healthz`).then((r) => r.json());
+  expect(health.lastTickAt).toBeGreaterThan(0);
+});
+
+it("HTTP待受に失敗してもDBの所有権を残さない", async () => {
+  const first = await startServer({
+    databasePath: await databasePath(),
+    port: 0,
+  });
+  cleanup.push(() => first.close());
+  const path = await databasePath();
+  const port = Number(new URL(first.url).port);
+  await expect(startServer({ databasePath: path, port })).rejects.toMatchObject(
+    {
+      code: "EADDRINUSE",
+    },
+  );
+  const recovered = await startServer({ databasePath: path, port: 0 });
+  cleanup.push(() => recovered.close());
+  await recovered.tick();
+  const health = await fetch(`${recovered.url}/healthz`).then((r) => r.json());
+  expect(health.lastTickAt).toBeGreaterThan(0);
 });

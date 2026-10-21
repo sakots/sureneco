@@ -40,6 +40,10 @@ notify-rust = { version = "4", optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = { version = "0.18", optional = true }
 
+[target.'cfg(target_os = "android")'.dependencies]
+# Android needs generated C bindings, not the optional QuickJS macro crate.
+rquickjs-sys = { version = "0.14", features = ["bindgen"] }
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Data_Xml_Dom", "UI_Notifications", "Win32_UI_Shell"] }
 winreg = "0.55"

@@ -15,12 +15,14 @@
     "typecheck": "tsc --noEmit",
     "build": "pnpm typecheck && vite build && pnpm build:backend",
     "build:backend": "node scripts/build-backend.mjs",
+    "build:server": "node scripts/build-server.mjs",
+    "server:start": "pnpm build:server && node dist/server.mjs",
     "theme:check": "node scripts/theme-check.mjs",
     "check": "pnpm test && pnpm build && cargo fmt --manifest-path src-tauri/Cargo.toml --check && pnpm theme:check && pnpm format:check && git diff --check",
     "package:linux": "pnpm check && node scripts/package.mjs linux",
     "package:win": "pnpm check && node scripts/package.mjs win",
-    "format": "prettier --write src tests scripts vite.config.ts tsconfig.json package.json src-tauri/*.json src-tauri/capabilities/*.json && cargo fmt --manifest-path src-tauri/Cargo.toml",
-    "format:check": "prettier --check src tests scripts vite.config.ts tsconfig.json package.json src-tauri/*.json src-tauri/capabilities/*.json",
+    "format": "prettier --write src server tests scripts vite.config.ts tsconfig.json package.json src-tauri/*.json src-tauri/capabilities/*.json && cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "format:check": "prettier --check src server tests scripts vite.config.ts tsconfig.json package.json src-tauri/*.json src-tauri/capabilities/*.json",
     "release:manifest": "node scripts/release-manifest.mjs"
   },
   "dependencies": {
