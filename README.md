@@ -41,6 +41,10 @@ Android版「スレネコアラート」は[開発と配布準備](docs/android.
 
 ## 更新履歴
 
+### [2026/10/22] v0.8.3
+
+- Firebase設定手順とPHPのFCM送信先のパッケージ名を、Android版の`sureneco.sakots`に合わせて修正。
+
 ### [2026/10/21] v0.8.3
 
 - FirebaseプロジェクトとAndroid・PHPサーバーの設定、接続確認の手順を追加。

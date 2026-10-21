@@ -107,7 +107,7 @@ final class FcmSender
         $item = $payload['recruitment'];
         $message = ['message' => [
             'token' => $token,
-            'android' => ['priority' => 'HIGH', 'ttl' => $ttl . 's', 'restricted_package_name' => 'io.github.sakots.sureneco'],
+            'android' => ['priority' => 'HIGH', 'ttl' => $ttl . 's', 'restricted_package_name' => 'sureneco.sakots'],
             'data' => [
                 'eventId' => $payload['eventId'], 'revision' => (string) $payload['revision'],
                 'expiresAt' => (string) $payload['expiresAt'], 'boardUrl' => $payload['boardUrl'],
