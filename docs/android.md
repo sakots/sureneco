@@ -29,6 +29,8 @@ PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウ
 
 開発環境ではJava 21、API 36、Build Tools 36.0.0、NDK 28.2.13676358と`aarch64-linux-android`を準備します。SDK規約への同意が必要です。SDKをプロジェクト内に置く場合は、Git管理外の`.android-sdk/`を使えます。
 
+Androidの公開用接続設定は、`src-tauri/gen/android/app/mobile.properties.example`を`mobile.properties`へコピーして指定します。`mobile.properties`はGit管理外です。`sureneco.apiBaseUrl`は固定HTTPS APIのURL、Firebaseの3項目は公開用アプリ識別子です。Admin SDK、FCM送信用秘密鍵、署名鍵はこのファイルへ入れません。署名付きリリースビルドでは4項目すべてが必須で、API URLが`https://`以外の場合はGradleが失敗します。
+
 ```sh
 export ANDROID_HOME="$PWD/.android-sdk"
 export NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
