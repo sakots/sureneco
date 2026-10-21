@@ -44,9 +44,7 @@ Android版は[開発と配布準備](docs/android.md)に現在の対応状況、
 ### [2026/10/21] v0.8.3
 
 - FirebaseプロジェクトとAndroid・PHPサーバーの設定、接続確認の手順を追加。
-
 - PHPのFCM HTTP v1送信と、期限・リビジョン確認、最大5回の永続再試行を追加。実際のFirebase・Androidへの配送は未確認。
-
 - Android配布設定にアプリID・API 36・ARM64・公開用Firebase識別子・固定HTTPS APIのビルド検証を追加。
 - Android版の実装に向けて、モバイル用Cargo構成とAndroidプロジェクトの基盤を追加。
 - Androidサーバーの誤ったNode.js常駐前提をPHP＋毎分cronへ訂正し、単発CLI・状態API・SQLite保存・重複実行防止を実装。Node専用コードを撤去。
