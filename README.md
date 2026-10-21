@@ -42,7 +42,7 @@ Android版は[開発と配布準備](docs/android.md)に現在の対応状況を
 
 ### [2026/10/21] v0.8.3
 
-- Android版の実装開始にあたり、環境・認証・保存・配布の準備手順を追加。
+- 開発に使用するpnpmを12.14.0に更新。
 - Android版の実装に向けて、モバイル用Cargo構成とAndroidプロジェクトの基盤を追加。
 - Androidサーバーの誤ったNode.js常駐前提をPHP＋毎分cronへ訂正し、単発CLI・状態API・SQLite保存・重複実行防止を実装。Node専用コードを撤去。5ch取得・プッシュ配送は未実装。
 - PHPにFirebase IDトークン・App Checkの署名検証と、本人の購読登録・更新・停止・削除を追加。ローカル署名とHTTP操作を検証し、実Firebase接続と正規表現の構文互換性は未確認。

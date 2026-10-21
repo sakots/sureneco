@@ -8,7 +8,7 @@ Tauri 2 + Rust + TypeScript + Reactで実装しています。募集検出と監
 
 ## 環境構築
 
-Node.js 22.12以上、pnpm 12.10.1、Rust stableを用意してください。WindowsはMSVC版Rust、Visual Studio C++ Build Tools、WebView2が必要です。Ubuntuは以下をインストールします。
+Node.js 22.12以上、pnpm 12.14.0、Rust stableを用意してください。WindowsはMSVC版Rust、Visual Studio C++ Build Tools、WebView2が必要です。Ubuntuは以下をインストールします。
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
