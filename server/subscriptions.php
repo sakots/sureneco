@@ -9,6 +9,8 @@ use PDO;
 use stdClass;
 use Throwable;
 
+require_once __DIR__ . '/detection.php';
+
 const SUBSCRIPTION_MAX_BODY_BYTES = 262144;
 const SUBSCRIPTION_MAX_WATCHED = 100;
 
@@ -132,14 +134,15 @@ function validateSubscriptionSettings(mixed $input): array
         }
         $result[$key] = $number;
     }
-    // Preserve JavaScript patterns verbatim. Syntax/semantic compatibility requires the
-    // isolated ECMAScript evaluation work; PCRE compilation is not an equivalent check.
+    // Preserve JavaScript patterns verbatim; validate syntax after the inexpensive checks.
+    $patterns = [];
     foreach (['thread_title_regex', 'ng_thread_title_regex', 'yujinsen_regex', 'closed_yujinsen_regex'] as $key) {
         $pattern = $value[$key] ?? null;
         if (!is_string($pattern) || subscriptionTextLength($pattern) > 1000 || ($key !== 'ng_thread_title_regex' && subscriptionTrim($pattern) === '')) {
             throw new InvalidArgumentException('Invalid pattern.');
         }
         $result[$key] = $pattern;
+        $patterns[] = $pattern;
     }
     $url = $value['url'] ?? null;
     if (!is_string($url) || !preg_match('~^https://((?:[a-z0-9-]+\.)*5ch\.(?:io|net))/([a-zA-Z0-9_]+)/?$~iD', $url, $match)) {
@@ -162,6 +165,14 @@ function validateSubscriptionSettings(mixed $input): array
             }
         }
         $result[$key] = $normalized;
+    }
+    try {
+        runDetectionWorker(['operation' => 'validate', 'patterns' => $patterns]);
+    } catch (DetectionWorkerException $error) {
+        if ($error->errorCode === 'invalid_pattern') {
+            throw new InvalidArgumentException('Invalid pattern.');
+        }
+        throw $error;
     }
     return $result;
 }
@@ -210,7 +221,6 @@ function subscriptionRequest(PDO $database, string $verifiedUid, string $method,
             if (!$input instanceof stdClass || array_diff(array_keys(get_object_vars($input)), ['settings', 'watched', 'fcmToken', 'consent']) !== [] || ($input->consent ?? null) !== true) {
                 throw new InvalidArgumentException('Invalid registration.');
             }
-            $settings = validateSubscriptionSettings($input->settings ?? null);
             $watched = $input->watched ?? null;
             if (!is_array($watched) || !array_is_list($watched) || count($watched) > SUBSCRIPTION_MAX_WATCHED) {
                 throw new InvalidArgumentException('Invalid watched threads.');
@@ -226,6 +236,7 @@ function subscriptionRequest(PDO $database, string $verifiedUid, string $method,
             if (!is_string($token) || !preg_match('/^[\x21-\x7e]{1,4096}$/D', $token)) {
                 throw new InvalidArgumentException('Invalid token.');
             }
+            $settings = validateSubscriptionSettings($input->settings ?? null);
             $settingsJson = json_encode($settings, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $watchedJson = json_encode($watched, JSON_THROW_ON_ERROR);
         } elseif ($input !== null && (!$input instanceof stdClass || get_object_vars($input) !== [])) {
@@ -233,6 +244,8 @@ function subscriptionRequest(PDO $database, string $verifiedUid, string $method,
         }
     } catch (InvalidArgumentException) {
         return subscriptionError(400, 'invalid_subscription');
+    } catch (DetectionWorkerException) {
+        return subscriptionError(503, 'detection_unavailable');
     }
 
     // Acquire the write lock before reading revision/state, including across PHP processes.

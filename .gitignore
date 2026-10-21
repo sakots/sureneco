@@ -10,3 +10,4 @@ src-tauri/gen/android/.idea/
 .secrets/
 .android-sdk/
 server/data/
+server/worker/target/
