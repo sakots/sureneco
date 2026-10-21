@@ -1,6 +1,6 @@
 # Android版の開発と配布準備
 
-現在は実装中です。ARM64のデバッグAPK生成と、PHPの単発CLI・状態API・SQLite保存・排他・異常終了後の再実行をローカルで確認しました。Node専用サーバーは撤去済みです。5ch取得・認証・FCM配送と、運用先へのcron登録は未実施です。Android版のAAB生成、Firebaseからの実配信、Google Play公開も未確認です。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
+現在は実装中です。ARM64のデバッグAPK生成、PHPの単発CLI・状態API・SQLite保存・排他・異常終了後の再実行、署名検証と購読の登録・更新・停止・削除をローカルで確認しました。Node専用サーバーは撤去済みです。実際のFirebase認証、5ch取得・FCM配送と運用先へのcron登録は未確認です。Android版のAAB生成、Firebaseからの実配信、Google Play公開も未確認です。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
 
 ## 完成時の構成
 
@@ -62,6 +62,22 @@ CLIは`php server/cron.php`で1回実行します。`SURENECO_SERVER_DB`でDBフ
 監視停止時は端末で即時に通知を抑止し、サーバーでも購読と送信待ちを止めます。登録削除ではその端末の通知先、監視設定、配信履歴を削除します。圏外ではサーバー反映待ちと表示し、通信回復後に再送します。
 
 秘密鍵、認証トークン、FCMトークン、NG全文を通常ログへ出しません。サーバー資格情報はAndroid配布物へ含めません。
+
+### 購読APIの契約
+
+`/v1/subscription`は認証された本人の購読だけを扱います。`PUT`で同意済みの設定とFCM通知先を登録・更新し、`GET`で状態を確認、`DELETE`で登録を削除します。`POST /v1/subscription/stop`は購読を停止します。UIDは検証済みIDトークンから決め、要求本文で他端末を指定することは許可しません。認証には`Authorization: Bearer`と`X-Firebase-AppCheck`を使い、FCMトークンを認証に使いません。
+
+同じ登録内容の再送ではリビジョンを増やさず、変更時には増加させます。停止は送信待ちを破棄し、削除は本人の設定・通知先・配信履歴を削除します。設定は60秒のサーバー更新下限、既存の板URL制限、対象数・本文サイズ・登録頻度の制限を通して保存します。
+
+Firebaseのプロジェクト・アプリ設定がない場合は認証を迂回せずサービス未設定として拒否します。公開用設定、署名・期限・発行者・対象プロジェクトとApp Checkの検証を通った要求だけを受け付けます。ローカル署名検証の成功は実際のFirebaseプロジェクトでの認証成功とは区別します。
+
+サーバーの公開用識別子は`SURENECO_FIREBASE_PROJECT_ID`、`SURENECO_FIREBASE_PROJECT_NUMBER`、`SURENECO_FIREBASE_APP_ID`で指定します。PHPのOpenSSL・cURL・PDO SQLite（SQLite 3.35以上）が必要です。公開鍵はGoogleの固定HTTPS先からTLS検証・リダイレクト拒否・5秒と256KiBの上限で取得し、有効期限内だけキャッシュします。`SURENECO_FIREBASE_KEY_CACHE`は公開領域外のディレクトリーで、既定は`server/data/firebase-keys`です。Admin秘密鍵は署名検証には使いません。
+
+PUTのJSONは`{settings, watched, fcmToken, consent: true}`です。`settings`はPC専用項目を除いた設定、`watched`はスレッドID文字列の配列です。本文は256KiB、監視対象は100件、接続元IPは毎分120回、UIDは毎分60回、登録・更新PUTは毎分10回までです。GET応答に生のFCMトークンを含めません。設定リビジョンは整数で、同じ内容の再送では保持し、設定・通知先の変更と停止時に増加します。
+
+保存するのはUID、通知先、監視設定・対象、同意時刻、状態とリビジョンです。明示削除までは保持し、停止だけでは設定は削除しません。削除時は本人の購読・取得基準・通知履歴・送信待ちをトランザクションで削除します。レート制限にはIP・UIDのハッシュとカウンターを使い、60秒の有効期間後に次の要求で掃除します。生の認証トークンは保存しません。バックアップからの削除は運用先でも同じ方針を適用します。
+
+正規表現は文字列の長さ・必須条件を検証してそのまま保存しますが、JavaScript正規表現の構文・判定互換性は未検証です。PCREへの変換で代用しません。募集判定を有効にする前に互換性と実行上限の検証が必要で、購読APIも`monitoringReady: false`を返します。ローカルの署名済みトークンと公開鍵フィクスチャでHTTP経由の登録・再送・他UIDの分離・通知先更新・停止・削除を確認しましたが、実際のFirebase・Androidとの接続確認ではありません。
 
 ## 検証と公開の区別
 

@@ -45,7 +45,13 @@ async function startPhp(
 ) {
   const child = spawn("php", args, {
     cwd: root,
-    env: { ...process.env, SURENECO_SERVER_DB: database },
+    env: {
+      ...process.env,
+      SURENECO_SERVER_DB: database,
+      SURENECO_FIREBASE_PROJECT_ID: "",
+      SURENECO_FIREBASE_PROJECT_NUMBER: "",
+      SURENECO_FIREBASE_APP_ID: "",
+    },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const exited = once(child, "exit");
@@ -236,4 +242,31 @@ it("公開ルートはGET healthzだけを公開し、cron・DB・購読APIを�
     expect((await fetch(`${api.url}${path}`)).status).toBe(404);
   }
   expect(await health(api.url)).toEqual(initial);
+});
+
+it("購読APIはFirebase未設定を迂回せず、過大本文と許可しない操作を拒否する", async () => {
+  const api = await httpServer(await databasePath());
+  for (const [method, path] of [
+    ["GET", "/v1/subscription"],
+    ["PUT", "/v1/subscription"],
+    ["DELETE", "/v1/subscription"],
+    ["POST", "/v1/subscription/stop"],
+  ]) {
+    const response = await fetch(`${api.url}${path}`, { method });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "authentication_unavailable",
+    });
+  }
+  const oversized = await fetch(`${api.url}/v1/subscription`, {
+    method: "PUT",
+    body: "x".repeat(262145),
+  });
+  expect(oversized.status).toBe(413);
+  expect(
+    (await fetch(`${api.url}/v1/subscription`, { method: "POST" })).status,
+  ).toBe(405);
+  expect((await fetch(`${api.url}/v1/subscription/other-owner`)).status).toBe(
+    404,
+  );
 });
