@@ -12,6 +12,8 @@ Androidのサーバー監視は最短約1分です。`update_sec`は既定60秒�
 
 PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、GitHub経由の更新はAndroidに持ち込みません。Androidのアプリ更新はGoogle Playから行います。
 
+Firebase Consoleでの準備と設定値の対応は[Firebaseの設定手順](firebase-setup.md)を参照してください。Firebase認証・FCMを使う方針とし、ntfyなどの別アプリは要求しません。
+
 ## 必要な環境
 
 - アプリ開発用のNode.js、pnpm、Rust。バージョンと既存のチェック手順は[開発手順](development.md)を参照。運用サーバーにはNode.jsを要求しません。

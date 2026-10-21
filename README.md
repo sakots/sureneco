@@ -31,6 +31,7 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 ## 資料
 
 - [使い方](docs/usage.md)：監視・通知、設定フォルダ、雀魂の起動、更新、Electron版からの切り替え
+- [Firebaseの設定](docs/firebase-setup.md)：プロジェクト作成、匿名認証・App Check・FCM、AndroidとPHPサーバーの設定
 - [開発](docs/development.md)：構成、環境構築、起動とチェック
 - [配布物の作成](docs/packaging.md)：Windows / Linuxビルド、署名、SSH先でのビルドと取得
 - [仕様と変更管理](docs/specification.md)：機能別仕様、OpenSpecの手順、検証
@@ -41,6 +42,8 @@ Android版は[開発と配布準備](docs/android.md)に現在の対応状況、
 ## 更新履歴
 
 ### [2026/10/21] v0.8.3
+
+- FirebaseプロジェクトとAndroid・PHPサーバーの設定、接続確認の手順を追加。
 
 - PHPのFCM HTTP v1送信と、期限・リビジョン確認、最大5回の永続再試行を追加。実際のFirebase・Androidへの配送は未確認。
 
