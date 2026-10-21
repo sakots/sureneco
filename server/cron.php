@@ -22,6 +22,7 @@ $exitCode = 0;
 
 try {
     require __DIR__ . '/bootstrap.php';
+    require __DIR__ . '/monitor.php';
     $database = openDatabase();
     $lockPath = workerLockPath($database);
     $mask = umask(0077);
@@ -46,7 +47,7 @@ try {
         $statement->execute([$startedAt]);
         $statement = null;
 
-        // This foundation records execution only; fetching and delivery are not implemented.
+        runMonitoringBatch($database);
         $finishedAt = (int) floor(microtime(true) * 1000);
         $statement = $database->prepare('UPDATE worker_state SET last_finished_at = ? WHERE id = 1');
         $statement->execute([$finishedAt]);

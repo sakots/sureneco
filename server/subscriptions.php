@@ -9,6 +9,8 @@ use PDO;
 use stdClass;
 use Throwable;
 
+require_once __DIR__ . '/detection.php';
+
 const SUBSCRIPTION_MAX_BODY_BYTES = 262144;
 const SUBSCRIPTION_MAX_WATCHED = 100;
 
@@ -38,6 +40,16 @@ function initializeSubscriptionSchema(PDO $database): void
             last_post INTEGER NOT NULL DEFAULT 0,
             needs_baseline INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (uid, board_url, thread_id)
+        );
+        CREATE TABLE IF NOT EXISTS subscription_fetch_state (
+            uid TEXT NOT NULL REFERENCES subscriptions(uid) ON DELETE CASCADE,
+            board_url TEXT NOT NULL,
+            resource TEXT NOT NULL,
+            last_attempt_at INTEGER NOT NULL,
+            last_success_at INTEGER,
+            threads_json TEXT,
+            error_code TEXT,
+            PRIMARY KEY (uid, board_url, resource)
         );
         CREATE TABLE IF NOT EXISTS notification_events (
             event_id TEXT PRIMARY KEY,
@@ -132,14 +144,15 @@ function validateSubscriptionSettings(mixed $input): array
         }
         $result[$key] = $number;
     }
-    // Preserve JavaScript patterns verbatim. Syntax/semantic compatibility requires the
-    // isolated ECMAScript evaluation work; PCRE compilation is not an equivalent check.
+    // Preserve JavaScript patterns verbatim; validate syntax after the inexpensive checks.
+    $patterns = [];
     foreach (['thread_title_regex', 'ng_thread_title_regex', 'yujinsen_regex', 'closed_yujinsen_regex'] as $key) {
         $pattern = $value[$key] ?? null;
         if (!is_string($pattern) || subscriptionTextLength($pattern) > 1000 || ($key !== 'ng_thread_title_regex' && subscriptionTrim($pattern) === '')) {
             throw new InvalidArgumentException('Invalid pattern.');
         }
         $result[$key] = $pattern;
+        $patterns[] = $pattern;
     }
     $url = $value['url'] ?? null;
     if (!is_string($url) || !preg_match('~^https://((?:[a-z0-9-]+\.)*5ch\.(?:io|net))/([a-zA-Z0-9_]+)/?$~iD', $url, $match)) {
@@ -162,6 +175,14 @@ function validateSubscriptionSettings(mixed $input): array
             }
         }
         $result[$key] = $normalized;
+    }
+    try {
+        runDetectionWorker(['operation' => 'validate', 'patterns' => $patterns]);
+    } catch (DetectionWorkerException $error) {
+        if ($error->errorCode === 'invalid_pattern') {
+            throw new InvalidArgumentException('Invalid pattern.');
+        }
+        throw $error;
     }
     return $result;
 }
@@ -210,7 +231,6 @@ function subscriptionRequest(PDO $database, string $verifiedUid, string $method,
             if (!$input instanceof stdClass || array_diff(array_keys(get_object_vars($input)), ['settings', 'watched', 'fcmToken', 'consent']) !== [] || ($input->consent ?? null) !== true) {
                 throw new InvalidArgumentException('Invalid registration.');
             }
-            $settings = validateSubscriptionSettings($input->settings ?? null);
             $watched = $input->watched ?? null;
             if (!is_array($watched) || !array_is_list($watched) || count($watched) > SUBSCRIPTION_MAX_WATCHED) {
                 throw new InvalidArgumentException('Invalid watched threads.');
@@ -226,6 +246,7 @@ function subscriptionRequest(PDO $database, string $verifiedUid, string $method,
             if (!is_string($token) || !preg_match('/^[\x21-\x7e]{1,4096}$/D', $token)) {
                 throw new InvalidArgumentException('Invalid token.');
             }
+            $settings = validateSubscriptionSettings($input->settings ?? null);
             $settingsJson = json_encode($settings, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $watchedJson = json_encode($watched, JSON_THROW_ON_ERROR);
         } elseif ($input !== null && (!$input instanceof stdClass || get_object_vars($input) !== [])) {
@@ -233,6 +254,8 @@ function subscriptionRequest(PDO $database, string $verifiedUid, string $method,
         }
     } catch (InvalidArgumentException) {
         return subscriptionError(400, 'invalid_subscription');
+    } catch (DetectionWorkerException) {
+        return subscriptionError(503, 'detection_unavailable');
     }
 
     // Acquire the write lock before reading revision/state, including across PHP processes.
@@ -276,6 +299,28 @@ function subscriptionRequest(PDO $database, string $verifiedUid, string $method,
                         watched_json = excluded.watched_json, fcm_token = excluded.fcm_token, updated_at = excluded.updated_at
                 ')->execute([$verifiedUid, $revision, $settingsJson, $watchedJson, $token, $now, $now, $now]);
                 $database->prepare('DELETE FROM notification_outbox WHERE uid = ?')->execute([$verifiedUid]);
+                // Preserve cursors for unchanged targets, but re-added targets need a new baseline.
+                $cursors = $database->prepare('SELECT board_url, thread_id FROM subscription_cursors WHERE uid = ?');
+                $cursors->execute([$verifiedUid]);
+                $obsolete = $cursors->fetchAll();
+                $cursors->closeCursor();
+                foreach ($obsolete as $cursor) {
+                    if ($cursor['board_url'] !== $settings['url'] || !in_array($cursor['thread_id'], $watched, true)) {
+                        $database->prepare('DELETE FROM subscription_cursors WHERE uid = ? AND board_url = ? AND thread_id = ?')
+                            ->execute([$verifiedUid, $cursor['board_url'], $cursor['thread_id']]);
+                    }
+                }
+                $fetches = $database->prepare('SELECT board_url, resource FROM subscription_fetch_state WHERE uid = ?');
+                $fetches->execute([$verifiedUid]);
+                $obsoleteFetches = $fetches->fetchAll();
+                $fetches->closeCursor();
+                foreach ($obsoleteFetches as $fetch) {
+                    if ($fetch['board_url'] !== $settings['url'] || $fetch['resource'] === 'subject.txt'
+                        || !in_array(substr($fetch['resource'], 4, -4), $watched, true) || ($current !== false && !(bool) $current['active'])) {
+                        $database->prepare('DELETE FROM subscription_fetch_state WHERE uid = ? AND board_url = ? AND resource = ?')
+                            ->execute([$verifiedUid, $fetch['board_url'], $fetch['resource']]);
+                    }
+                }
                 if ($current !== false && !(bool) $current['active']) {
                     $database->prepare('UPDATE subscription_cursors SET needs_baseline = 1 WHERE uid = ?')->execute([$verifiedUid]);
                 }
