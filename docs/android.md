@@ -41,24 +41,151 @@ pnpm tauri android build --debug --apk --target aarch64 --ci --features mobile -
 
 上記はLinux x64ホストの例です。別のホストではNDKの`prebuilt`配下を環境に合わせます。bindgenにもNDKのsysrootを渡し、ホストOSのCヘッダーを使わないようにします。
 
+ビルド成功後、Windowsへ転送するAPKを配置します。失敗時は古いAPKを転送せず、先にビルドエラーを解消してください。
+
+```sh
+mkdir -p release
+cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk release/sureneco_v0.8.3_android_debug.apk
+```
+
 この段階のAndroidエントリーポイントは起動用の基盤です。画面のコマンド接続、Firebase認証、バックグラウンド通知は別項目で実装・検証します。デバッグAPKはGoogle Play提出用の署名付きAABとは区別します。
 
 生成先は`src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`です。生成物からアプリID`io.github.sakots.sureneco`、versionName `0.8.3`、versionCode `1`、minSdk 24、target/compileSdk 36、ARM64のみであることを確認しました。QuickJSを含む`libsureneco.so`のLOADセグメントは16KB整列、APKも`zipalign -c -P 16 4`に合格しています。接続端末がなく、端末上の起動・募集判定と16KBページサイズ端末の動作は未確認です。
 
-### SSH接続元のWindowsから実機へインストール
+## WindowsからAndroid実機をデバッグする
 
-実機はWindowsへUSB接続し、Linux側ではAPKのビルドだけを行います。SSH先へADBやUSBを転送する必要はありません。Windowsでは[公式Platform-Tools](https://developer.android.com/tools/releases/platform-tools)を展開し、実機のUSBデバッグと初回接続の許可を有効にします。
+この手順は「SSH先のLinuxでビルド → WindowsへAPKをコピー → WindowsにUSB接続した実機へインストール」の構成です。ADBはWindows側だけで動かし、SSHへのUSB転送、ADBポートの公開、Linuxの開発サーバーへの接続は不要です。APKにはビルド時の画面が入るため、変更確認のたびに再ビルド・再転送・上書きインストールします。ホットリロードやRustのブレークポイント実行を行う手順ではありません。
 
-現在の検証用APKは`release/sureneco_v0.8.3_android_debug.apk`にも配置します。PowerShellの例です。`user@linux-host`は普段のSSH接続先、リモートのパスはリポジトリーの配置先に変更してください。
+以下のコマンドは、LinuxのSSHシェルではなく**WindowsのPowerShell**で実行します。Windowsでは基本のインストール・ログ取得にAndroid Studio、Rust、Javaは不要です。
+
+### 1. Windowsと実機を準備する
+
+1. [公式Platform-Tools](https://developer.android.com/tools/releases/platform-tools)のWindows用ZIPを展開し、`C:\Android\platform-tools\adb.exe`を用意します。別の場所へ展開した場合は、以下の`$adb`を変更します。フルパスで起動するためPATH設定は不要です。
+2. 実機の設定でビルド番号を繰り返しタップして「開発者向けオプション」を表示し、「USBデバッグ」を有効にします。設定名・場所は機種により異なります。
+3. データ通信対応のUSBケーブルでWindowsと接続し、実機のロックを解除して「USBデバッグを許可」を承認します。Windowsが認識しない場合は端末メーカーのUSBドライバーを確認します。
+
+PowerShellでパスとアプリIDを設定します。変数はそのPowerShellウィンドウ内だけで有効です。
+
+```powershell
+$adb = "C:\Android\platform-tools\adb.exe"
+$appId = "io.github.sakots.sureneco"
+$apk = "$HOME\Downloads\sureneco_v0.8.3_android_debug.apk"
+& $adb version
+& $adb devices -l
+```
+
+`devices -l`の先頭列にある端末シリアル番号を、次の`実際のシリアル番号`と置き換えます。端末やエミュレーターが複数あっても対象を間違えないよう、以後はすべて`-s $serial`を指定します。
+
+```powershell
+$serial = "実際のシリアル番号"
+& $adb -s $serial get-state
+```
+
+`device`なら接続できています。`unauthorized`は実機側の許可待ち、`offline`は通信できていない状態です。ADBの秘密鍵やUSBデバッグの許可を他人へ渡さないでください。
+
+### 2. LinuxからAPKを取得してインストールする
+
+[Androidビルドの基盤](#androidビルドの基盤)でデバッグAPKを生成・配置してから、Windowsで次を実行します。`user@linux-host`は普段のSSH接続先、リモートのパスはリポジトリーの配置先へ変更してください。
 
 ```powershell
 $sshTarget = "user@linux-host"
-scp "${sshTarget}:/home/sakots/dev/sureneco/release/sureneco_v0.8.3_android_debug.apk" "$HOME\Downloads\"
-& "C:\Android\platform-tools\adb.exe" devices
-& "C:\Android\platform-tools\adb.exe" install -r "$HOME\Downloads\sureneco_v0.8.3_android_debug.apk"
+scp "${sshTarget}:/home/sakots/dev/sureneco/release/sureneco_v0.8.3_android_debug.apk" $apk
 ```
 
-`devices`の結果が`unauthorized`なら実機側で許可します。端末が出なければデータ通信対応ケーブルとWindowsの端末用USBドライバーを確認します。このAPKは起動経路の確認用で、募集閲覧・設定操作・プッシュ受信が完成したアプリではありません。Windowsからのインストール・端末上の起動はまだ未確認です。
+SCPが成功したことを確認してからインストールします。
+
+```powershell
+& $adb -s $serial install -r $apk
+```
+
+`Success`を確認します。`-r`は同じ署名のアプリをデータを保持して上書きします。ローカルで用意した`copy-android-apk.bat`を使う場合、保存先はBATと同じフォルダーなので`$apk`をその場所へ合わせます。このBATはGit管理外で、リポジトリーのcloneには含まれません。
+
+現在のAPKはARM64向け・Android 7.0（API 24）以上が対象です。端末の条件は次で確認できます。
+
+```powershell
+& $adb -s $serial shell getprop ro.product.cpu.abilist
+& $adb -s $serial shell getprop ro.build.version.sdk
+& $adb -s $serial shell getconf PAGE_SIZE
+```
+
+ABI一覧に`arm64-v8a`が必要です。ページサイズは通常4096または16384で、16384なら16KB端末です。端末のページサイズを確認しただけでは、アプリの16KB環境での動作確認にはなりません。
+
+### 3. 起動・終了とインストール済みバージョンを確認する
+
+```powershell
+& $adb -s $serial shell am force-stop $appId
+& $adb -s $serial shell am start -W -n "${appId}/.MainActivity"
+& $adb -s $serial shell dumpsys package $appId | Select-String "versionName|versionCode"
+```
+
+`Status: ok`はActivityの起動成功を示します。実機の画面も確認し、表示内容やエラーを記録してください。Android画面のコマンド接続とFCM受信はまだ未実装なので、起動成功を募集閲覧・設定保存・プッシュ受信の確認済みとは扱いません。
+
+`force-stop`はアプリを強制停止します。通常終了やバックグラウンド移行とは異なり、再度利用者が起動するまでプッシュを受信できない場合があります。将来のバックグラウンド通知の検証では、ホームへ戻る・別アプリへ切り替える・画面を消す操作と区別してください。
+
+### 4. Logcatで起動時のログとクラッシュを保存する
+
+起動直後に落ちる場合はPIDを絞らず、まず次でログの取得を始めてから、**実機のホーム画面でsurenecoのアイコンをタップして起動**します。症状を再現したらPowerShellで`Ctrl+C`を押して取得を終了します。端末に保持されている直前のログも含まれます。
+
+```powershell
+$log = "$HOME\Downloads\sureneco-logcat-$(Get-Date -Format yyyyMMdd-HHmmss).txt"
+& $adb -s $serial logcat -b main -b system -b crash -v threadtime | Tee-Object -FilePath $log
+```
+
+クラッシュ用バッファだけを後から保存する場合は、次を使います。`-d`は保存済みログを出力して終了する指定です。
+
+```powershell
+$crashLog = "$HOME\Downloads\sureneco-crash-$(Get-Date -Format yyyyMMdd-HHmmss).txt"
+& $adb -s $serial logcat -b crash -d -v threadtime | Set-Content -Encoding utf8 $crashLog
+```
+
+アプリが起動し続けている場合は、メインプロセスのPIDで絞れます。
+
+```powershell
+$appPid = (& $adb -s $serial shell pidof -s $appId | Out-String).Trim()
+if ($appPid) {
+    & $adb -s $serial logcat "--pid=$appPid" -v threadtime
+} else {
+    Write-Host "アプリのプロセスがありません。起動してから再取得してください。"
+}
+```
+
+PowerShellの`$PID`は予約済みの自動変数なので、ここでは`$appPid`を使います。PIDはアプリの再起動で変わります。PIDを絞るとWebViewの別プロセスやOS側のクラッシュ情報を取りこぼすため、起動失敗では先に全体ログを取得してください。LogcatにJavaScriptのすべての例外・ログが出るとは限りません。
+
+ログには別アプリの情報、端末識別情報、通信先などが含まれます。共有前に確認し、認証情報、FCMトークン、NG全文や個人情報を取り除いてください。調査前の`logcat -c`は既存ログを消すため、この手順では実行しません。
+
+### 5. ChromeでWebViewの画面・JavaScriptを調べる
+
+1. 実機でデバッグAPKを起動し、WindowsのChromeで`chrome://inspect/#devices`を開きます。
+2. **Discover USB devices**を有効にします。
+3. surenecoのWebViewが表示されたら、その下の**inspect**を開きます。
+4. **Console**でJavaScriptの例外、**Network**で通信失敗、**Elements**で画面のレイアウトを確認します。
+
+WebViewの検査にはアプリ側でWebViewデバッグが有効である必要があります。APKが`debuggable`なだけで必ず表示されるとは限りません。出てこない場合はADB接続、実機でアプリが表示中か、デバッグAPKかを確認し、アプリ側のWebViewデバッグ設定を調べます。今回の環境ではChromeからの実機検査は未確認です。公開用APKへ無条件にWebViewデバッグを有効にする設定は追加しません。
+
+DevToolsからの一時的な画面変更はソースへ保存されません。恒久修正はLinux側のソースへ反映し、APKを再ビルド・転送・上書きインストールします。
+
+### 6. よくあるエラー
+
+| 症状 | 確認すること |
+| --- | --- |
+| `adb`が認識されない | `$adb`のフルパスを確認。PowerShellでは`& $adb`で起動する |
+| `devices`に端末が出ない | USBデバッグ、データ通信対応ケーブル、USBポート、Windowsの端末用USBドライバー |
+| `unauthorized` | 実機のロックを解除し、USBデバッグのRSA確認を承認。出なければ接続し直す |
+| `offline` | USB接続をやり直す。改善しなければ`& $adb kill-server`、`& $adb start-server`を実行し再確認。他のADB接続も一時切断される |
+| `more than one device/emulator` | `devices -l`で対象を選び、`-s $serial`を指定する |
+| `INSTALL_FAILED_NO_MATCHING_ABIS` | ARM64 APKに対し、端末のABI一覧に`arm64-v8a`があるか確認する |
+| `INSTALL_FAILED_OLDER_SDK` | 端末のAPIレベルが24以上か確認する |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | 既存アプリとAPKの署名が異なる。同じ署名鍵で再ビルドする。アンインストールすると端末内の設定・データが消えるため、安易に削除しない |
+| `INSTALL_FAILED_VERSION_DOWNGRADE` | インストール済みのversionCodeより古い。新しいビルドを使い、無条件にダウングレードしない |
+| 起動直後に終了する・画面が真っ白 | 起動前からLogcatを取得し、クラッシュログとWebViewのConsoleを確認する。未実装のコマンド接続とも区別する |
+
+### 7. 不具合を報告するとき
+
+端末の機種・Androidバージョン・ABI・ページサイズ、APKのversionName/versionCode、実行した操作、発生時刻、表示されたエラー、機密情報を除いたLogcatを添えます。「初回インストール／上書き」「前面／ホーム／画面消灯／強制停止」のどれかも記録します。
+
+この資料ではAPKの生成・識別情報とホスト側ADBのコマンドを確認しています。Windowsからの実機インストール、起動、Logcat取得、Chrome検査、16KB端末での動作は未確認です。実施後に端末と結果を記録し、未確認の項目を成功扱いにしないでください。
+
+公式資料：[Android Debug Bridge](https://developer.android.com/tools/adb)、[Logcat](https://developer.android.com/tools/logcat)、[WebViewのリモートデバッグ](https://developer.chrome.com/docs/devtools/remote-debugging/webviews)。
 
 ## PHPサーバーとcronの構成
 
