@@ -21,6 +21,27 @@ PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウ
 
 現在用意されているのはAndroid端末です。Firebaseプロジェクトと運用先は未設定です。ローカル検証と実際のFirebase接続を必要とする確認は分けて記録します。
 
+## Androidビルドの基盤
+
+モバイル用のCargo featureは`mobile`です。PC版の既定featureを無効にして使います。Androidプロジェクトは`src-tauri/gen/android`に置き、SDKのローカルパス、生成物、署名設定はGitへ含めません。GradleからのRustビルドにもPATH上の`pnpm`を使います。
+
+開発環境ではJava 21、API 36、Build Tools 36.0.0、NDK 28.2.13676358と`aarch64-linux-android`を準備します。SDK規約への同意が必要です。SDKをプロジェクト内に置く場合は、Git管理外の`.android-sdk/`を使えます。
+
+```sh
+export ANDROID_HOME="$PWD/.android-sdk"
+export NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+rustup target add aarch64-linux-android
+pnpm tauri android build --debug --apk --target aarch64 --ci
+```
+
+この段階のAndroidエントリーポイントは起動用の基盤です。画面のコマンド接続、Firebase認証、バックグラウンド通知は別項目で実装・検証します。デバッグAPKはGoogle Play提出用の署名付きAABとは区別します。
+
+## Nodeサーバーのローカル基盤
+
+Firebase設定と固定HTTPS API先の準備を待つ間は、接続先設定を未完了としてNodeサーバーを先行実装します。ローカル基盤はループバックでのみ公開し、SQLiteへワーカーの状態を保存します。同じDBのワーカーを別プロセスから起動すると、SQLiteの排他ロックで拒否します。プロセス停止時にはOSがロックを解放し、ロック用ファイルは削除しません。
+
+この基盤だけでは5chの取得・認証・通知配信は行いません。ヘルスチェックの応答はプロセスの生存確認であり、通知配送の成功を意味しません。
+
 ## 認証・保存と停止
 
 通知の利用開始前に、サーバーへ保存する情報と削除方法を説明して同意を受けます。Firebase匿名認証で端末を識別し、監視スレッド、板URL、更新周期、検出条件、NG・許可ワッチョイ、有効期間、FCM通知先と設定リビジョンを同期します。PC用の実行ファイルパスや設定フォルダーは送信しません。
