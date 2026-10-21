@@ -5,7 +5,7 @@
 - [x] 1.1 Android対応手順にPHP＋毎分cronの単発処理とFCM、最短約1分の監視周期、端末認証、保存データ、運用環境、対象外の機能を記載し、提案と仕様差分に一致することを確認する。
 - [x] 1.2 SDK/NDK・Android用Rustターゲットを準備し、モバイル用Cargo構成・ライブラリエントリーポイント・Android生成プロジェクトを追加する。Androidクロスビルドとデスクトップ専用依存が含まれないことを確認する。
 - [ ] 1.3 アプリID、API 36以上、ARM64、versionName/versionCode、公開用Firebase設定と固定HTTPS API設定を整える。Gradle設定とGit除外で、秘密情報とローカル出力が追跡されないことを確認する。
-- [ ] 1.4 server/にPHPのHTTPS API・cron用CLIバッチとSQLiteの永続領域を用意する。1回処理後の終了、次回起動時の状態復元、重複実行のスキップ、異常終了後のロック解放をローカルで確認する。誤って追加したNodeサーバー、専用テスト、build:server・server:startと不要なビルド・型検査設定を撤去し、Androidビルド基盤は維持する。
+- [x] 1.4 server/にPHPのHTTPS API・cron用CLIバッチとSQLiteの永続領域を用意する。1回処理後の終了、次回起動時の状態復元、重複実行のスキップ、異常終了後のロック解放をローカルで確認する。誤って追加したNodeサーバー、専用テスト、build:server・server:startと不要なビルド・型検査設定を撤去し、Androidビルド基盤は維持する。
 
 ## 2. 認証と購読API
 

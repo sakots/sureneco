@@ -4,7 +4,7 @@
 
 動機と合意範囲はproposal.mdを参照する。現行v0.8.3はdesktop featureが既定で、トレイ・OS操作・監視スレッドがsrc-tauri/src/desktop.rsにまとまっている。モバイルエントリーポイントとAndroid生成プロジェクトを追加し、ARM64デバッグAPKの生成は確認済み。募集判定はsrc/core、要求処理はsrc/backend/engine.ts、QuickJSホストはsrc-tauri/src/engine.rsに分離されている。
 
-Androidの通知はサーバー監視＋プッシュ通知とし、利用者が指定したサーバー構成はPHP＋cronである。毎分cronで各回1回処理して終了し、20秒間隔の短時間ループも使わないことで合意した。Node常駐サーバーを追加した実装は前提違いであり、PHPへの切り替え時に撤去する。Java 21、SDK/NDKとAndroid用Rustターゲットは準備済みだが、運用サーバー、Firebase、Play Consoleの接続と権限は未確認。
+Androidの通知はサーバー監視＋プッシュ通知とし、利用者が指定したサーバー構成はPHP＋cronである。毎分cronで各回1回処理して終了し、20秒間隔の短時間ループも使わないことで合意した。前提違いのNode常駐サーバーは撤去し、PHPの単発CLI・状態API・SQLite保存と排他を実装した。5ch取得・認証・配信と運用先のcron登録は未実施。Java 21、SDK/NDKとAndroid用Rustターゲットは準備済みだが、運用サーバー、Firebase、Play Consoleの接続と権限は未確認。
 
 ## Goals / Non-Goals
 

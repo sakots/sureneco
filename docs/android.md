@@ -1,6 +1,6 @@
 # Android版の開発と配布準備
 
-現在は実装中です。ARM64のデバッグAPK生成は確認済みですが、PHP＋cronのサーバーは未実装です。誤って追加したNodeサーバーの起動確認は、PHPサーバーの検証結果には含めません。Android版のAAB生成、Firebaseからの実配信、Google Play公開も未確認です。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
+現在は実装中です。ARM64のデバッグAPK生成と、PHPの単発CLI・状態API・SQLite保存・排他・異常終了後の再実行をローカルで確認しました。Node専用サーバーは撤去済みです。5ch取得・認証・FCM配送と、運用先へのcron登録は未実施です。Android版のAAB生成、Firebaseからの実配信、Google Play公開も未確認です。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
 
 ## 完成時の構成
 
@@ -49,9 +49,11 @@ cronのスケジュールは`* * * * *`です。各起動で期限を迎えた�
 
 同じDBを使うバッチの重複実行は固定ロックファイルの非ブロッキング`flock`でスキップします。ロックファイルを削除せず、正常終了・異常終了時のOSによる解放を使います。DB・ロック・資格情報はWeb公開領域の外へ置き、PHP APIとCLIが同じ永続データへアクセスできるようにします。
 
-APIの応答成功だけでcron監視が正常とは扱いません。バッチの最終開始・終了、最終取得成功、取得・配信エラーと送信待ちの滞留を確認します。PHP実装とcron実行は未検証のため、実行可能な登録コマンドや正常稼働の案内はまだ提供しません。
+APIの応答成功だけでcron監視が正常とは扱いません。バッチの最終開始・終了、最終取得成功、取得・配信エラーと送信待ちの滞留を確認します。PHP基盤の初期段階では実行時刻の保存と状態照会を提供し、`monitoringReady: false`を返します。5ch取得・認証・FCM配送は別の作業項目です。
 
-既存の`server/main.ts`、`server/service.ts`とNode専用のテスト・ビルド／起動コマンドは誤った方針で追加したものです。PHPへの切り替え時に撤去する対象であり、`pnpm server:start`をAndroidの運用手順として使わないでください。Androidのビルド基盤はそのまま維持します。
+CLIは`php server/cron.php`で1回実行します。`SURENECO_SERVER_DB`でDBファイルを指定し、未指定時は`server/data/monitor.sqlite`を使います。ローカルAPIは`php -S 127.0.0.1:8787 -t server/public server/public/index.php`で起動し、`GET /healthz`で保存状態を確認します。PHP組み込みサーバーはローカル検証専用です。運用時はHTTPS対応Webサーバーの公開ルートを`server/public`に限定します。
+
+毎分cronにはPHP実行ファイル・`server/cron.php`・DB保存先を絶対パスで登録します。重複実行は`status: skipped`で処理せず終了し、実行失敗は非ゼロ終了です。Node専用サーバー、テスト、ビルド・起動コマンドは撤去済みで、Androidのビルド基盤は維持しています。PHP 8.5 CLIとPDO SQLiteでローカル実行を確認しました。`pnpm test:server`でPHPプロセスの回帰テストを実行します。cronサービスへの登録・毎分実行は運用先で別途確認します。
 
 ## 認証・保存と停止
 
