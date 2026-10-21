@@ -25,7 +25,7 @@ PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウ
 
 ## Androidビルドの基盤
 
-Android版の表示名は「スレネコアラート」、パッケージ名（applicationId）は`sureneco.sakots`です。TauriのAndroid専用設定、Gradleのnamespace/applicationId、Kotlinのパッケージと表示文字列を一致させます。PC版の名称・識別子、Rust crate名と配布ファイル名の`sureneco`は変更しません。Firebaseへ登録するAndroidパッケージ名も`sureneco.sakots`に合わせてください。
+Android版の表示名は「スレネコアラート」、パッケージ名（applicationId）は`sureneco.sakots`です。TauriのAndroid専用設定、Gradleのnamespace/applicationId、Kotlinのパッケージと表示文字列を一致させます。PC版の表示名も「スレネコアラート」とし、PC版の内部製品名・識別子、Rust crate名と配布ファイル名の`sureneco`は維持します。Firebaseへ登録するAndroidパッケージ名も`sureneco.sakots`に合わせてください。
 
 旧パッケージでインストールしたAPKとは別アプリになります。`install -r`で旧アプリが置き換わったり、保存データが自動移行されたりはしません。旧アプリの削除やデータ移行は自動では行いません。
 

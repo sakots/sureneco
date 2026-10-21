@@ -1,4 +1,4 @@
-# sureneco
+# スレネコアラート
 
 ![Last commit](https://img.shields.io/github/last-commit/sakots/sureneco)
 ![version](https://img.shields.io/github/v/release/sakots/sureneco)
@@ -52,6 +52,7 @@ Android版「スレネコアラート」は[開発と配布準備](docs/android.
 - SSH先で生成したAndroidデバッグAPKをWindowsへ転送し、Windows側のADBで実機へインストールする手順を追加。
 - WindowsからAndroid実機をデバッグするため、ADBの準備、起動、Logcat保存、ChromeによるWebView調査とエラーの対処手順を追加。
 - Android版の表示名を「スレネコアラート」、パッケージ名を`sureneco.sakots`へ変更し、ビルド設定と実機デバッグ手順を統一。
+- PC版の画面・トレイ・通知・ランチャーの表示名を「スレネコアラート」に変更。更新互換のため内部製品名・識別子・実行ファイル名・設定保存先は維持。
 - Android版をGoogle Playへ配布するための提案・仕様差分・設計・作業項目を追加。公開は未実施。
 - Android版の監視方針をサーバー監視＋プッシュ通知へ変更し、バックグラウンド受信、設定同期、監視停止・登録解除の計画を追加。
 

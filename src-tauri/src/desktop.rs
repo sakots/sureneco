@@ -68,7 +68,7 @@ fn register_windows_notifications(app: &AppHandle) -> Result<(), String> {
     let (key, _) = RegKey::predef(HKEY_CURRENT_USER)
         .create_subkey(format!("Software\\Classes\\AppUserModelId\\{id}"))
         .map_err(|e| e.to_string())?;
-    key.set_value("DisplayName", &"sureneco")
+    key.set_value("DisplayName", &"スレネコアラート")
         .map_err(|e| e.to_string())?;
     let wide: Vec<u16> = id.encode_utf16().chain(Some(0)).collect();
     unsafe {
@@ -152,9 +152,9 @@ pub fn notify(_app: &AppHandle, title: String, body: String) -> Result<(), Strin
         let notification = notify_rust::Notification::new()
             .summary(&title)
             .body(&body)
-            .appname("sureneco")
+            .appname("スレネコアラート")
             .icon("sureneco")
-            .action("default", "surenecoを開く")
+            .action("default", "スレネコアラートを開く")
             .show()
             .map_err(|e| e.to_string())?;
         let app = _app.clone();
@@ -538,7 +538,7 @@ pub fn run() {
                     let error_app = handle.clone();
                     app.dialog()
                         .message(error)
-                        .title("surenecoを起動できません")
+                        .title("スレネコアラートを起動できません")
                         .kind(tauri_plugin_dialog::MessageDialogKind::Error)
                         .show(move |_| error_app.exit(1));
                     return Ok(());
@@ -547,14 +547,15 @@ pub fn run() {
             app.manage(backend);
             app.manage(Clipboard(Mutex::new(None)));
             app.manage(updates::Controller::new(&handle));
-            let open = MenuItem::with_id(app, "open", "surenecoを開く", true, None::<&str>)?;
+            let open =
+                MenuItem::with_id(app, "open", "スレネコアラートを開く", true, None::<&str>)?;
             let refresh = MenuItem::with_id(app, "refresh", "今すぐ更新", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "終了", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &refresh, &separator, &quit])?;
             let tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("sureneco · 友人戦募集通知")
+                .tooltip("スレネコアラート · 友人戦募集通知")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -620,7 +621,7 @@ pub fn run() {
             }
         }),
         Err(error) => {
-            eprintln!("surenecoを起動できません: {error}");
+            eprintln!("スレネコアラートを起動できません: {error}");
         }
     }
 }
