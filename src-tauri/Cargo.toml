@@ -6,9 +6,13 @@ description = "5ch雀魂スレッドの友人戦募集通知"
 license = "MIT"
 authors = ["sakots"]
 
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [features]
 default = ["desktop"]
-desktop = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-window-state", "dep:tauri-plugin-updater", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-dialog", "dep:arboard", "dep:open", "dep:notify-rust", "dep:gtk"]
+desktop = ["dep:tauri", "dep:tauri-build", "tauri/tray-icon", "tauri/image-png", "tauri/image-ico", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-window-state", "dep:tauri-plugin-updater", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-dialog", "dep:arboard", "dep:open", "dep:notify-rust", "dep:gtk"]
+mobile = ["dep:tauri", "dep:tauri-build"]
 
 [build-dependencies]
 tauri-build = { version = "2", optional = true , features = [] }
@@ -23,7 +27,7 @@ url = "2"
 dirs = "6"
 tempfile = "3"
 parking_lot = "0.12"
-tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico"], optional = true }
+tauri = { version = "2", features = [], optional = true }
 tauri-plugin-single-instance = { version = "2", optional = true }
 tauri-plugin-window-state = { version = "2", optional = true }
 tauri-plugin-updater = { version = "2.13", optional = true }
