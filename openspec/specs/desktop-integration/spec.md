@@ -2,7 +2,7 @@
 
 ## Purpose
 
-WindowsとUbuntuで常駐するsurenecoの画面、トレイ、ウィンドウ状態と通知クリックの動作を定義する。非表示時にも監視を続け、通知から既存ウィンドウへ戻れることを保証するための仕様。
+WindowsとUbuntuで常駐するスレネコアラートの画面、トレイ、ウィンドウ状態と通知クリックの動作を定義する。非表示時にも監視を続け、通知から既存ウィンドウへ戻れることを保証するための仕様。
 
 ## Requirements
 
@@ -28,6 +28,15 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するTauri 2アプリ。Rus
 
 - **WHEN** 開発版または配布版のウィンドウを表示する
 - **THEN** File・Edit等の標準メニューを表示しない
+
+### Requirement: アプリの表示名と内部識別子
+
+PC版は表示名の変更と内部識別子の維持を分離しなければならない（SHALL）。表示名を「スレネコアラート」とし、画面の見出し・タイトル・更新案内、トレイ、通知、ランチャーへ反映する。内部製品名、アプリ識別子、実行ファイル名、設定保存先、通知起動スキームは従来のsurenecoを維持する。Windowsのセットアップ画面の製品名はsurenecoのままとし、既存インストールの更新判定を変えずにアプリの登録名・ショートカット表示を変更する。
+
+#### Scenario: 名称変更後の起動と導入
+
+- **WHEN** 名称変更版を起動またはインストールする
+- **THEN** アプリの表示名はスレネコアラートとなり、従来の設定保存先と更新用の識別子を引き続き使用する
 
 ### Requirement: コンパクトで狭幅に対応する画面
 
@@ -65,7 +74,7 @@ Windows / Ubuntuで5chの雀魂スレッドを監視するTauri 2アプリ。Rus
 
 通知クリックは以下の再表示動作を行わなければならない（SHALL）。
 
-通知をクリックするとsurenecoのウィンドウを再表示し、最小化中なら復元してフォーカスする。Windowsはsureneco-notification://notificationsのprotocol activationとTauri deep-linkを使い、起動済みならsingle-instanceで既存ウィンドウを表示する。Linuxはデスクトップ通知のdefaultアクションを受け付ける。スレッドをブラウザーで開く操作は画面内の「レスを開く」を使う。
+通知をクリックするとスレネコアラートのウィンドウを再表示し、最小化中なら復元してフォーカスする。Windowsはsureneco-notification://notificationsのprotocol activationとTauri deep-linkを使い、起動済みならsingle-instanceで既存ウィンドウを表示する。Linuxはデスクトップ通知のdefaultアクションを受け付ける。スレッドをブラウザーで開く操作は画面内の「レスを開く」を使う。
 
 #### Scenario: 最小化中の通知クリック
 

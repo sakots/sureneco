@@ -140,7 +140,7 @@ export function App({ api }: { api: Api }) {
             猫
           </span>
           <div>
-            <h1>sureneco</h1>
+            <h1>スレネコアラート</h1>
             <p>友人戦するにゃ！</p>
           </div>
         </div>
@@ -175,7 +175,9 @@ export function App({ api }: { api: Api }) {
         ["available", "downloaded"].includes(update.status) &&
         page !== "settings" && (
           <div className="message update-banner">
-            <span>sureneco v{update.latestVersion}に更新できます。</span>
+            <span>
+              スレネコアラート v{update.latestVersion}に更新できます。
+            </span>
             <button className="secondary" onClick={() => setPage("settings")}>
               更新画面を開く
             </button>

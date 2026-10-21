@@ -154,7 +154,7 @@ pub async fn check(app: &AppHandle) -> Result<(), String> {
                 if inner.notified.insert(version.clone()) {
                     let _ = notify(
                         app,
-                        "surenecoの更新".into(),
+                        "スレネコアラートの更新".into(),
                         format!("v{version}が公開されました。設定画面から更新できます。"),
                     );
                 }
