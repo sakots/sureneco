@@ -1,22 +1,22 @@
 # Android版の開発と配布準備
 
-サーバー実装は一旦中断し、[進捗](server-progress.md)を保存しています。運用先は契約済みエックスサーバーと1分程度の通知を前提に[再検討中](operation-cost.md)です。以下のVPS構成は試作案として扱います。
+Node.js＋VPSとUnifiedPush＋自前ntfyを採用しました。実装は[進捗を保存して中断中](server-progress.md)です。以下は目標構成と既存Android基盤の記録で、UnifiedPush受信はまだ利用できません。
 
-現在は実装中です。AndroidのARM64デバッグAPKと表示名・識別子の確認に加え、VPS向けNode.jsサーバーの購読API・SQLite保存・共有取得・募集判定・FCM送信・永続再試行を実装しました。Node.js 24でローカルAPI、停止・削除、ワーカー隔離、強制終了と再起動後の復旧を検証しています。実際のFirebase認証・AndroidへのFCM配送、Android画面の接続と受信処理、VPS配備、署名付きAAB・Google Play公開は未完了です。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
+AndroidのARM64デバッグAPKと表示名・識別子は確認済みです。Node.jsのAPI・SQLite・監視・配信はFirebase版の試作があり、最終一括検証は未実施です。Firebase依存の置換、Android画面の接続・認証・UnifiedPush受信、自前ntfy・VPS配備、署名付きAAB・Google Play公開は未完了です。[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
 
 ## 完成時の構成
 
-VPS上の常駐Node.jsサービスが購読APIと監視・FCM送信を担当し、systemdで起動・停止・再起動を管理します。PHP＋毎分cronの構成は撤去しました。Node.js版はローカル検証済みで、VPSでの運用と実配送は未確認です。構成と準備事項は[Node.js＋VPS](node-vps.md)を参照してください。
+VPS上の常駐Node.jsが購読APIと監視・Web Push送信を担当し、同じVPSの自前ntfyが端末へ中継します。systemdで別々の専用サービスとして管理します。[採用構成](unifiedpush-ntfy.md)と[VPS準備](node-vps.md)を参照してください。
 
 SQLiteへ購読設定、取得済みレス番号、通知イベントと送信待ちを保存し、再起動後に復元します。既存のTypeScript判定コアを分離ワーカーで実行し、重い正規表現でAPIや他の監視を停止させない構成にします。
 
-Androidは別アプリの利用中・画面消灯中もプッシュを受け取ります。端末内で常駐取得する方式ではありません。表示中の一覧取得とOS通知を分離し、通知はプッシュへ統一します。圏外、通知拒否、Android設定での強制停止、FCMの配送遅延等では受信できない場合があります。
+Androidは別アプリの利用中・画面消灯中もプッシュを受け取ります。端末内で常駐取得する方式ではありません。表示中の一覧取得とOS通知を分離し、通知はプッシュへ統一します。圏外、通知拒否、Android設定での強制停止、中継アプリの停止・配送遅延等では受信できない場合があります。
 
-Androidのサーバー監視は`update_sec`が既定60秒、`thread_update_sec`が既定300秒で、どちらも60秒以上の整数を受け付ける設計です。常駐スケジューラーが期限を迎えた購読を処理し、毎分cronの実行回には丸めません。負荷・通信・FCMによる遅延はあり、PC版の20秒更新は変更しません。
+Androidのサーバー監視は`update_sec`が既定60秒、`thread_update_sec`が既定300秒で、どちらも60秒以上の整数を受け付ける設計です。常駐スケジューラーが期限を迎えた購読を処理し、毎分cronの実行回には丸めません。負荷・通信・ntfy・端末による遅延はあり、PC版の20秒更新は変更しません。
 
 PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、GitHub経由の更新はAndroidに持ち込みません。Androidのアプリ更新はGoogle Playから行います。
 
-Firebase Consoleでの準備と設定値の対応は[Firebaseの設定手順](firebase-setup.md)を参照してください。Firebase認証・FCMを使う方針とし、ntfyなどの別アプリは要求しません。
+Androidには別途中継アプリのntfyを導入し、自前サーバーを設定してもらいます。Firebaseを含まない構成の案内にはF-Droid版を使います。スレネコアラートにUnifiedPush connectorを追加し、中継選択・未導入・通知先更新・解除を扱います。接続維持はntfyが担当するため、そちらの常駐通知・電池設定が必要になる場合があります。
 
 ## 必要な環境
 
@@ -25,13 +25,13 @@ Firebase Consoleでの準備と設定値の対応は[Firebaseの設定手順](fi
 - 実機またはエミュレーター。ネイティブ依存を含む16KBページサイズの動作も確認。
 - Google Playのアプリ登録と、Android用アップロード署名鍵。PC版の更新署名鍵は使いません。
 - LinuxのVPS、systemd、SQLiteの永続保存領域、HTTPSのAPI公開先とリバースプロキシ。Node.jsサービス用のユーザー、再起動・バックアップ・障害監視を準備。
-- Firebaseプロジェクト。Androidアプリ登録、Cloud Messaging、匿名認証、App Check（公開時はPlay Integrity）を設定。
+- 自前ntfy、APIとntfyのHTTPS公開先、VAPID鍵とntfyの端末別認証・ACL設定。Firebaseプロジェクトは不要です。
 
-現在用意されているのはAndroid端末です。Firebaseプロジェクトと運用先は未設定です。ローカル検証と実際のFirebase接続を必要とする確認は分けて記録します。
+現在用意されているのはAndroid端末です。自前ntfyと運用VPSは未設定で、実配送は未確認です。
 
 ## Androidビルドの基盤
 
-Android版の表示名は「スレネコアラート」、パッケージ名（applicationId）は`sureneco.sakots`です。TauriのAndroid専用設定、Gradleのnamespace/applicationId、Kotlinのパッケージと表示文字列を一致させます。PC版の表示名も「スレネコアラート」とし、PC版の内部製品名・識別子、Rust crate名と配布ファイル名の`sureneco`は維持します。Firebaseへ登録するAndroidパッケージ名も`sureneco.sakots`に合わせてください。
+Android版の表示名は「スレネコアラート」、パッケージ名（applicationId）は`sureneco.sakots`です。TauriのAndroid専用設定、Gradleのnamespace/applicationId、Kotlinのパッケージと表示文字列を一致させます。PC版の表示名も「スレネコアラート」とし、PC版の内部製品名・識別子、Rust crate名と配布ファイル名の`sureneco`は維持します。
 
 旧パッケージでインストールしたAPKとは別アプリになります。`install -r`で旧アプリが置き換わったり、保存データが自動移行されたりはしません。旧アプリの削除やデータ移行は自動では行いません。
 
@@ -39,7 +39,7 @@ Android版の表示名は「スレネコアラート」、パッケージ名（a
 
 開発環境ではJava 21、API 36、Build Tools 36.0.0、NDK 28.2.13676358と`aarch64-linux-android`を準備します。SDK規約への同意が必要です。SDKをプロジェクト内に置く場合は、Git管理外の`.android-sdk/`を使えます。
 
-Androidの公開用接続設定は、`src-tauri/gen/android/app/mobile.properties.example`を`mobile.properties`へコピーして指定します。`mobile.properties`はGit管理外です。`sureneco.apiBaseUrl`は固定HTTPS APIのURL、Firebaseの3項目は公開用アプリ識別子です。Admin SDK、FCM送信用秘密鍵、署名鍵はこのファイルへ入れません。署名付きリリースビルドでは4項目すべてが必須で、API URLが`https://`以外の場合はGradleが失敗します。
+現行`mobile.properties.example`とGradleのリリース検証には旧Firebase公開設定が残ります。実装再開時にFirebase項目を撤去し、固定HTTPS APIと自前ntfy originの設定へ置き換えます。現在の例をUnifiedPush用の完成した設定として使わないでください。`mobile.properties`はGit管理外とし、署名鍵・ntfy管理資格情報・VAPID秘密鍵はAndroid配布物へ入れません。`google-services.json`は新構成では不要ですが、既存ファイルのGit除外は維持します。
 
 ```sh
 export ANDROID_HOME="$PWD/.android-sdk"
@@ -58,7 +58,7 @@ mkdir -p release
 cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk release/sureneco_v0.8.3_android_debug.apk
 ```
 
-この段階のAndroidエントリーポイントは起動用の基盤です。画面のコマンド接続、Firebase認証、バックグラウンド通知は別項目で実装・検証します。デバッグAPKはGoogle Play提出用の署名付きAABとは区別します。
+この段階のAndroidエントリーポイントは起動用の基盤です。画面のコマンド接続、端末認証、UnifiedPush受信は別項目で実装・検証します。デバッグAPKはGoogle Play提出用の署名付きAABとは区別します。
 
 生成先は`src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`です。生成APKから表示名「スレネコアラート」、アプリID`sureneco.sakots`、versionName `0.8.3`、versionCode `1`、minSdk 24、target/compileSdk 36、ARM64のみであることを確認しました。起動ActivityとFileProvider、APK内のDEX・ネイティブJNIも新しいパッケージ名に一致しています。QuickJSを含む`libsureneco.so`のLOADセグメントは16KB整列で、APKの署名検証と`zipalign -c -P 16 4`にも合格しました。接続端末がなく、端末上の起動・募集判定と16KBページサイズ端末の動作は未確認です。
 
@@ -128,7 +128,7 @@ ABI一覧に`arm64-v8a`が必要です。ページサイズは通常4096また�
 & $adb -s $serial shell dumpsys package $appId | Select-String "versionName|versionCode"
 ```
 
-`Status: ok`はActivityの起動成功を示します。実機の画面も確認し、表示内容やエラーを記録してください。Android画面のコマンド接続とFCM受信はまだ未実装なので、起動成功を募集閲覧・設定保存・プッシュ受信の確認済みとは扱いません。
+`Status: ok`はActivityの起動成功を示します。実機の画面も確認し、表示内容やエラーを記録してください。Android画面のコマンド接続とUnifiedPush受信はまだ未実装なので、起動成功を募集閲覧・設定保存・プッシュ受信の確認済みとは扱いません。
 
 `force-stop`はアプリを強制停止します。通常終了やバックグラウンド移行とは異なり、再度利用者が起動するまでプッシュを受信できない場合があります。将来のバックグラウンド通知の検証では、ホームへ戻る・別アプリへ切り替える・画面を消す操作と区別してください。
 
@@ -161,7 +161,7 @@ if ($appPid) {
 
 PowerShellの`$PID`は予約済みの自動変数なので、ここでは`$appPid`を使います。PIDはアプリの再起動で変わります。PIDを絞るとWebViewの別プロセスやOS側のクラッシュ情報を取りこぼすため、起動失敗では先に全体ログを取得してください。LogcatにJavaScriptのすべての例外・ログが出るとは限りません。
 
-ログには別アプリの情報、端末識別情報、通信先などが含まれます。共有前に確認し、認証情報、FCMトークン、NG全文や個人情報を取り除いてください。調査前の`logcat -c`は既存ログを消すため、この手順では実行しません。
+ログには別アプリの情報、端末識別情報、通信先などが含まれます。共有前に確認し、認証情報、通知先URL・暗号化鍵、NG全文や個人情報を取り除いてください。調査前の`logcat -c`は既存ログを消すため、この手順では実行しません。
 
 ### 5. ChromeでWebViewの画面・JavaScriptを調べる
 
@@ -199,21 +199,15 @@ DevToolsからの一時的な画面変更はソースへ保存されません。
 
 ## Node.jsサーバーと監視の構成
 
-[VPSセットアップ](node-vps.md)に、Node.jsと依存の導入、ビルド、環境変数、SQLiteと秘密鍵の配置、systemd・Nginxの設定と動作確認をまとめています。`pnpm build:server`で生成し、`pnpm server:start`でローカル起動、`pnpm test:server`で検証します。PHP・cron・サーバー用Rustワーカーは不要です。
+[通知方式の設計](unifiedpush-ntfy.md)に端末別認証、チャレンジによる通知先所有確認、暗号化配送、停止・削除のAPI計画をまとめています。[VPS準備](node-vps.md)に常駐API・ntfy・SQLite・systemd・HTTPSと負荷確認をまとめています。
 
-購読APIはFirebase Admin SDKでIDトークンとApp Checkを検証し、UIDの本人だけを操作させます。`/v1/subscription`のPUTで同意済み設定とFCMトークンを登録・更新、GETで状態照会、DELETEで削除、`POST /v1/subscription/stop`で停止します。本文は`{settings, watched, fcmToken, consent: true}`で、PC用の`launcher_*`は送信しません。登録前に保存内容と削除方法を説明します。
-
-監視設定、取得基準と状態、通知イベント・送信待ちはSQLiteへ保存します。板・datの取得を共有し、初回・再開時は過去募集を基準にして通知しません。再起動後も取得基準とイベントIDを復元します。締め・期限・NG・許可ワッチョイ・参照による5桁ID検出は既存TypeScriptコアを分離ワーカーで実行します。
-
-FCMは高優先度dataメッセージで、送信前に停止・リビジョン・既知の締め・期限を確認します。送信待ちは期限内で最大5回再試行し、無効トークンと確認できた場合だけ本人の購読を削除します。送信後の成功記録前停止では再送され得るため、Android側でも重複・期限・リビジョンとローカル停止を確認します。
-
-保存項目・期間・削除と障害確認の詳細は[VPS資料](node-vps.md#api更新周期保存と削除)を参照してください。生トークン・秘密鍵・NG全文は通常ログに出しません。サーバー用資格情報をAndroid配布物へ含めません。停止は設定を保持し、登録削除は本人の設定・通知先・基準・配信履歴を削除します。
+共有取得と募集判定には既存TypeScriptコアを使い、NG・許可ワッチョイ・参照による5桁ID・締め・期限を維持します。送信前とネイティブ受信時にイベントID・リビジョン・通知先世代・期限・停止を確認し、表示中もローカル更新からOS通知を重複発行しません。鍵・生トークン・通知先URL・auth secret・NG全文は通常ログに出しません。
 
 ## 検証と公開の区別
 
-ローカルテスト、Androidクロスビルド、署名付きAAB、実際のFirebase認証・FCM受信、VPS配備、Play内部テスト、正式公開はそれぞれ別に確認します。`monitoringReady: false`と実配送未確認の状態を維持し、ローカルのAPI・配送フィクスチャの成功を実接続の成功にしません。
+ローカルテスト、Androidビルド、署名付きAAB、実際の自前ntfy・Androidへの配送、VPS配備、Play内部テスト、正式公開は別に確認します。`monitoringReady: false`を維持し、旧Firebase試作のテストを新方式の接続成功として扱いません。
 
-契約、課金、Firebase作成、VPSへのデプロイ、Play/GitHubへの公開はビルド処理から行いません。公開先・権限・費用負担を確認してから進めます。
+端末認証、通知先変更、停止・削除、別アプリ利用、画面消灯、ntfy停止・再接続と電池制限を検証します。ntfy受付成功だけでは端末に表示できたとは判断しません。契約・課金・デプロイ・公開はビルドから行いません。
 
 ## 仕様
 
