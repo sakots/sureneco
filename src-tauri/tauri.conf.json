@@ -15,7 +15,7 @@
         "create": false,
         "label": "main",
         "visible": false,
-        "title": "スレネコアラート",
+        "title": "スレ猫チェッカー",
         "width": 1120,
         "height": 820,
         "minWidth": 400,

@@ -2,6 +2,8 @@
 
 2026/10/22にUnifiedPush＋自前ntfyを採用。実装を再開し、Firebase依存を端末認証・Web PushとAndroid connectorへ置き換えた。ローカルテストを実環境の配送成功の根拠にはしない。docs/unifiedpush-ntfy.mdとdocs/server-progress.mdを参照。
 
+1.5のAPK検証は改名前の「スレネコアラート」の記録です。現行の表示名は「スレ猫チェッカー」で、新名称のAPKは未検証です。
+
 ## 1. Android・サーバー基盤と資料
 
 - [x] 1.1 Android対応手順にVPS上の常駐Node.js、systemd、SQLiteとUnifiedPush＋自前ntfy、更新周期、端末認証、保存データと対象外の機能を記載し、提案・設計・仕様差分の整合を確認する。試作・未確認・実装中断の状態を区別する。
