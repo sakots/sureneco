@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -11,6 +11,10 @@ import { Store } from "../server/store";
 import { createApi } from "../server/api";
 import { fetchBoard, validateDataUrl } from "../server/http";
 import { defaults } from "../src/core/settings";
+
+// One API scenario includes multiple durable writes and isolated validations.
+vi.setConfig({ testTimeout: 30000 });
+
 const cleanup: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();

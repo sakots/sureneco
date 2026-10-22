@@ -24,6 +24,8 @@ pnpm dev
 
 詳しい環境構築は[Tauriの前提条件](https://v2.tauri.app/start/prerequisites/)を参照してください。
 
+`pnpm test:server`はVPSでのCPU・ディスク競合を抑えるため、テストファイルを1つずつ実行します。複数のSQLite更新・分離ワーカー起動を含むサーバー/API結合テストは1テスト30秒まで待ちます。実サービスの判定ワーカー1秒・HTTP取得15秒・監視回50秒の上限は維持します。5秒のテストタイムアウトだけが出る既存チェックアウトでは、`pnpm test:server --maxWorkers=1 --testTimeout=30000`でも再確認できます。30秒でも失敗する場合や、`execution_limit`・期待値の不一致が出る場合は、単なるテスト全体の制限超過とは分けて調査します。
+
 ## 仕様と変更管理（OpenSpec）
 
 現行仕様は [`openspec/specs/`](../openspec/specs/) に機能別で管理しています。[仕様の目次](specification.md)から各仕様と検証手順を参照できます。`openspec/config.yaml` に日本語での記述と資料ファーストの開発ルールを設定しています。

@@ -1,6 +1,6 @@
 import { createECDH, randomBytes } from "node:crypto";
 import { challenge, confirm } from "../server/channels";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,10 @@ import { runDetection } from "../server/detection";
 import { monitor } from "../server/monitor";
 import { deliver, DeliveryError } from "../server/delivery";
 import { Scheduler } from "../server/scheduler";
+
+// Integration cases perform many durable writes and worker starts on VPS disks.
+// Keep the production worker/HTTP deadlines independent of this suite timeout.
+vi.setConfig({ testTimeout: 30000 });
 
 const cleanup: (() => void)[] = [];
 afterEach(() => {
