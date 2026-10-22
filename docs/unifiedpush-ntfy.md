@@ -12,20 +12,20 @@
     ↓
 Androidのntfyアプリ：UnifiedPush distributor（中継アプリ）
     ↓
-スレネコアラート：内容を検証してOS通知を表示
+スレネコチェッカー：内容を検証してOS通知を表示
 ```
 
-UnifiedPushはアプリと中継アプリをつなぐ仕様です。監視サーバーからはWeb Pushを使い、中継アプリが端末上のスレネコアラートへ渡します。[UnifiedPushの公式概要](https://unifiedpush.org/developers/intro/)
+UnifiedPushはアプリと中継アプリをつなぐ仕様です。監視サーバーからはWeb Pushを使い、中継アプリが端末上のスレネコチェッカーへ渡します。[UnifiedPushの公式概要](https://unifiedpush.org/developers/intro/)
 
 Firebase Authentication・App Check・FCMは使わず、自動フォールバックも設けません。PC版の監視・通知方式は変更しません。契約済みエックスサーバーは案内・プライバシーポリシー等の掲載先として利用します。常駐するNode.jsとntfyはVPSへまとめます。
 
 ## Android側の準備と画面
 
-利用者にはスレネコアラートに加えてntfyアプリを導入してもらいます。Firebaseを含まない構成の案内にはF-Droid版を使います。ntfyの自前サーバーを設定し、スレネコアラートから中継アプリを選択・登録します。[ntfyのAndroid版と即時配送](https://docs.ntfy.sh/subscribe/phone/)
+利用者にはスレネコチェッカーに加えてntfyアプリを導入してもらいます。Firebaseを含まない構成の案内にはF-Droid版を使います。ntfyの自前サーバーを設定し、スレネコチェッカーから中継アプリを選択・登録します。[ntfyのAndroid版と即時配送](https://docs.ntfy.sh/subscribe/phone/)
 
 初期対応は運営する自前ntfyです。異なるサーバーの通知先を黙って受け付けません。未導入、登録中、登録失敗、通知先更新待ち、権限拒否を区別して案内し、一覧閲覧は継続できるようにします。利用者がトピック名を手入力する方式にはしません。
 
-端末の接続維持はntfyアプリが担当し、スレネコアラートに5ch監視用のForeground Serviceは追加しません。ntfy側には常駐通知や電池の最適化設定が必要になる場合があります。中継アプリの停止・削除、圏外、OSの制限を受信状態と分けて説明します。
+端末の接続維持はntfyアプリが担当し、スレネコチェッカーに5ch監視用のForeground Serviceは追加しません。ntfy側には常駐通知や電池の最適化設定が必要になる場合があります。中継アプリの停止・削除、圏外、OSの制限を受信状態と分けて説明します。
 
 ## 認証と通知先の登録
 

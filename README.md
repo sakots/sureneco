@@ -1,4 +1,4 @@
-# スレネコアラート
+# スレネコチェッカー
 
 ![Last commit](https://img.shields.io/github/last-commit/sakots/sureneco)
 ![version](https://img.shields.io/github/v/release/sakots/sureneco)
@@ -39,9 +39,16 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 - [仕様と変更管理](docs/specification.md)：機能別仕様、OpenSpecの手順、検証
 - [Tauri移行時の構成](docs/tauri-migration.md)：技術選択と移行時の記録
 
-Android版「スレネコアラート」は[開発と配布準備](docs/android.md)に現在の対応状況、[Windowsからの実機デバッグ](docs/android.md#windowsからandroid実機をデバッグする)にAPK転送・インストール・ログ取得・WebView調査の手順を記載しています。
+Android版「スレネコチェッカー」は[開発と配布準備](docs/android.md)に現在の対応状況、[Windowsからの実機デバッグ](docs/android.md#windowsからandroid実機をデバッグする)にAPK転送・インストール・ログ取得・WebView調査の手順を記載しています。
 
 ## 更新履歴
+
+### [2026/10/22] v0.8.8
+
+- 通知サーバーの起動完了通知を終了ハンドラー登録後へ移し、起動直後の正常終了が不安定になる問題を修正。
+- アプリの表示名を「スレネコアラート」から「スレネコチェッカー」へ変更。画面・トレイ・通知・ランチャー・更新案内の名称を統一。
+- Windows版の更新時に、アプリ自身を指す旧名のショートカットを整理するよう修正。
+- 開発中のAndroid版の表示名と関連資料も新名称へ統一。今回はPC版のみ公開し、設定保存先・内部識別子・配布ファイル名は維持。
 
 ### [2026/10/22] v0.8.7
 

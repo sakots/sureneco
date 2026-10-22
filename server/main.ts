@@ -73,7 +73,6 @@ async function main() {
     throw new Error();
   }
   scheduler.start();
-  console.log("sureneco server ready.");
   let stopping = false;
   const stop = async () => {
     if (stopping) return;
@@ -95,6 +94,7 @@ async function main() {
   process.once("SIGINT", () => {
     void stop();
   });
+  console.log("sureneco server ready.");
 }
 main().catch(() => {
   console.error("Server startup failed.");

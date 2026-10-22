@@ -1,4 +1,5 @@
-!define SURENECO_DISPLAY_NAME "スレネコアラート"
+!define SURENECO_DISPLAY_NAME "スレネコチェッカー"
+!define SURENECO_PREVIOUS_DISPLAY_NAME "スレネコアラート"
 
 !macro SURENECO_RENAME_SHORTCUT DIRECTORY
   !insertmacro IsShortcutTarget "${DIRECTORY}\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
@@ -6,6 +7,11 @@
   ${If} $0 = 1
     Delete "${DIRECTORY}\${SURENECO_DISPLAY_NAME}.lnk"
     Rename "${DIRECTORY}\${PRODUCTNAME}.lnk" "${DIRECTORY}\${SURENECO_DISPLAY_NAME}.lnk"
+    !insertmacro IsShortcutTarget "${DIRECTORY}\${SURENECO_PREVIOUS_DISPLAY_NAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    Pop $0
+    ${If} $0 = 1
+      Delete "${DIRECTORY}\${SURENECO_PREVIOUS_DISPLAY_NAME}.lnk"
+    ${EndIf}
   ${EndIf}
 !macroend
 

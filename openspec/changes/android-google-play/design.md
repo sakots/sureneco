@@ -10,7 +10,7 @@ Androidの通知はUnifiedPush＋自前ntfyとする。Node.js＋VPSの監視と
 
 **Goals:** VPS上の単一Node.jsサービスがAPIと監視・配送を担当し、既存TypeScriptコアと自前ntfy・Web Pushを利用して運用構成をまとめる。再起動後も取得基準と送信待ちを復元し、端末ごとの同期・停止・削除を保つ。
 
-**Non-Goals:** PHPとの二重運用、自動データ移行、毎分cronへの依存、水平分散、端末内の24時間ポーリング、スレネコアラート自身のForeground Service・Wake Lock、iOS、PC版の監視方式変更、サーバー契約・デプロイ・ストア公開。プッシュの必達・即時配送も保証しない。
+**Non-Goals:** PHPとの二重運用、自動データ移行、毎分cronへの依存、水平分散、端末内の24時間ポーリング、スレネコチェッカー自身のForeground Service・Wake Lock、iOS、PC版の監視方式変更、サーバー契約・デプロイ・ストア公開。プッシュの必達・即時配送も保証しない。
 
 ## Decisions
 
@@ -48,7 +48,7 @@ Node.jsから自前ntfyへRFC8291（aes128gcm）対応のWeb Pushライブラリ
 
 ### 4. UnifiedPushをAndroidネイティブで受信する
 
-AndroidのKotlin層にUnifiedPush connectorを組み込む。初期対応の中継アプリは自前ntfyへ接続するntfyとし、Firebaseを含まない案内にはF-Droid版を使う。未導入・選択・登録中・失敗・通知先変更・登録解除を画面へ反映する。スレネコアラートに監視用のForeground Serviceは追加せず、接続維持は中継アプリが担当する。arboard・notify-rust・トレイ・single-instance・window-state・desktop updaterはAndroidへリンクしない。
+AndroidのKotlin層にUnifiedPush connectorを組み込む。初期対応の中継アプリは自前ntfyへ接続するntfyとし、Firebaseを含まない案内にはF-Droid版を使う。未導入・選択・登録中・失敗・通知先変更・登録解除を画面へ反映する。スレネコチェッカーに監視用のForeground Serviceは追加せず、接続維持は中継アプリが担当する。arboard・notify-rust・トレイ・single-instance・window-state・desktop updaterはAndroidへリンクしない。
 
 connectorから通知先URL・p256dh公開鍵・auth secretを取得し、認証済みAPIへ同期する。設定済みの自前ntfyのHTTPS origin・通知先パスだけを許可する。リダイレクトと内部IPへの送信を拒否し、毎回DNS解決先を検査する。新規・更新チャネルには短時間有効・一回限りのチャレンジを暗号化配送し、端末からの認証済み応答で所有を確認してから監視を有効にする。別端末と競合する通知先は拒否する。
 
@@ -74,7 +74,7 @@ APIは購読ごとの最終取得成功時刻とエラーを返す。直近に�
 
 Androidの生成プロジェクトと再現に必要な設定だけをGit管理し、SDKパス、鍵、ローカルビルド出力は除外する。API 24を初期minSdk、API 36以上をtarget/compile SDKとし、ARM64と16KBページサイズ対応を確認する。package:androidは署名付きAABを生成するだけで公開しない。
 
-Androidの表示名は「スレネコアラート」、パッケージ名とKotlin namespaceは`sureneco.sakots`とする。TauriのAndroid専用設定でproductName/identifierを上書きし、Gradle・Activity・文字列リソースを一致させる。PC版の設定、Rust crate名、配布物の`sureneco`接頭辞は変更しない。旧Androidパッケージとは別アプリであり、互換用の旧Activity・識別子・データ移行処理は追加しない。
+Androidの表示名は「スレネコチェッカー」、パッケージ名とKotlin namespaceは`sureneco.sakots`とする。TauriのAndroid専用設定でproductName/identifierを上書きし、Gradle・Activity・文字列リソースを一致させる。PC版の設定、Rust crate名、配布物の`sureneco`接頭辞は変更しない。旧Androidパッケージとは別アプリであり、互換用の旧Activity・識別子・データ移行処理は追加しない。
 
 固定HTTPS APIと自前ntfyのoriginをAndroidの公開用ビルド設定へ与える。Firebase公開識別子・SDKは撤去し、ntfy管理資格情報やVAPID秘密鍵・Android署名鍵をAABへ含めない。versionNameはpackage.json、versionCodeは初回1から独立管理し、アップロード鍵はPC版更新鍵と分離する。
 

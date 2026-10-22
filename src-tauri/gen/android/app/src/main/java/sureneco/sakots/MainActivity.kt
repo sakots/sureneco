@@ -20,7 +20,7 @@ class MainActivity : TauriActivity() {
         if (PushState.desired(this)) {
           val vapid = PushState.prepare(this)
           runOnUiThread { UnifiedPush.tryUseCurrentOrDefaultDistributor(this) { success ->
-            if (success) UnifiedPush.register(this, messageForDistributor = "スレネコアラートの友人戦募集通知", vapid = vapid)
+            if (success) UnifiedPush.register(this, messageForDistributor = "スレネコチェッカーの友人戦募集通知", vapid = vapid)
             else PushState.mark(this, "中継アプリ未導入：ntfyの設定を確認してください")
           } }
         }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "スレネコアラート",
+  "productName": "スレネコチェッカー",
   "identifier": "sureneco.sakots",
   "build": {
     "features": ["mobile"]
@@ -9,7 +9,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "スレネコアラート",
+        "title": "スレネコチェッカー",
         "create": true,
         "visible": true
       }
