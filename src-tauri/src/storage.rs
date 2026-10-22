@@ -106,7 +106,7 @@ pub fn read(path: &Path) -> Result<Option<String>, String> {
     }
 }
 
-fn write(path: &Path, text: &str) -> Result<(), String> {
+pub(crate) fn write(path: &Path, text: &str) -> Result<(), String> {
     let parent = path.parent().ok_or("保存先が不正です。")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     write_existing(path, text)

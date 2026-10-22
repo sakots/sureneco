@@ -1,35 +1,36 @@
-# 通知サーバーの実装進捗と中断時の記録
+# UnifiedPush通知の実装進捗
 
-利用者の指示により、2026/10/22に実装を一旦中断しました。その後、Node.js＋VPSの監視とUnifiedPush＋自前ntfyによる通知を採用しました。今回は設計・仕様・運用資料だけを更新し、実装再開・契約・配備は行っていません。[採用構成](unifiedpush-ntfy.md)と[費用](vps-cost.md)を参照してください。
+2026/10/22に実装を再開しました。作業ブランチは`feat/unifiedpush-ntfy`です。Node.js＋VPSの監視とUnifiedPush＋自前ntfyの方針に沿い、Firebase版の試作を置き換えました。VPS契約・配備・実ntfy配送・実端末確認・Play公開は行っていません。
 
-## 試作した範囲
+## 実装したもの
 
-作業ブランチは`feat/node-vps-server`です。VPS向けNode.js版として、以下のコードを作成しました。Firebase版の試作であり、採用したUnifiedPush版にはまだ置き換わっていません。最終チェックと実環境検証が終わっていないため、完成・配備済みとは扱いません。
+- `server/device-auth.ts`：256bit端末別トークン、ハッシュ保存、更新・失効・本人の端末削除。公開APIの発行・入力・頻度を制限。
+- `server/channels.ts`・`subscriptions.ts`：通知先と鍵の登録、5分有効の一回限りチャレンジ、所有確認前の無効化、設定リビジョンと通知先世代、停止・削除・再送。
+- `server/web-push.ts`：Web Pushのaes128gcm暗号化・VAPID・TTL、ntfy専用ヘッダー、固定HTTPS origin、既知クエリーの正規化、DNS/IP検査と解決先固定、タイムアウト。鍵生成スクリプトを追加。
+- `server/store.ts`・`monitor.ts`・`scheduler.ts`・`delivery.ts`：SQLite排他と永続化、共有取得とTypeScriptコアの隔離実行、期限内で最大5回の再試行。旧Firebase SDK・ワーカー・設定・依存を削除。
+- Android：connector 3.3.5、中継選択・登録・解除、端末専用保存、ネイティブ受信・通知、期限・重複・世代・権限・停止確認。古い同期応答を採用しないため端末内でも更新世代を確認。
+- モバイル画面：通知同意・未導入・確認待ち・未同期・再試行・停止・削除。PC専用操作とGitHub更新を表示せず、Androidの更新間隔は60秒以上。表示中の一覧更新とOS通知を分離。
+- APK基盤とAAB生成用コマンド・署名設定。systemd・API/ntfyのNginx・ntfy設定例、[導入準備](node-vps.md)と[Play提出資料の下書き](google-play.md)。
 
-- `server/store.ts`：SQLite、トランザクション、所有権用SQLite接続による二重起動の排他。
-- `server/api.ts`・`subscriptions.ts`：購読登録・更新・照会・停止・削除、UID別の所有者制限、入力と頻度の上限。
-- `server/monitor.ts`・`scheduler.ts`：常駐監視、板・datの共有取得、初回・再開の通知基準、永続カーソル、イベントと送信待ちの同時保存。
-- `server/worker.ts`・`detection*.ts`：既存TypeScriptコアの募集判定、JavaScript正規表現の分離実行、時間・メモリ・入出力の上限。
-- `server/firebase*.ts`・`delivery.ts`：Firebase Admin SDKの認証・App Check・FCM接続、配送前のリビジョン・期限確認、最大5回の永続再試行。SDKも別ワーカーで実行。
-- `server/main.ts`、`scripts/build-server.mjs`：起動・終了とビルド。`package.json`に`build:server`・`server:start`・`test:server`を追加。
-- `server/server.env.example`・`sureneco.service`・`nginx.conf.example`：VPS向けの設定例。運用先で未検証。
+旧PHP実装・専用テスト・サーバー用Rustワーカーは以前の試作で撤去済みで、Git履歴から参照できます。PC・Android本体のRust/QuickJSは維持します。未公開試作DBからの自動移行は追加せず、新しいDBパスを使います。
 
-作業ツリーではPHPコード・専用テスト・サーバー用Rustワーカー・PHP導入資料を削除しました。旧実装はこのブランチの親コミットまでのGit履歴にあります。PC・Android本体のRust/QuickJSは変更していません。生成済みの旧Rustワーカー出力はGit除外のまま保持します。PHP版からの自動DB移行はありません。
+## 検証
 
-## 確認済みの範囲
+- TypeScript/React/サーバーの全113テストに合格。暗号化した実データの復号、誤った鍵の拒否も確認。
+- Android ARM64デバッグAPKを生成。公開先未設定のため、ビルド検証用の`.invalid`ホストを指定。接続済みAPKとは区別。
+- Androidの受信判定の単体テストに合格。停止、権限拒否、復号失敗、旧リビジョン・旧チャネル、期限、重複を確認。
+- サーバーの実プロセス起動、二重起動拒否、強制終了と再起動・正常停止をローカルテストで確認。認証と配送のテストを実ntfyの成功とは扱わない。
 
-Node.js 24.22.1と26系でNode.jsサーバーのローカル回帰テストを実行しました。26件の成功を確認した後、null・改行を含む入力の検証を修正し、その対象テスト1件を再確認しました。最終変更後の全体一括テストは未実施です。
+`pnpm check`（113件＋Rust 26件、型・ビルド・テーマ・書式・差分チェック）に合格。Node.js 24でもサーバーの29テストに合格しました。APKは署名検証、アプリID・表示名、versionName 0.8.3 / versionCode 1、minSdk 24 / targetSdk 36、ARM64を確認。APKの16KB zip整列とRust/QuickJSを含む共有ライブラリーのLOAD整列（0x4000）も確認しました。16KB端末での起動確認は未実施です。
 
-確認した経路は、HTTPの登録・照会・停止・削除、別UIDと通知先競合、入力とレート制限、共有取得と70秒設定、初回基準、NG・許可ワッチョイ・参照・締め・期限、200件超の送信待ち、DB保存失敗時の回復、再試行と無効通知先、送信成功後の保存失敗、重い正規表現の強制終了、強制終了後のサービス再起動です。TypeScriptの型チェックも通っています。
-
-Firebase SDKへの不正な形式のトークン入力は拒否を確認しましたが、実際のFirebaseで署名済みのID・App Checkトークンを取得して認証成功を確認したものではありません。FCMのペイロード・TTLと配送状態のテストも、実配送の成功ではありません。
+Windowsクロスビルド、UbuntuのGUI起動、Android実端末の操作は今回未確認です。`monitoringReady: false`を維持しています。
 
 ## 残っていること
 
-1. Firebase認証・App Checkを自前の端末別認証へ、FCMをUnifiedPush／Web Pushへ置き換える。Firebase SDK・設定・依存・テストをその変更で撤去する。
-2. チャネル所有確認、暗号化・VAPID、通知先更新、ntfyの端末別認証・トピックACL、停止・削除をTDDで実装する。
-3. Androidのconnector・中継選択・未導入案内・設定同期・ネイティブ受信を実装し、画面消灯中も実機確認する。
-4. Node.jsのビルド・全テスト・書式・テーマ・差分チェック、API・判定・outbox・排他・復旧の最終レビュー。旧`--check-config`と環境例は新方式へ更新して実行確認する。
-5. 検証VPSでNode.jsとntfyのsystemd・HTTPS・権限・バックアップを確認し、接続数・メモリ・転送量と通知遅延を測る。価格だけで容量や処理人数を保証しない。
+1. 実API・自前ntfyのホスト名を設定し、個別アカウント・トピックACLの払い出し、更新・撤去と所有確認を通して検証する。現状のntfyアカウント管理は運用者の手順で、アプリによる自動払い出しはない。
+2. Android実機でコピー・外部URL・タップ遷移、再起動、圏外停止・削除、消灯中・別アプリ利用中の配送、中継停止・通知先更新・電池設定を確認する。
+3. 実装した端末認証更新を実機で動かし、更新の応答切断・再起動・削除を確認する。
+4. 公開用のアップロード鍵・接続先でAABを生成し、配布物への秘密情報混入、16KB端末、Play資料・申告を確認する。
+5. VPSのsystemd・TLS・バックアップ・削除・障害監視、同時接続・メモリ・転送量・通知遅延を実測する。登録人数の固定上限を設けない方針は無限の処理能力の保証ではない。
 
-提案・設計・仕様差分・タスクは新方式へ更新済みです。完了チェックは試作だけでは進めず、3/32のままです。`monitoringReady: false`を維持し、旧ローカルテストの成功をUnifiedPush実配信の成功として扱いません。旧PHP版はGit履歴にあり、自動DB移行やFCMフォールバックは追加しない方針です。
+実装済みでも実環境確認を含むタスクは、OpenSpec上では未完了のまま残します。今回の作業を、配送運用・ストア提出・正式公開の完了とは扱いません。

@@ -1,6 +1,6 @@
 # Proposal
 
-2026/10/22に、Node.js＋VPSの監視とUnifiedPush＋自前ntfyによる通知を採用した。Firebase認証・App Check・FCMは置き換える。実装の中断は維持し、今回は計画だけを更新する。docs/unifiedpush-ntfy.mdとdocs/server-progress.mdを参照。
+2026/10/22に、Node.js＋VPSの監視とUnifiedPush＋自前ntfyによる通知を採用した。Firebase認証・App Check・FCMは置き換える。利用者の依頼により実装を再開した。docs/unifiedpush-ntfy.mdとdocs/server-progress.mdを参照。
 
 ## Why
 
@@ -38,6 +38,6 @@
 - `src-tauri/Cargo.toml`、`build.rs`、`src/lib.rs`、`src/desktop.rs`と新規モバイル実装、Android生成プロジェクトとネイティブのUnifiedPush受信処理。
 - `src/core`の検出・検証・監視ロジック、`src/backend/engine.ts`、React API・画面。端末側の募集通知とプッシュ受信を重複させない。
 - Node.js/TypeScriptのAPI、常駐監視スケジューラー、SQLite、自前ntfyとWeb Pushライブラリー、認証・配信・障害復旧テストとVPS運用手順。同等の回帰確認後、PHP実装・専用テスト・サーバー用Rustワーカーと不要なビルド設定を撤去する。AndroidとPC版のRust/QuickJS基盤は維持する。
-- SDK/NDK、Android用Rustターゲット、Google Playアカウント、アップロード用署名鍵に加え、Node.js 24 LTSを動かせるVPS、systemd、HTTPS公開先、自前ntfy、VAPID鍵と端末別認証が必要。Node.js版は試作・実装中断中で、Firebase依存の置換・最終一括検証・運用先での実配送は未確認。
+- SDK/NDK、Android用Rustターゲット、Google Playアカウント、アップロード用署名鍵に加え、Node.js 24 LTSを動かせるVPS、systemd、HTTPS公開先、自前ntfy、VAPID鍵と端末別認証が必要。Node.js版は端末認証・Web Pushへ置換済みで、ローカル検証と運用先での実配送は区別する。
 - 運用費・監視・バックアップと個人情報管理が追加される。サーバーへは監視条件・端末識別・通知先を保存するため、説明とプライバシーポリシー・データセーフティ申告を用意する。
 - 2026-10-21時点のGoogle Play提出要件はAPI 36以上。ネイティブ依存を含む16KBページサイズ端末の検証も行う。ビルド成功・配信成功・審査通過・正式公開は区別する。

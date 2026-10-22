@@ -39,3 +39,17 @@ it("Android用ライブラリにPC専用の依存を組み込まない", () => {
     expect(names).not.toContain(name);
   }
 }, 30_000);
+
+it("Android配布処理は署名設定なしでビルド・公開を開始しない", () => {
+  expect(() =>
+    execFileSync(process.execPath, ["scripts/package-android.mjs"], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        SURENECO_ANDROID_SIGNING_FILE:
+          "/tmp/sureneco-missing-signing-file.properties",
+      },
+      stdio: "pipe",
+    }),
+  ).toThrow();
+});

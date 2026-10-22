@@ -7,7 +7,7 @@ import "./style.css";
 
 function DesktopApp() {
   useEffect(() => {
-    void invoke("show_main_window").catch(console.error);
+    if (!api.mobile) void invoke("show_main_window").catch(console.error);
   }, []);
   return <App api={api} />;
 }

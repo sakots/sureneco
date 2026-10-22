@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { boardUrl, validThreadId } from "../src/core/settings";
 import type { Settings } from "../src/core/types";
 import { runDetection } from "./detection";
 import { Store } from "./store";
+import { parsePushSubscription } from "./web-push";
 export type MobileSettings = Omit<
   Settings,
   | "launcher_mode"
@@ -18,6 +19,10 @@ export interface Subscription {
   settings: string;
   watched: string;
   token: string;
+  endpoint: string;
+  generation: string;
+  confirmed: number;
+  challenge_hash: string | null;
   consented: number;
   created: number;
   updated: number;
@@ -25,6 +30,8 @@ export interface Subscription {
 export interface SubscriptionView {
   revision: number;
   active: boolean;
+  channelConfirmed: boolean;
+  generation: string;
   settings: MobileSettings;
   watched: string[];
   lastFetchSuccessAt: number | null;
@@ -161,6 +168,8 @@ function view(db: Store, current: Subscription | undefined): Reply {
       subscription: {
         revision: current.revision,
         active: !!current.active,
+        channelConfirmed: !!current.confirmed,
+        generation: current.generation,
         settings: JSON.parse(current.settings),
         watched: JSON.parse(current.watched),
         lastFetchSuccessAt: fetched?.success ?? null,
@@ -177,6 +186,7 @@ export async function subscriptions(
   method: string,
   input: unknown,
   now = Date.now(),
+  origin?: string,
 ): Promise<Reply> {
   if (!uid || uid.length > 128 || /[\x00-\x1f\x7f]/.test(uid))
     return bad(401, "unauthorized");
@@ -188,13 +198,16 @@ export async function subscriptions(
   let settings: MobileSettings | undefined;
   let watched: string[] = [];
   let token = "";
+  let endpoint = "";
   try {
     if (method === "PUT") {
       if (
         !object(input) ||
         Object.keys(input).some(
           (key) =>
-            !["settings", "watched", "fcmToken", "consent"].includes(key),
+            !["settings", "watched", "pushSubscription", "consent"].includes(
+              key,
+            ),
         ) ||
         input.consent !== true ||
         !Array.isArray(input.watched) ||
@@ -203,14 +216,10 @@ export async function subscriptions(
       )
         return bad(400, "invalid_subscription");
       watched = [...new Set(input.watched as string[])].sort();
-      if (
-        typeof input.fcmToken !== "string" ||
-        !input.fcmToken.length ||
-        input.fcmToken.length > 4096 ||
-        /[^\x21-\x7e]/.test(input.fcmToken)
-      )
-        return bad(400, "invalid_subscription");
-      token = input.fcmToken;
+      if (!origin) return bad(503, "push_unavailable");
+      const push = parsePushSubscription(input.pushSubscription, origin);
+      token = JSON.stringify(push);
+      endpoint = push.endpoint;
       settings = await validateSettings(input.settings);
     } else if (input !== null && (!object(input) || Object.keys(input).length))
       return bad(400, "invalid_subscription");
@@ -229,6 +238,8 @@ export async function subscriptions(
     );
   }
   return db.transaction(() => {
+    if (method === "PUT" && !db.get("SELECT uid FROM devices WHERE uid=?", uid))
+      return bad(401, "unauthorized");
     db.prune(now);
     const current = db.get<Subscription>(
       "SELECT * FROM subscriptions WHERE uid=?",
@@ -238,9 +249,9 @@ export async function subscriptions(
       db.run("DELETE FROM subscriptions WHERE uid=?", uid);
     else if (method === "POST" && current) {
       db.run("DELETE FROM outbox WHERE uid=?", uid);
-      if (current.active)
+      if (current.active || current.challenge_hash)
         db.run(
-          "UPDATE subscriptions SET active=0,revision=?,updated=? WHERE uid=?",
+          "UPDATE subscriptions SET active=0,confirmed=0,challenge_hash=NULL,revision=?,updated=? WHERE uid=?",
           Math.max(now * 1000, current.revision + 1),
           now,
           uid,
@@ -250,27 +261,34 @@ export async function subscriptions(
       const targets = JSON.stringify(watched);
       if (
         !current ||
-        !current.active ||
+        (!current.active && !current.challenge_hash) ||
         current.settings !== encoded ||
         current.watched !== targets ||
         current.token !== token
       ) {
         if (
           db.get(
-            "SELECT uid FROM subscriptions WHERE token=? AND uid<>?",
-            token,
+            "SELECT uid FROM subscriptions WHERE endpoint=? AND uid<>?",
+            endpoint,
             uid,
           )
         )
-          return bad(409, "token_in_use");
+          return bad(409, "endpoint_in_use");
         const revision = Math.max(now * 1000, (current?.revision ?? 0) + 1);
+        const channelChanged =
+          !current || current.token !== token || !current.confirmed;
+        const generation = channelChanged ? randomUUID() : current.generation;
         db.run(
-          "INSERT INTO subscriptions(uid,revision,active,settings,watched,token,consented,created,updated) VALUES(?,?,1,?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET revision=excluded.revision,active=1,settings=excluded.settings,watched=excluded.watched,token=excluded.token,updated=excluded.updated",
+          "INSERT INTO subscriptions(uid,revision,active,settings,watched,token,endpoint,generation,confirmed,consented,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET revision=excluded.revision,active=excluded.active,settings=excluded.settings,watched=excluded.watched,token=excluded.token,endpoint=excluded.endpoint,generation=excluded.generation,confirmed=excluded.confirmed,challenge_hash=NULL,challenge_expires=0,challenge_sent=0,updated=excluded.updated",
           uid,
           revision,
+          channelChanged ? 0 : 1,
           encoded,
           targets,
           token,
+          endpoint,
+          generation,
+          channelChanged ? 0 : 1,
           now,
           now,
           now,

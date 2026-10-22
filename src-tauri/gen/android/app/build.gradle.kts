@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.net.URI
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -29,24 +30,18 @@ fun mobileProperty(name: String): String =
 fun buildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
-val apiBaseUrl = mobileProperty("sureneco.apiBaseUrl")
-val firebaseProjectId = mobileProperty("sureneco.firebaseProjectId")
-val firebaseProjectNumber = mobileProperty("sureneco.firebaseProjectNumber")
-val firebaseAppId = mobileProperty("sureneco.firebaseAppId")
-if (apiBaseUrl.isNotEmpty() && !apiBaseUrl.startsWith("https://")) {
-    throw GradleException("sureneco.apiBaseUrl must use https://")
+val apiBaseUrl = (System.getenv("SURENECO_API_BASE_URL") ?: mobileProperty("sureneco.apiBaseUrl")).trim().removeSuffix("/")
+val ntfyOrigin = (System.getenv("SURENECO_NTFY_ORIGIN") ?: mobileProperty("sureneco.ntfyOrigin")).trim().removeSuffix("/")
+for (value in listOf(apiBaseUrl, ntfyOrigin)) {
+    if (value.isNotEmpty()) {
+        val uri = URI(value)
+        if (releaseBuild && uri.host?.endsWith(".invalid") == true) throw GradleException("Release endpoints must use the deployed hosts")
+        if (uri.scheme != "https" || uri.host.isNullOrEmpty() || uri.userInfo != null || uri.query != null || uri.fragment != null || !uri.path.isNullOrEmpty())
+            throw GradleException("Mobile endpoints must be HTTPS origins without paths or credentials")
+    }
 }
-if (releaseBuild && listOf(
-        apiBaseUrl,
-        firebaseProjectId,
-        firebaseProjectNumber,
-        firebaseAppId,
-    ).any(String::isEmpty)
-) {
-    throw GradleException(
-        "mobile.properties must define the public Firebase settings and HTTPS API URL for release builds",
-    )
-}
+if (releaseBuild && listOf(apiBaseUrl, ntfyOrigin).any(String::isEmpty))
+    throw GradleException("mobile.properties must define HTTPS API and self-hosted ntfy origins")
 
 android {
     compileSdk = 36
@@ -59,11 +54,23 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
         buildConfigField("String", "SURENECO_API_BASE_URL", buildConfigString(apiBaseUrl))
-        buildConfigField("String", "SURENECO_FIREBASE_PROJECT_ID", buildConfigString(firebaseProjectId))
-        buildConfigField("String", "SURENECO_FIREBASE_PROJECT_NUMBER", buildConfigString(firebaseProjectNumber))
-        buildConfigField("String", "SURENECO_FIREBASE_APP_ID", buildConfigString(firebaseAppId))
+        buildConfigField("String", "SURENECO_NTFY_ORIGIN", buildConfigString(ntfyOrigin))
         ndk {
             abiFilters.add("arm64-v8a")
+        }
+    }
+    val signingProperties = Properties().apply {
+        val source = System.getenv("SURENECO_ANDROID_SIGNING_FILE")?.let { file(it) } ?: rootProject.file("keystore.properties")
+        if (source.exists()) source.inputStream().use { load(it) }
+    }
+    if (releaseBuild) {
+        if (listOf("storeFile", "storePassword", "keyAlias", "keyPassword").any { signingProperties.getProperty(it).isNullOrBlank() })
+            throw GradleException("Release builds require separate Android upload signing settings")
+        signingConfigs.create("upload") {
+            storeFile = file(signingProperties.getProperty("storeFile"))
+            storePassword = signingProperties.getProperty("storePassword")
+            keyAlias = signingProperties.getProperty("keyAlias")
+            keyPassword = signingProperties.getProperty("keyPassword")
         }
     }
     buildTypes {
@@ -80,6 +87,7 @@ android {
             }
         }
         getByName("release") {
+            if (releaseBuild) signingConfig = signingConfigs.getByName("upload")
             optimization {
                enable = true
             }
@@ -111,6 +119,7 @@ rust {
 }
 
 dependencies {
+    implementation("org.unifiedpush.android:connector:3.3.5")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")
@@ -122,3 +131,9 @@ dependencies {
 }
 
 apply(from = file("tauri.build.gradle.kts"))
+
+configurations.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("com.google.crypto.tink:tink")).using(module("com.google.crypto.tink:tink-android:1.23.0"))
+    }
+}

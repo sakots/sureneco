@@ -17,6 +17,7 @@ function setup(
     error: null,
   },
   settings: Snapshot["settings"] = defaults,
+  mobile?: Api["mobile"],
 ) {
   const snapshot: Snapshot = {
     settings,
@@ -36,6 +37,7 @@ function setup(
     notificationAvailable: true,
   };
   const api: Api = {
+    mobile,
     getUpdateState: vi.fn(async () => update),
     checkUpdate: vi.fn(async () => {}),
     downloadUpdate: vi.fn(async () => {}),
@@ -463,4 +465,36 @@ it("ブラウザーの実行ファイルとプロファイルを保存し、ア�
       launcher_args: ["-applaunch", "12345", "an argument with spaces"],
     }),
   );
+});
+
+it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表示する", async () => {
+  const state = {
+    enabled: false,
+    status: "未登録",
+    permission: false,
+    server: null,
+  };
+  const mobile = {
+    getPushState: vi.fn(async () => state),
+    startPush: vi.fn(async () => state),
+    stopPush: vi.fn(async () => state),
+    deletePush: vi.fn(async () => state),
+    syncPush: vi.fn(async () => state),
+    requestPushPermission: vi.fn(async () => {}),
+  };
+  const api = setup([], undefined, { ...defaults, update_sec: 60 }, mobile);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  await screen.findByText("バックグラウンド通知");
+  expect(screen.queryByText("設定フォルダ")).toBeNull();
+  expect(screen.queryByText("雀魂の起動")).toBeNull();
+  expect(api.getUpdateState).not.toHaveBeenCalled();
+  expect(api.getConfigDirectory).not.toHaveBeenCalled();
+  const interval = screen.getByLabelText("友人戦募集の更新間隔（秒）");
+  expect(interval.getAttribute("min")).toBe("60");
+  await user.clear(interval);
+  await user.type(interval, "59");
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  await screen.findByText("Androidの更新間隔は60秒以上にしてください。");
 });

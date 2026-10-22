@@ -1,19 +1,14 @@
 import { afterEach, expect, it } from "vitest";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import { spawn } from "node:child_process";
+import { createECDH, randomBytes } from "node:crypto";
+import type { PushData } from "../server/web-push";
 import { Store } from "../server/store";
 import { createApi } from "../server/api";
-import {
-  AuthError,
-  checkIdentity,
-  messageFor,
-  deliveryFailure,
-} from "../server/firebase-sdk";
-import { Firebase, firebaseConfig } from "../server/firebase";
 import { fetchBoard, validateDataUrl } from "../server/http";
 import { defaults } from "../src/core/settings";
 const cleanup: (() => unknown | Promise<unknown>)[] = [];
@@ -25,15 +20,17 @@ function directory() {
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
-async function api(
-  auth = async (id?: string, check?: string) => {
-    if (id !== "Bearer accepted" || check !== "checked") throw new AuthError();
-    return "owner";
-  },
-) {
-  const db = new Store(join(directory(), "db.sqlite"));
+async function api() {
+  const db = new Store(join(directory(), "db"));
   cleanup.push(() => db.close());
-  const server = createApi(db, auth);
+  const messages: PushData[] = [];
+  const server = createApi(db, {
+    origin: "https://push.example",
+    publicKey: "public-vapid",
+    send: async (_sub, message) => {
+      messages.push(message);
+    },
+  });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   cleanup.push(
@@ -45,194 +42,168 @@ async function api(
   );
   return {
     db,
+    messages,
     base: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
   };
 }
-const headers = {
-  Authorization: "Bearer accepted",
-  "X-Firebase-AppCheck": "checked",
-  "Content-Type": "application/json",
-};
-const settings = Object.fromEntries(
-  Object.entries(defaults).filter(([key]) => !key.startsWith("launcher_")),
-);
-const input = {
-  settings: { ...settings, update_sec: 60 },
-  watched: ["1792548000"],
-  consent: true,
-  fcmToken: "secret-notification-token",
-};
-it("runs the HTTP subscription lifecycle without exposing tokens and rejects unauthenticated or foreign operations", async () => {
-  const { base } = await api();
+function input() {
+  const key = createECDH("prime256v1");
+  key.generateKeys();
+  return {
+    settings: {
+      ...Object.fromEntries(
+        Object.entries(defaults).filter(([k]) => !k.startsWith("launcher_")),
+      ),
+      update_sec: 60,
+    },
+    watched: ["1792548000"],
+    consent: true,
+    pushSubscription: {
+      endpoint: "https://push.example/up" + randomBytes(16).toString("hex"),
+      keys: {
+        p256dh: key.getPublicKey().toString("base64url"),
+        auth: randomBytes(16).toString("base64url"),
+      },
+    },
+  };
+}
+it("authenticates real device credentials and activates monitoring only after a one-time push challenge", async () => {
+  const { base, messages, db } = await api();
+  const issue = async () =>
+    await (
+      await fetch(base + "/v1/device", {
+        method: "POST",
+        body: JSON.stringify({ consent: true }),
+      })
+    ).json();
+  const first = await issue();
+  const second = await issue();
+  const headers = { Authorization: "Bearer " + first.token };
+  const data = input();
   expect((await fetch(base + "/v1/subscription")).status).toBe(401);
-  expect(
-    (
-      await fetch(base + "/v1/subscription", {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ ...input, uid: "other" }),
-      })
-    ).status,
-  ).toBe(400);
-  const registered = await fetch(base + "/v1/subscription", {
-    method: "PUT",
-    headers,
-    body: JSON.stringify(input),
-  });
-  expect(registered.status).toBe(200);
-  expect(await registered.text()).not.toContain("secret-notification-token");
-  expect(
-    (await (await fetch(base + "/v1/subscription", { headers })).json())
-      .subscription.active,
-  ).toBe(true);
-  expect(
-    (
-      await (
-        await fetch(base + "/v1/subscription/stop", { method: "POST", headers })
-      ).json()
-    ).subscription.active,
-  ).toBe(false);
-  await fetch(base + "/v1/subscription", { method: "DELETE", headers });
-  expect(
-    (await (await fetch(base + "/v1/subscription", { headers })).json())
-      .subscription,
-  ).toBeNull();
-});
-it("restricts routes, methods, input size, malformed JSON and request frequency", async () => {
-  const { base } = await api();
-  expect((await fetch(base + "/server/data/monitor.sqlite")).status).toBe(404);
-  const badMethod = await fetch(base + "/v1/subscription", {
+  const put = () =>
+    fetch(base + "/v1/subscription", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(data),
+    });
+  expect((await put()).status).toBe(200);
+  expect(messages).toHaveLength(1);
+  const status = () =>
+    fetch(base + "/v1/subscription", { headers }).then((r) => r.json());
+  expect((await status()).subscription.active).toBe(false);
+  const confirm = () =>
+    fetch(base + "/v1/subscription/confirm", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        challenge: messages[0].challenge,
+        generation: messages[0].generation,
+      }),
+    });
+  const foreign = await fetch(base + "/v1/subscription/confirm", {
     method: "POST",
-    headers,
+    headers: { Authorization: "Bearer " + second.token },
+    body: JSON.stringify({
+      challenge: messages[0].challenge,
+      generation: messages[0].generation,
+    }),
   });
-  expect(badMethod.status).toBe(405);
-  expect(badMethod.headers.get("allow")).toContain("PUT");
+  expect(foreign.status).toBe(400);
+  expect((await confirm()).status).toBe(200);
+  expect((await status()).subscription.active).toBe(true);
+  expect((await confirm()).status).toBe(400);
+  const text = JSON.stringify(await status());
+  expect(text).not.toContain(data.pushSubscription.endpoint);
+  expect(text).not.toContain(data.pushSubscription.keys.auth);
+  expect((await put()).status).toBe(200);
+  expect(messages).toHaveLength(1);
   expect(
     (
       await fetch(base + "/v1/subscription", {
         method: "PUT",
         headers,
-        body: "{",
+        body: JSON.stringify({ ...data, uid: second.deviceId }),
       })
     ).status,
   ).toBe(400);
+  await fetch(base + "/v1/subscription/stop", { method: "POST", headers });
+  expect((await status()).subscription.active).toBe(false);
+  const nextToken = randomBytes(32).toString("base64url");
+  const rotated = await (
+    await fetch(base + "/v1/device/rotate", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ newToken: nextToken }),
+    })
+  ).json();
+  expect((await fetch(base + "/v1/subscription", { headers })).status).toBe(
+    401,
+  );
+  expect(rotated.rotated).toBe(true);
+  const newHeaders = { Authorization: "Bearer " + nextToken };
   expect(
     (
-      await fetch(base + "/v1/subscription", {
-        method: "PUT",
-        headers,
+      await fetch(base + "/v1/device/rotate", {
+        method: "POST",
+        headers: newHeaders,
+        body: JSON.stringify({ newToken: nextToken }),
+      })
+    ).status,
+  ).toBe(200);
+  await fetch(base + "/v1/device", { method: "DELETE", headers: newHeaders });
+  expect(
+    (
+      await fetch(base + "/v1/device", {
+        method: "DELETE",
+        headers: newHeaders,
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    db.get("SELECT * FROM subscriptions WHERE uid=?", first.deviceId),
+  ).toBeUndefined();
+  expect(
+    (await fetch(base + "/v1/subscription", { headers: newHeaders })).status,
+  ).toBe(401);
+});
+it("limits routes, JSON input, body size, public registration and rejects unknown owners", async () => {
+  const { base } = await api();
+  expect((await fetch(base + "/server/data/db")).status).toBe(404);
+  expect((await fetch(base + "/v1/device", { method: "PUT" })).status).toBe(
+    405,
+  );
+  expect(
+    (await fetch(base + "/v1/device", { method: "POST", body: "{" })).status,
+  ).toBe(400);
+  expect(
+    (
+      await fetch(base + "/v1/device", {
+        method: "POST",
         body: "x".repeat(262145),
       })
     ).status,
   ).toBe(413);
-  for (let i = 0; i < 120; i++) await fetch(base + "/v1/subscription");
-  expect((await fetch(base + "/v1/subscription")).status).toBe(429);
-});
-it("fails closed for missing Firebase configuration and rejects malformed tokens through the actual SDK worker", async () => {
-  const firebase = new Firebase(null);
-  cleanup.push(() => firebase.close());
-  const { base } = await api((id, check) => firebase.authenticate(id, check));
-  expect((await fetch(base + "/v1/subscription", { headers })).status).toBe(
-    503,
-  );
-  const configured = new Firebase({
-    projectId: "sureneco-test",
-    projectNumber: "123",
-    appId: "1:123:android:abcdef",
-  });
-  cleanup.push(() => configured.close());
-  await expect(
-    configured.authenticate("Bearer invalid.jwt", "invalid.check"),
-  ).rejects.toMatchObject({ status: 401 });
-});
-it("requires exact verified Firebase project, issuer, app and expiry", () => {
-  const config = {
-    projectId: "sureneco-test",
-    projectNumber: "123",
-    appId: "1:123:android:abcdef",
-  };
-  const now = Date.now();
-  const id = {
-    uid: "owner",
-    aud: config.projectId,
-    iss: `https://securetoken.google.com/${config.projectId}`,
-    iat: Math.floor(now / 1000),
-    exp: Math.floor(now / 1000) + 3600,
-  };
-  const checked = {
-    app_id: config.appId,
-    aud: ["projects/123"],
-    iss: "https://firebaseappcheck.googleapis.com/123",
-    iat: id.iat,
-    exp: id.exp,
-  };
-  expect(checkIdentity(config, id, checked, now)).toBe("owner");
-  for (const invalid of [
-    { ...id, aud: "foreign" },
-    { ...id, exp: 1 },
-    { ...id, iss: "fake" },
-  ])
-    expect(() => checkIdentity(config, invalid, checked, now)).toThrow();
-  for (const invalid of [
-    { ...checked, app_id: "other" },
-    { ...checked, iss: "https://firebaseappcheck.googleapis.com/999" },
-    { ...checked, aud: ["projects/999"] },
-    { ...checked, exp: 1 },
-  ])
-    expect(() => checkIdentity(config, id, invalid, now)).toThrow();
-  expect(firebaseConfig({})).toBeNull();
-  expect(() =>
-    firebaseConfig({ SURENECO_FIREBASE_PROJECT_ID: "test" }),
-  ).toThrow("Firebase configuration unavailable.");
-});
-it("bounds FCM data and TTL, targets the current Android package, and classifies retries without credentials", () => {
-  const now = Date.now();
-  const payload = {
-    eventId: "id",
-    revision: 1,
-    expiresAt: Math.floor(now / 1000) + 120,
-    boardUrl: defaults.url,
-    threadId: "1792548000",
-    threadTitle: "雀魂".repeat(1000),
-    recruitment: {
-      number: 1,
-      name: "",
-      id: "",
-      watchoi: "",
-      body: "友人戦".repeat(1000),
-      roomIds: ["12345"],
-      postedAt: now,
-      threadId: "1792548000",
-      closed: false,
-    },
-  };
-  const message = messageFor("destination", payload, now);
-  const applicationId = readFileSync(
-    "src-tauri/gen/android/app/build.gradle.kts",
-    "utf8",
-  ).match(/applicationId\s*=\s*"([^"]+)"/)![1];
-  expect(message.android?.restrictedPackageName).toBe(applicationId);
-  expect(message.android?.ttl).toBeGreaterThan(0);
-  expect(message.android?.ttl).toBeLessThanOrEqual(120000);
-  expect(message).not.toHaveProperty("notification");
-  expect(Buffer.byteLength(message.data!.body)).toBeLessThanOrEqual(1500);
-  expect(Buffer.byteLength(message.data!.title)).toBeLessThanOrEqual(240);
-  expect(() => messageFor("x", { ...payload, expiresAt: 0 }, now)).toThrow();
   expect(
-    deliveryFailure({ code: "messaging/registration-token-not-registered" }),
-  ).toMatchObject({ code: "unregistered", retryable: false });
-  expect(deliveryFailure({ code: "messaging/invalid-argument" })).toMatchObject(
-    { code: "invalid_argument", retryable: false },
-  );
+    (await fetch(base + "/v1/device", { method: "POST", body: "{}" })).status,
+  ).toBe(400);
+  for (let i = 0; i < 5; i++)
+    expect(
+      (
+        await fetch(base + "/v1/device", {
+          method: "POST",
+          body: JSON.stringify({ consent: true }),
+        })
+      ).status,
+    ).toBe(201);
   expect(
-    deliveryFailure({
-      code: "messaging/server-unavailable",
-      httpResponse: { headers: { "retry-after": "120" } },
-    }),
-  ).toMatchObject({ retryable: true, retryAfter: 120 });
-  expect(deliveryFailure(new Error("private_key token")).message).toBe(
-    "Push delivery failed.",
-  );
+    (
+      await fetch(base + "/v1/device", {
+        method: "POST",
+        body: JSON.stringify({ consent: true }),
+      })
+    ).status,
+  ).toBe(429);
 });
 it("rejects URL traversal and redirects and decodes bounded CP932/UTF-8 data", async () => {
   for (const url of [
@@ -293,10 +264,7 @@ it("starts, rejects a second process, releases ownership on SIGKILL and restarts
     SURENECO_SERVER_PORT: String(port),
   };
   for (const key of Object.keys(env))
-    if (
-      key.startsWith("SURENECO_FIREBASE_") ||
-      key === "SURENECO_FCM_CREDENTIALS"
-    )
+    if (key === "SURENECO_NTFY_ORIGIN" || key === "SURENECO_VAPID_FILE")
       delete (env as Record<string, string | undefined>)[key];
   const start = async () => {
     const child = spawn(process.execPath, ["dist/server/main.mjs"], {
@@ -337,3 +305,45 @@ it("starts, rejects a second process, releases ownership on SIGKILL and restarts
   const [end] = await once(restarted, "exit");
   expect(end).toBe(0);
 }, 10000);
+
+it("does not reactivate a stopped, expired or replaced channel with an old challenge", async () => {
+  const { base, messages, db } = await api();
+  const device = await (
+    await fetch(base + "/v1/device", {
+      method: "POST",
+      body: JSON.stringify({ consent: true }),
+    })
+  ).json();
+  const headers = { Authorization: "Bearer " + device.token };
+  const put = async (data: ReturnType<typeof input>) =>
+    fetch(base + "/v1/subscription", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(data),
+    });
+  const confirm = async (message: PushData) =>
+    fetch(base + "/v1/subscription/confirm", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        challenge: message.challenge,
+        generation: message.generation,
+      }),
+    });
+  const data = input();
+  await put(data);
+  const stopped = messages[0];
+  await fetch(base + "/v1/subscription/stop", { method: "POST", headers });
+  expect((await confirm(stopped)).status).toBe(400);
+  await put(data);
+  const expired = messages[1];
+  db.run("UPDATE subscriptions SET challenge_expires=0");
+  expect((await confirm(expired)).status).toBe(400);
+  await put(input());
+  const current = messages[2];
+  expect((await confirm(expired)).status).toBe(400);
+  expect((await confirm(current)).status).toBe(200);
+  await fetch(base + "/v1/device", { method: "DELETE", headers });
+  expect((await put(data)).status).toBe(401);
+  expect(db.get("SELECT * FROM subscriptions")).toBeUndefined();
+});

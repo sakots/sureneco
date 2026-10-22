@@ -3,6 +3,7 @@ import { defaults, validateSettings } from "../core/settings";
 import { isRecent } from "../core/detection";
 import { extractRoomIds, postReferences, splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot, UpdateState } from "../core/types";
+import { MobilePushPanel } from "./MobilePushPanel";
 import { UpdatePanel } from "./UpdatePanel";
 const labels: Record<keyof Settings, string> = {
   update_sec: "友人戦募集の更新間隔（秒）",
@@ -63,34 +64,66 @@ export function App({ api }: { api: Api }) {
       .catch((err) => {
         if (alive) setError(String(err));
       });
-    const stopUpdates = api.subscribeUpdate((value) => {
-      if (alive) setUpdate(value);
-    });
-    void api
-      .getUpdateState()
-      .then((value) => {
-        if (alive) setUpdate(value);
-      })
-      .catch((err) => {
-        if (alive) setError(String(err));
-      });
-    void api
-      .getConfigDirectory()
-      .then((value) => {
-        if (alive) {
-          setConfigDirectory(value);
-          setConfigDirectoryDraft(value);
-        }
-      })
-      .catch((err) => {
-        if (alive) setError(String(err));
-      });
+    const stopUpdates = api.mobile
+      ? () => {}
+      : api.subscribeUpdate((value) => {
+          if (alive) setUpdate(value);
+        });
+    if (!api.mobile) {
+      void api
+        .getUpdateState()
+        .then((value) => {
+          if (alive) setUpdate(value);
+        })
+        .catch((err) => {
+          if (alive) setError(String(err));
+        });
+      void api
+        .getConfigDirectory()
+        .then((value) => {
+          if (alive) {
+            setConfigDirectory(value);
+            setConfigDirectoryDraft(value);
+          }
+        })
+        .catch((err) => {
+          if (alive) setError(String(err));
+        });
+    }
     const timer = setInterval(() => setTick((x) => x + 1), 10000);
     return () => {
       alive = false;
       stop();
       stopUpdates();
       clearInterval(timer);
+    };
+  }, [api]);
+  useEffect(() => {
+    if (!api.mobile) return;
+    const refresh = () => {
+      if (!document.hidden) void api.refresh().catch(() => {});
+    };
+    const tapped = () => setPage("recruitments");
+    const consume = () => {
+      if (!document.hidden)
+        void api.mobile
+          ?.consumeNotificationTarget?.()
+          .then((target) => {
+            if (target) tapped();
+          })
+          .catch(() => {});
+    };
+    const targets = setInterval(consume, 1000);
+    consume();
+    const timer = setInterval(refresh, 60000);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("show-recruitments", tapped);
+    refresh();
+    return () => {
+      clearInterval(targets);
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("show-recruitments", tapped);
     };
   }, [api]);
   async function act(task: () => Promise<void>) {
@@ -198,7 +231,7 @@ export function App({ api }: { api: Api }) {
           {e}
         </div>
       ))}
-      {snapshot && !snapshot.notificationAvailable && (
+      {snapshot && !api.mobile && !snapshot.notificationAvailable && (
         <div className="message">
           この環境ではデスクトップ通知を利用できません。
         </div>
@@ -341,24 +374,26 @@ export function App({ api }: { api: Api }) {
                       </div>
                     )}
                     <div className="recruitment-actions">
-                      {item.roomIds.map((id) => (
-                        <button
-                          key={id}
-                          className="secondary"
-                          disabled={busy || !active}
-                          aria-label={`ルームID ${id}をコピーして雀魂を起動`}
-                          onClick={() =>
-                            void act(async () => {
-                              await api.launchMahjongSoul(id);
-                              setNotice(
-                                `レス ${noticePost}：ルームID ${id}をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。`,
-                              );
-                            })
-                          }
-                        >
-                          雀魂を起動{item.roomIds.length > 1 ? `（${id}）` : ""}
-                        </button>
-                      ))}
+                      {!api.mobile &&
+                        item.roomIds.map((id) => (
+                          <button
+                            key={id}
+                            className="secondary"
+                            disabled={busy || !active}
+                            aria-label={`ルームID ${id}をコピーして雀魂を起動`}
+                            onClick={() =>
+                              void act(async () => {
+                                await api.launchMahjongSoul(id);
+                                setNotice(
+                                  `レス ${noticePost}：ルームID ${id}をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。`,
+                                );
+                              })
+                            }
+                          >
+                            雀魂を起動
+                            {item.roomIds.length > 1 ? `（${id}）` : ""}
+                          </button>
+                        ))}
                       <button
                         className="secondary"
                         onClick={() =>
@@ -390,65 +425,74 @@ export function App({ api }: { api: Api }) {
           )}
           {page === "settings" && (
             <>
-              {update && <UpdatePanel api={api} state={update} />}
-              <section className="settings-card">
-                <h3>設定フォルダ</h3>
-                <p className="metadata">
-                  現在の保存先： <span>{configDirectory ?? "読み込み中…"}</span>
-                </p>
-                <label htmlFor="config-directory">
-                  設定フォルダのパス
-                  <input
-                    id="config-directory"
-                    type="text"
-                    value={configDirectoryDraft}
-                    disabled={busy || configDirectory === null}
-                    aria-describedby="config-directory-help"
-                    onChange={(event) =>
-                      setConfigDirectoryDraft(event.target.value)
-                    }
-                  />
-                </label>
-                <p className="help" id="config-directory-help">
-                  絶対パスを入力するか、フォルダを選択してください。「保存先を変更」で保存済みの設定、監視対象、取得済みレス番号を変更先にコピーし、以後の保存先にします。元のフォルダのデータは残ります。state.json
-                  が既にあるフォルダには変更できません。ウィンドウの位置・サイズは移しません。
-                </p>
-                <div className="form-actions">
-                  <button
-                    className="secondary"
-                    disabled={busy || configDirectory === null}
-                    onClick={() =>
-                      void act(async () => {
-                        const selected = await api.chooseConfigDirectory();
-                        if (selected !== null)
-                          setConfigDirectoryDraft(selected);
-                      })
-                    }
-                  >
-                    フォルダを選択
-                  </button>
-                  <button
-                    className="primary"
-                    disabled={
-                      busy ||
-                      configDirectory === null ||
-                      !configDirectoryDraft.trim()
-                    }
-                    onClick={() =>
-                      void act(async () => {
-                        const directory =
-                          await api.changeConfigDirectory(configDirectoryDraft);
-                        setConfigDirectory(directory);
-                        setConfigDirectoryDraft(directory);
-                        setNotice("設定フォルダを変更しました。");
-                      })
-                    }
-                  >
-                    保存先を変更
-                  </button>
-                </div>
-              </section>
+              {api.mobile && <MobilePushPanel api={api.mobile} />}
+              {!api.mobile && update && (
+                <UpdatePanel api={api} state={update} />
+              )}
+              {!api.mobile && (
+                <section className="settings-card">
+                  <h3>設定フォルダ</h3>
+                  <p className="metadata">
+                    現在の保存先：{" "}
+                    <span>{configDirectory ?? "読み込み中…"}</span>
+                  </p>
+                  <label htmlFor="config-directory">
+                    設定フォルダのパス
+                    <input
+                      id="config-directory"
+                      type="text"
+                      value={configDirectoryDraft}
+                      disabled={busy || configDirectory === null}
+                      aria-describedby="config-directory-help"
+                      onChange={(event) =>
+                        setConfigDirectoryDraft(event.target.value)
+                      }
+                    />
+                  </label>
+                  <p className="help" id="config-directory-help">
+                    絶対パスを入力するか、フォルダを選択してください。「保存先を変更」で保存済みの設定、監視対象、取得済みレス番号を変更先にコピーし、以後の保存先にします。元のフォルダのデータは残ります。state.json
+                    が既にあるフォルダには変更できません。ウィンドウの位置・サイズは移しません。
+                  </p>
+                  <div className="form-actions">
+                    <button
+                      className="secondary"
+                      disabled={busy || configDirectory === null}
+                      onClick={() =>
+                        void act(async () => {
+                          const selected = await api.chooseConfigDirectory();
+                          if (selected !== null)
+                            setConfigDirectoryDraft(selected);
+                        })
+                      }
+                    >
+                      フォルダを選択
+                    </button>
+                    <button
+                      className="primary"
+                      disabled={
+                        busy ||
+                        configDirectory === null ||
+                        !configDirectoryDraft.trim()
+                      }
+                      onClick={() =>
+                        void act(async () => {
+                          const directory =
+                            await api.changeConfigDirectory(
+                              configDirectoryDraft,
+                            );
+                          setConfigDirectory(directory);
+                          setConfigDirectoryDraft(directory);
+                          setNotice("設定フォルダを変更しました。");
+                        })
+                      }
+                    >
+                      保存先を変更
+                    </button>
+                  </div>
+                </section>
+              )}
               <SettingsForm
+                mobile={!!api.mobile}
                 initial={snapshot.settings}
                 busy={busy}
                 onSave={(settings) =>
@@ -471,17 +515,23 @@ export function App({ api }: { api: Api }) {
             ? `· 友人戦募集：${snapshot.settings.update_sec}秒ごと · スレッド一覧：${snapshot.settings.thread_update_sec}秒ごと`
             : ""}
         </span>
-        <span>閉じるとトレイに常駐します</span>
+        <span>
+          {api.mobile
+            ? "更新はGoogle Playから行います"
+            : "閉じるとトレイに常駐します"}
+        </span>
       </footer>
     </div>
   );
 }
 function SettingsForm({
   initial,
+  mobile = false,
   busy,
   onSave,
 }: {
   initial: Settings;
+  mobile?: boolean;
   busy: boolean;
   onSave: (s: Settings) => Promise<void>;
 }) {
@@ -513,7 +563,13 @@ function SettingsForm({
               ? "number"
               : "text"
           }
-          min={key === "update_sec" || key === "thread_update_sec" ? 20 : 1}
+          min={
+            key === "update_sec" || key === "thread_update_sec"
+              ? mobile
+                ? 60
+                : 20
+              : 1
+          }
           max={
             numeric.includes(key as (typeof numeric)[number])
               ? 2147483
@@ -538,6 +594,12 @@ function SettingsForm({
             ...Object.fromEntries(numeric.map((k) => [k, Number(draft[k])])),
             ...Object.fromEntries(lists.map((k) => [k, draft[k].split("\n")])),
           };
+          if (
+            mobile &&
+            (Number(candidate.update_sec) < 60 ||
+              Number(candidate.thread_update_sec) < 60)
+          )
+            throw new Error("Androidの更新間隔は60秒以上にしてください。");
           void onSave(validateSettings(candidate));
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
@@ -567,47 +629,49 @@ function SettingsForm({
           板URLを変えると、監視対象と取得済みレス番号をリセットします。
         </p>
       </section>
-      <section className="settings-card">
-        <h3>雀魂の起動</h3>
-        <p className="help">
-          募集のボタンからルームIDをコピーして起動します。入室はゲーム内でIDを貼り付けてください。
-        </p>
-        <label htmlFor="launcher_mode">
-          起動方法
-          <select
-            id="launcher_mode"
-            value={draft.launcher_mode}
-            onChange={(e) =>
-              setDraft({ ...draft, launcher_mode: e.target.value })
-            }
-          >
-            <option value="default">既定ブラウザー</option>
-            <option value="browser">Chrome / Edge（プロファイル指定）</option>
-            <option value="application">指定アプリ（雀魂・Steamなど）</option>
-          </select>
-        </label>
-        {draft.launcher_mode !== "default" && field("launcher_path")}
-        {draft.launcher_mode === "browser" && (
-          <>
-            {field("launcher_profile")}
-            {field("launcher_user_data_dir")}
-            <p className="help">
-              chrome://version または edge://version
-              のプロファイルパス末尾（Default、Profile
-              1など）を指定します。空欄ならブラウザーの既定設定を使います。ユーザーデータディレクトリーは通常空欄で構いません。
-            </p>
-          </>
-        )}
-        {draft.launcher_mode === "application" && (
-          <>
-            {field("launcher_args")}
-            <p className="help">
-              空白を含む引数も引用符で囲まず、一行に一つ入力します。Steam経由の場合はsteam.exeを指定し、-applaunchと対象ゲームのApp
-              IDを二行に分けて入力します。
-            </p>
-          </>
-        )}
-      </section>
+      {!mobile && (
+        <section className="settings-card">
+          <h3>雀魂の起動</h3>
+          <p className="help">
+            募集のボタンからルームIDをコピーして起動します。入室はゲーム内でIDを貼り付けてください。
+          </p>
+          <label htmlFor="launcher_mode">
+            起動方法
+            <select
+              id="launcher_mode"
+              value={draft.launcher_mode}
+              onChange={(e) =>
+                setDraft({ ...draft, launcher_mode: e.target.value })
+              }
+            >
+              <option value="default">既定ブラウザー</option>
+              <option value="browser">Chrome / Edge（プロファイル指定）</option>
+              <option value="application">指定アプリ（雀魂・Steamなど）</option>
+            </select>
+          </label>
+          {draft.launcher_mode !== "default" && field("launcher_path")}
+          {draft.launcher_mode === "browser" && (
+            <>
+              {field("launcher_profile")}
+              {field("launcher_user_data_dir")}
+              <p className="help">
+                chrome://version または edge://version
+                のプロファイルパス末尾（Default、Profile
+                1など）を指定します。空欄ならブラウザーの既定設定を使います。ユーザーデータディレクトリーは通常空欄で構いません。
+              </p>
+            </>
+          )}
+          {draft.launcher_mode === "application" && (
+            <>
+              {field("launcher_args")}
+              <p className="help">
+                空白を含む引数も引用符で囲まず、一行に一つ入力します。Steam経由の場合はsteam.exeを指定し、-applaunchと対象ゲームのApp
+                IDを二行に分けて入力します。
+              </p>
+            </>
+          )}
+        </section>
+      )}
       <section className="settings-card">
         <h3>検出する正規表現</h3>
         <p className="help">
