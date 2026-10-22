@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f5f6f8;
   --panel: #ffffff;
   --text: #202d38;
@@ -18,20 +18,19 @@
   background: var(--bg);
   color: var(--text);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #141b20;
-    --panel: #1e282e;
-    --text: #edf2f5;
-    --muted: #aabbc7;
-    --border: #40515c;
-    --accent: #9cdebb;
-    --accent-text: #162b20;
-    --soft: #243d31;
-    --error-bg: #442724;
-    --error-text: #ffbbb1;
-    --focus: #94c0ff;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141b20;
+  --panel: #1e282e;
+  --text: #edf2f5;
+  --muted: #aabbc7;
+  --border: #40515c;
+  --accent: #9cdebb;
+  --accent-text: #162b20;
+  --soft: #243d31;
+  --error-bg: #442724;
+  --error-text: #ffbbb1;
+  --focus: #94c0ff;
 }
 * {
   box-sizing: border-box;
@@ -446,4 +445,18 @@ progress {
   .settings-card {
     overflow-wrap: anywhere;
   }
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
 }
