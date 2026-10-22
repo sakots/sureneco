@@ -32,6 +32,7 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 
 - [使い方](docs/usage.md)：監視・通知、設定フォルダ、雀魂の起動、更新、Electron版からの切り替え
 - [Firebaseの設定](docs/firebase-setup.md)：プロジェクト作成、匿名認証・App Check・FCM、AndroidとPHPサーバーの設定
+- [PHPサーバーのセットアップ](docs/php-setup.md)：実行環境、ファイル配置、API公開、環境変数、cronと動作確認
 - [開発](docs/development.md)：構成、環境構築、起動とチェック
 - [配布物の作成](docs/packaging.md)：Windows / Linuxビルド、署名、SSH先でのビルドと取得
 - [仕様と変更管理](docs/specification.md)：機能別仕様、OpenSpecの手順、検証
@@ -43,6 +44,7 @@ Android版「スレネコアラート」は[開発と配布準備](docs/android.
 
 ### [2026/10/22] v0.8.3
 
+- PHPサーバーの実行環境・配置・HTTPS API・環境変数・cron・動作確認のセットアップ手順を追加。
 - `google-services.json`の配置先を設定資料に追加し、Git管理から除外するようにした。
 - Firebase設定手順とPHPのFCM送信先のパッケージ名を、Android版の`sureneco.sakots`に合わせて修正。
 

@@ -100,6 +100,8 @@ sureneco.firebaseAppId=1:123456789012:android:0123456789abcdef
 
 ## 6. PHP APIとcronへ設定を渡す
 
+PHPの導入・ファイル配置・Webサーバー設定・cron登録の一連の手順は[PHPサーバーのセットアップ](php-setup.md)を参照してください。この節ではFirebaseに関係する環境変数を説明します。
+
 ### 環境変数の対応
 
 Android・PHP API・FCM送信に同じFirebaseプロジェクトを使います。
