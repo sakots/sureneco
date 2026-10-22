@@ -1,10 +1,11 @@
 import { build } from "esbuild";
+import { rm } from "node:fs/promises";
+await rm(new URL("../dist/server", import.meta.url), {
+  recursive: true,
+  force: true,
+});
 await build({
-  entryPoints: [
-    "server/main.ts",
-    "server/detection-worker.ts",
-    "server/firebase-worker.ts",
-  ],
+  entryPoints: ["server/main.ts", "server/detection-worker.ts"],
   bundle: true,
   platform: "node",
   target: "node24",

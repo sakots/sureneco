@@ -6,6 +6,7 @@ import { runDetection } from "./detection";
 import { fetchBoard } from "./http";
 export interface Payload {
   eventId: string;
+  generation?: string;
   revision: number;
   boardUrl: string;
   threadId: string;

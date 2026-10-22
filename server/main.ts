@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { Store } from "./store";
-import { Firebase, firebaseConfig } from "./firebase";
+import { PushTransport, pushConfig, type PushData } from "./web-push";
 import { createApi } from "./api";
 import { monitor } from "./monitor";
 import { deliver } from "./delivery";
@@ -9,21 +9,43 @@ async function main() {
   if (Number(process.versions.node.split(".")[0]) < 24) throw new Error();
   const port = Number(process.env.SURENECO_SERVER_PORT ?? "8787");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error();
-  const config = firebaseConfig();
+  const config = pushConfig();
   if (process.argv.includes("--check-config")) {
     console.log(
-      config
-        ? "Firebase settings loaded; not sent."
-        : "Firebase not configured.",
+      config ? "Push settings loaded; not sent." : "Push not configured.",
     );
     return;
   }
-  const firebase = new Firebase(config);
+  const transport = config ? new PushTransport(config) : null;
   const db = new Store(
     process.env.SURENECO_SERVER_DB ?? resolve("server/data/monitor.sqlite"),
   );
-  const api = createApi(db, (id, check) => firebase.authenticate(id, check));
-  const sender = firebase.sender();
+  const api = createApi(
+    db,
+    transport
+      ? {
+          origin: transport.config.origin,
+          publicKey: transport.config.publicKey,
+          send: (...args) => transport.send(...args),
+        }
+      : null,
+  );
+  const sender = transport
+    ? (token: string, payload: import("./monitor").Payload, timeout: number) =>
+        transport.send(
+          JSON.parse(token),
+          {
+            ...payload,
+            type: "recruitment",
+            threadTitle: Array.from(payload.threadTitle).slice(0, 80).join(""),
+            recruitment: {
+              ...payload.recruitment,
+              body: Array.from(payload.recruitment.body).slice(0, 220).join(""),
+            },
+          } as PushData,
+          timeout,
+        )
+    : null;
   const scheduler = new Scheduler(async () => {
     const started = performance.now();
     db.run("UPDATE service_state SET started=? WHERE id=1", Date.now());
@@ -48,7 +70,6 @@ async function main() {
     });
   } catch {
     db.close();
-    await firebase.close();
     throw new Error();
   }
   scheduler.start();
@@ -65,7 +86,6 @@ async function main() {
     api.closeIdleConnections();
     await scheduler.stop();
     await closed;
-    await firebase.close();
     db.close();
     clearTimeout(force);
   };

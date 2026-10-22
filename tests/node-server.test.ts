@@ -1,3 +1,5 @@
+import { createECDH, randomBytes } from "node:crypto";
+import { challenge, confirm } from "../server/channels";
 import { afterEach, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,17 +33,64 @@ const {
   launcher_user_data_dir,
   ...settings
 } = defaults;
+const pushKeys = new Map<string, { p256dh: string; auth: string }>();
 function registration(token = "token-one", overrides = {}) {
+  if (!pushKeys.has(token)) {
+    const key = createECDH("prime256v1");
+    key.generateKeys();
+    pushKeys.set(token, {
+      p256dh: key.getPublicKey().toString("base64url"),
+      auth: randomBytes(16).toString("base64url"),
+    });
+  }
   return {
     settings: { ...settings, update_sec: 60, ...overrides },
     watched: [thread],
-    fcmToken: token,
+    pushSubscription: {
+      endpoint: "https://push.example/up" + token,
+      keys: pushKeys.get(token)!,
+    },
     consent: true,
   };
 }
 async function register(db: Store, uid = "one", input = registration()) {
-  const result = await subscriptions(db, uid, "PUT", input, now);
+  db.run(
+    "INSERT OR IGNORE INTO devices(uid,token_hash,created) VALUES(?,?,?)",
+    uid,
+    "test-hash-" + uid,
+    now,
+  );
+  const result = await subscriptions(
+    db,
+    uid,
+    "PUT",
+    input,
+    now,
+    "https://push.example",
+  );
   expect(result.status).toBe(200);
+  let message: any;
+  await challenge(
+    db,
+    uid,
+    {
+      origin: "https://push.example",
+      publicKey: "",
+      send: async (_s, m) => {
+        message = m;
+      },
+    },
+    now,
+  );
+  if (message)
+    return (
+      await confirm(
+        db,
+        uid,
+        { challenge: message.challenge, generation: message.generation },
+        now,
+      )
+    ).body.subscription!;
   return result.body.subscription!;
 }
 const dat = (bodies: string[], at = now) =>
@@ -71,8 +120,23 @@ it("keeps revisions idempotent, separates owners, rejects token theft and marks 
   expect(
     (await subscriptions(db, "other", "GET", null, now)).body.subscription,
   ).toBeNull();
+  db.run(
+    "INSERT OR IGNORE INTO devices(uid,token_hash,created) VALUES(?,?,?)",
+    "other",
+    "test-hash-other",
+    now,
+  );
   expect(
-    (await subscriptions(db, "other", "PUT", registration(), now)).status,
+    (
+      await subscriptions(
+        db,
+        "other",
+        "PUT",
+        registration(),
+        now,
+        "https://push.example",
+      )
+    ).status,
   ).toBe(409);
   const changed = await register(db, "one", registration("replacement"));
   expect(changed.revision).toBeGreaterThan(first.revision);
@@ -82,7 +146,8 @@ it("keeps revisions idempotent, separates owners, rejects token theft and marks 
     (await subscriptions(db, "one", "POST", {}, now)).body.subscription
       ?.revision,
   ).toBe(stopped.body.subscription?.revision);
-  await register(db, "one", registration("replacement"));
+  const resumed = await register(db, "one", registration("replacement"));
+  expect(resumed.active).toBe(true);
   await subscriptions(db, "one", "DELETE", null, now);
   expect(
     (await subscriptions(db, "one", "GET", null, now)).body.subscription,
@@ -102,7 +167,16 @@ it("validates server settings, ownership fields, limits and consent before persi
     { ...registration(), watched: Array(101).fill(thread) },
   ]) {
     expect(
-      (await subscriptions(db, "invalid", "PUT", invalid, now)).status,
+      (
+        await subscriptions(
+          db,
+          "invalid",
+          "PUT",
+          invalid,
+          now,
+          "https://push.example",
+        )
+      ).status,
     ).toBe(400);
   }
   const input = registration();
@@ -179,12 +253,14 @@ it("persists a delivery attempt before send, retries with a bound, and preserves
     throw new DeliveryError("delivery_unavailable", true, 70);
   };
   await deliver(db, sender, { now: now + 60000, random: () => 0 });
-  expect(db.get("SELECT next_attempt FROM outbox")?.next_attempt).toBe(
-    now + 130000,
+  const nextAttempt = Number(
+    db.get("SELECT next_attempt FROM outbox")?.next_attempt,
   );
+  expect(nextAttempt).toBeGreaterThanOrEqual(now + 130000);
+  expect(nextAttempt).toBeLessThan(now + 131000);
   await deliver(db, sender, { now: now + 129000 });
   expect(attempts).toBe(1);
-  await deliver(db, async () => {}, { now: now + 130000 });
+  await deliver(db, async () => {}, { now: nextAttempt });
   expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(0);
   expect(db.get("SELECT COUNT(*) AS n FROM events")?.n).toBe(1);
 });
@@ -318,7 +394,7 @@ it("retains delivery attempts and deduplication across process restarts and conf
   expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(0);
   expect(db.get("SELECT COUNT(*) AS n FROM events")?.n).toBe(1);
 });
-it("limits retries, expires notices, and cannot delete a replacement token on in-flight UNREGISTERED", async () => {
+it("limits retries, expires notices, and cannot delete a replacement token on in-flight invalid endpoint", async () => {
   const db = store();
   await register(db);
   let bodies = ["挨拶"];
@@ -331,11 +407,13 @@ it("limits retries, expires notices, and cannot delete a replacement token on in
     db,
     async () => {
       await register(db, "one", registration("new-token"));
-      throw new DeliveryError("unregistered", false);
+      throw new DeliveryError("invalid_endpoint", false);
     },
     { now: now + 60000 },
   );
-  expect(db.get("SELECT token FROM subscriptions")?.token).toBe("new-token");
+  expect(db.get("SELECT token FROM subscriptions")?.token).toContain(
+    "upnew-token",
+  );
   expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(0);
   const id = "retry";
   const owner = db.get<{ revision: number }>(
@@ -442,15 +520,16 @@ it("drops expired events before send and removes only a proven invalid recipient
   await deliver(
     db,
     async (token) => {
-      if (token === "one") throw new DeliveryError("unregistered", false);
-      sent.push(token);
+      if (JSON.parse(token).endpoint.endsWith("upone"))
+        throw new DeliveryError("invalid_endpoint", false);
+      sent.push(JSON.parse(token).endpoint);
     },
     { now: now + 60000 },
   );
-  expect(sent).toEqual(["two"]);
+  expect(sent).toEqual(["https://push.example/uptwo"]);
   expect(
-    db.get("SELECT uid FROM subscriptions WHERE uid='one'"),
-  ).toBeUndefined();
+    db.get("SELECT active FROM subscriptions WHERE uid='one'"),
+  ).toMatchObject({ active: 0 });
   bodies.push("友人戦 23456");
   await monitor(db, { now: now + 120000, fetcher });
   let expiredSends = 0;

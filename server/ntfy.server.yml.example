@@ -1,0 +1,12 @@
+# Verify with the ntfy version you install; replace the public origin.
+base-url: https://push.example.com
+listen-http: 127.0.0.1:2586
+behind-proxy: true
+cache-file: /var/lib/ntfy/cache.db
+auth-file: /var/lib/ntfy/user.db
+auth-default-access: deny-all
+# UnifiedPush publishers need anonymous write access to their capability URLs.
+# Subscribers require their own ntfy account and per-topic read ACL.
+auth-access:
+  - "*:up*:write-only"
+# Firebase and upstream relays are intentionally not configured.

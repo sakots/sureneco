@@ -1,8 +1,8 @@
 # Android版の開発と配布準備
 
-Node.js＋VPSとUnifiedPush＋自前ntfyを採用しました。実装は[進捗を保存して中断中](server-progress.md)です。以下は目標構成と既存Android基盤の記録で、UnifiedPush受信はまだ利用できません。
+Node.js＋VPSとUnifiedPush＋自前ntfyを採用し、実装を再開しました。[進捗](server-progress.md)に実装・検証した範囲を記録しています。実端末での配送とVPS配備はまだ確認していません。
 
-AndroidのARM64デバッグAPKと表示名・識別子は確認済みです。Node.jsのAPI・SQLite・監視・配信はFirebase版の試作があり、最終一括検証は未実施です。Firebase依存の置換、Android画面の接続・認証・UnifiedPush受信、自前ntfy・VPS配備、署名付きAAB・Google Play公開は未完了です。[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
+Androidの画面接続・端末操作・通知設定、UnifiedPush connector 3.3.5による登録・受信とネイティブ通知判定を追加しました。Node.js側は端末別認証とWeb Push暗号化へ置き換え、Firebase SDK・公開設定を撤去しています。デバッグAPKを生成しました。実ntfy配送・実端末・署名付き公開AAB・Google Play提出は未完了です。[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
 
 ## 完成時の構成
 
@@ -39,7 +39,7 @@ Android版の表示名は「スレネコアラート」、パッケージ名（a
 
 開発環境ではJava 21、API 36、Build Tools 36.0.0、NDK 28.2.13676358と`aarch64-linux-android`を準備します。SDK規約への同意が必要です。SDKをプロジェクト内に置く場合は、Git管理外の`.android-sdk/`を使えます。
 
-現行`mobile.properties.example`とGradleのリリース検証には旧Firebase公開設定が残ります。実装再開時にFirebase項目を撤去し、固定HTTPS APIと自前ntfy originの設定へ置き換えます。現在の例をUnifiedPush用の完成した設定として使わないでください。`mobile.properties`はGit管理外とし、署名鍵・ntfy管理資格情報・VAPID秘密鍵はAndroid配布物へ入れません。`google-services.json`は新構成では不要ですが、既存ファイルのGit除外は維持します。
+`src-tauri/gen/android/app/mobile.properties.example`をGit管理外の`mobile.properties`へコピーし、`sureneco.apiBaseUrl`と`sureneco.ntfyOrigin`を設定します。どちらもパス・資格情報・クエリーを含まないHTTPS originです。環境変数`SURENECO_API_BASE_URL`・`SURENECO_NTFY_ORIGIN`で上書きもできます。公開ビルドは空欄・`.invalid`ホストを拒否します。署名鍵・ntfy管理資格情報・VAPID秘密鍵は含めません。`google-services.json`は不要ですがGit除外は維持します。既存のPHP用URLがパスを含む場合は、新しいAPIのoriginへ変更してください。
 
 ```sh
 export ANDROID_HOME="$PWD/.android-sdk"
@@ -58,9 +58,23 @@ mkdir -p release
 cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk release/sureneco_v0.8.3_android_debug.apk
 ```
 
-この段階のAndroidエントリーポイントは起動用の基盤です。画面のコマンド接続、端末認証、UnifiedPush受信は別項目で実装・検証します。デバッグAPKはGoogle Play提出用の署名付きAABとは区別します。
+この段階のAndroidエントリーポイントは起動用の基盤です。画面のコマンド接続、端末認証、UnifiedPush受信は実装済みで、実端末との接続は別に検証します。デバッグAPKはGoogle Play提出用の署名付きAABとは区別します。
 
 生成先は`src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`です。生成APKから表示名「スレネコアラート」、アプリID`sureneco.sakots`、versionName `0.8.3`、versionCode `1`、minSdk 24、target/compileSdk 36、ARM64のみであることを確認しました。起動ActivityとFileProvider、APK内のDEX・ネイティブJNIも新しいパッケージ名に一致しています。QuickJSを含む`libsureneco.so`のLOADセグメントは16KB整列で、APKの署名検証と`zipalign -c -P 16 4`にも合格しました。接続端末がなく、端末上の起動・募集判定と16KBページサイズ端末の動作は未確認です。
+
+## 通知を設定する
+
+ntfyアプリを導入して自前サーバー・個別アカウントを設定し、スレネコアラートの設定で通知を許可します。保存する情報への同意を選択して「通知を有効にする」を押し、中継アプリを選びます。通知先の所有確認が完了すると「監視中」になります。[ntfyの権限準備](node-vps.md#ntfyの権限を準備する)も必要です。
+
+「同期を再試行」で未同期の設定を再送します。「監視を停止」は端末で先に通知を抑止し、圏外ならサーバー反映待ちとして保持します。「サーバー登録を削除」はAPI成功後に端末認証を消し、サーバーの購読・履歴を削除します。ntfy側のアカウント撤去は運用者が別途行います。アプリのバックアップは無効にして資格情報の復元・共有を防ぎます。
+
+画面表示中だけ一覧を更新し、ネイティブ側でもバックグラウンドの取得を拒否します。OS通知はプッシュ受信に統一し、表示中の一覧更新から二重通知しません。端末認証は30日経過後の起動時に更新し、切断時には更新候補を保持して再試行します。実端末での更新・切断の確認は残っています。
+
+## 署名付きAABの準備
+
+Git管理外の`src-tauri/gen/android/keystore.properties`へ`storeFile`（絶対パス）・`storePassword`・`keyAlias`・`keyPassword`を設定します。Android用アップロード鍵を使い、PC更新用鍵は使いません。`SURENECO_ANDROID_SIGNING_FILE`で設定ファイルの絶対パスも指定できます。
+
+`pnpm package:android`はチェック後にAABを生成し、`release/sureneco_vVERSION_android.aab`へ配置します。署名設定不足・公開接続先不足・同名出力では失敗し、PlayやGitHubへ公開しません。実際のアップロード鍵による公開AABの生成・検証はまだ行っていません。
 
 ## WindowsからAndroid実機をデバッグする
 
@@ -128,7 +142,7 @@ ABI一覧に`arm64-v8a`が必要です。ページサイズは通常4096また�
 & $adb -s $serial shell dumpsys package $appId | Select-String "versionName|versionCode"
 ```
 
-`Status: ok`はActivityの起動成功を示します。実機の画面も確認し、表示内容やエラーを記録してください。Android画面のコマンド接続とUnifiedPush受信はまだ未実装なので、起動成功を募集閲覧・設定保存・プッシュ受信の確認済みとは扱いません。
+`Status: ok`はActivityの起動成功を示します。実機の画面も確認し、表示内容やエラーを記録してください。Android画面・UnifiedPush受信は実装済みですが、起動成功だけを募集閲覧・設定保存・プッシュ受信の確認済みとは扱いません。
 
 `force-stop`はアプリを強制停止します。通常終了やバックグラウンド移行とは異なり、再度利用者が起動するまでプッシュを受信できない場合があります。将来のバックグラウンド通知の検証では、ホームへ戻る・別アプリへ切り替える・画面を消す操作と区別してください。
 
@@ -187,7 +201,7 @@ DevToolsからの一時的な画面変更はソースへ保存されません。
 | `INSTALL_FAILED_OLDER_SDK` | 端末のAPIレベルが24以上か確認する |
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | 既存アプリとAPKの署名が異なる。同じ署名鍵で再ビルドする。アンインストールすると端末内の設定・データが消えるため、安易に削除しない |
 | `INSTALL_FAILED_VERSION_DOWNGRADE` | インストール済みのversionCodeより古い。新しいビルドを使い、無条件にダウングレードしない |
-| 起動直後に終了する・画面が真っ白 | 起動前からLogcatを取得し、クラッシュログとWebViewのConsoleを確認する。未実装のコマンド接続とも区別する |
+| 起動直後に終了する・画面が真っ白 | 起動前からLogcatを取得し、クラッシュログとWebViewのConsoleを確認する。ネイティブ接続・API設定の失敗も確認する |
 
 ### 7. 不具合を報告するとき
 

@@ -27,9 +27,12 @@ export class Store {
       this.db.exec(`
         PRAGMA foreign_keys=ON;
         PRAGMA busy_timeout=5000;
+        CREATE TABLE IF NOT EXISTS devices (uid TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, created INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS subscriptions (
-          uid TEXT PRIMARY KEY, revision INTEGER NOT NULL, active INTEGER NOT NULL,
+          uid TEXT PRIMARY KEY REFERENCES devices(uid) ON DELETE CASCADE, revision INTEGER NOT NULL, active INTEGER NOT NULL,
           settings TEXT NOT NULL, watched TEXT NOT NULL, token TEXT NOT NULL UNIQUE,
+          endpoint TEXT NOT NULL UNIQUE, generation TEXT NOT NULL, confirmed INTEGER NOT NULL DEFAULT 0,
+          challenge_hash TEXT, challenge_expires INTEGER NOT NULL DEFAULT 0, challenge_sent INTEGER NOT NULL DEFAULT 0,
           consented INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS cursors (
@@ -63,6 +66,12 @@ export class Store {
         CREATE TABLE IF NOT EXISTS service_state (id INTEGER PRIMARY KEY, started INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0, error TEXT);
         INSERT OR IGNORE INTO service_state(id) VALUES(1);
       `);
+      if (
+        !this.all<{ name: string }>("PRAGMA table_info(subscriptions)").some(
+          (column) => column.name === "endpoint",
+        )
+      )
+        throw new Error("Unsupported draft schema.");
     } catch {
       this.db?.close();
       this.owner?.close();

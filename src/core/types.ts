@@ -70,6 +70,7 @@ export interface UpdateState {
   error: string | null;
 }
 export interface Api {
+  mobile?: PushApi;
   getUpdateState(): Promise<UpdateState>;
   checkUpdate(): Promise<void>;
   downloadUpdate(): Promise<void>;
@@ -87,4 +88,25 @@ export interface Api {
   copyRoomId(id: string): Promise<void>;
   launchMahjongSoul(id: string): Promise<void>;
   subscribe(callback: (snapshot: Snapshot) => void): () => void;
+}
+
+export interface PushState {
+  enabled: boolean;
+  status: string;
+  permission: boolean;
+  ntfyOrigin?: string;
+  server?: {
+    lastFetchSuccessAt: number | null;
+    error: string | null;
+    delivery?: { error?: string } | null;
+  } | null;
+}
+export interface PushApi {
+  consumeNotificationTarget?(): Promise<boolean>;
+  getPushState(): Promise<PushState>;
+  startPush(consent: boolean): Promise<PushState>;
+  stopPush(): Promise<PushState>;
+  deletePush(): Promise<PushState>;
+  syncPush(): Promise<PushState>;
+  requestPushPermission(): Promise<void>;
 }

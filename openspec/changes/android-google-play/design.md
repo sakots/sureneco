@@ -4,7 +4,7 @@
 
 動機と合意範囲はproposal.mdを参照する。現行v0.8.3はdesktop featureが既定で、トレイ・OS操作・監視スレッドがsrc-tauri/src/desktop.rsにまとまっている。モバイルエントリーポイントとAndroid生成プロジェクトを追加し、ARM64デバッグAPKの生成は確認済み。募集判定はsrc/core、要求処理はsrc/backend/engine.ts、QuickJSホストはsrc-tauri/src/engine.rsに分離されている。
 
-Androidの通知はUnifiedPush＋自前ntfyとする。Node.js＋VPSの監視とSQLiteは維持し、Firebase認証・App Check・FCMを置き換える。実装は一旦中断したままで、現行ソースには旧Firebase試作が残る。採用構成はdocs/unifiedpush-ntfy.md、確認済み範囲はdocs/server-progress.mdを参照する。旧試作のテストを新方式の実配送成功の根拠にはしない。
+Androidの通知はUnifiedPush＋自前ntfyとする。Node.js＋VPSの監視とSQLiteは維持し、Firebase認証・App Check・FCMを置き換える。実装を再開しており、現行ソースは端末認証とWeb Pushへ置き換えた。採用構成はdocs/unifiedpush-ntfy.md、確認済み範囲はdocs/server-progress.mdを参照する。旧試作のテストを新方式の実配送成功の根拠にはしない。
 
 ## Goals / Non-Goals
 
@@ -33,6 +33,8 @@ SIGTERMでは新規受付と次回予約を止め、実行中の仕事を上限�
 起動時に無条件登録せず、保存する情報を説明し、通知を許可した利用者がバックグラウンド通知を有効にしたときに登録する。同期対象は板URL、監視スレッド、更新周期、募集・締め・タイトル条件、NGと許可ワッチョイ、有効期間、UnifiedPush通知先と暗号化鍵。端末内の実行ファイルパスや設定フォルダーは送らない。
 
 監視条件は共通の検証を通してから保存し、サーバーは単調増加するリビジョンを返す。Androidは変更要求中から旧リビジョンの通知を抑止し、受付結果と同期状態を表示する。通信失敗時に「同期済み」と表示しない。監視開始・条件変更・停止・削除は再送しても結果が増殖しない操作とする。
+
+端末認証の更新ではAndroidが新しい256bitトークンを生成して専用領域へ更新候補として保存し、`POST /v1/device/rotate`へ`{newToken}`を送ります。応答が切れた場合は新トークンで本人の購読を照会して更新を確認できるまで旧・新の候補を保持します。起動時に30日を経過していれば更新し、途中の更新は同期前に再試行します。
 
 ### 3. 判定と配信を永続化する
 
@@ -91,7 +93,7 @@ Androidの表示名は「スレネコアラート」、パッケージ名とKotl
 
 ## Migration Plan
 
-実装再開時にFirebase試作の認証・配送・設定・依存・テストを端末認証とUnifiedPushへ置き換える。旧DBの自動移行やFCMフォールバックは追加しない。既存の共有取得・判定・outboxを回帰確認し、実際の自前ntfyと端末で停止・削除・復旧を検証してからPlay内部テストへ進む。障害時は新規登録・送信を止め、既存端末の停止・削除は維持する。
+Firebase試作の認証・配送・設定・依存・テストを端末認証とUnifiedPushへ置き換えた。旧DBの自動移行やFCMフォールバックは追加しない。既存の共有取得・判定・outboxを回帰確認し、実際の自前ntfyと端末で停止・削除・復旧を検証してからPlay内部テストへ進む。障害時は新規登録・送信を止め、既存端末の停止・削除は維持する。
 
 ## Open Questions
 
@@ -99,7 +101,7 @@ VPS契約先・APIとntfyのホスト名・鍵保管先・Play Consoleの権限�
 
 ## 参照資料
 
-- [採用構成と未実装のAPI設計](../../../docs/unifiedpush-ntfy.md)
+- [採用構成とAPI設計](../../../docs/unifiedpush-ntfy.md)
 - https://unifiedpush.org/developers/intro/
 - https://docs.ntfy.sh/config/#example-unifiedpush
 - https://docs.ntfy.sh/subscribe/phone/

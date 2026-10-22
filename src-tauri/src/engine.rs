@@ -28,7 +28,7 @@ impl Engine {
             })).map_err(|e| e.to_string())?;
             ctx.eval::<(), _>(include_str!("../../dist/backend/engine.js")).map_err(|e| js_error(&ctx, e))?;
             let init: Function = ctx.eval("surenecoEngine.init").map_err(|e| js_error(&ctx, e))?;
-            init.call::<_, String>((saved, true)).map_err(|e| js_error(&ctx, e))?;
+            init.call::<_, String>((saved, true, cfg!(target_os = "android"))).map_err(|e| js_error(&ctx, e))?;
             Ok(())
         })?;
         Ok(Self {

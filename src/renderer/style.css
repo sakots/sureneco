@@ -438,3 +438,12 @@ progress {
   margin-top: 8px;
   accent-color: var(--accent);
 }
+
+@media (max-width: 400px) {
+  .form-actions {
+    flex-wrap: wrap;
+  }
+  .settings-card {
+    overflow-wrap: anywhere;
+  }
+}

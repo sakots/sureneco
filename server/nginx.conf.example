@@ -1,10 +1,12 @@
 # Add inside your HTTPS server block; configure your own DNS and TLS certificate.
 location / {
+    # Push URLs and client addresses must not enter the default access log.
+    access_log off;
+    error_log /dev/null crit;
     client_max_body_size 256k;
     proxy_pass http://127.0.0.1:8787;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header Authorization $http_authorization;
-    proxy_set_header X-Firebase-AppCheck $http_x_firebase_appcheck;
     proxy_read_timeout 15s;
 }

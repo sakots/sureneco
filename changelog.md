@@ -4,6 +4,8 @@
 
 ### [2026/10/22] v0.8.3
 
+- Firebaseへの依存をなくすため、端末別認証・所有確認付きWeb Push配送とAndroidのUnifiedPush登録・受信・通知設定を追加。Firebase SDK・公開設定を削除。実ntfy配送・VPS配備・実端末確認は未実施。
+
 - Firebaseに依存しない通知を採用するため、Android通知の計画をUnifiedPush＋自前ntfyへ修正。端末認証・中継アプリ・運用費の資料を更新し、旧Firebase設定手順を削除。実装の中断は維持。
 
 - Node.js通知サーバーの試作機能を追加。実装を一旦中断し、契約済みエックスサーバーの活用と人数制限を設けないVPS運用の費用比較・進捗資料を追加。実Firebase・Android配送とVPS配備は未確認。

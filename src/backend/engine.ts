@@ -25,8 +25,16 @@ let state: ReturnType<typeof loadState>;
 export function init(
   text: string | null = null,
   notificationAvailable: boolean,
+  mobile = false,
 ) {
   state = loadState(text);
+  if (mobile) {
+    state.settings.update_sec = Math.max(60, state.settings.update_sec);
+    state.settings.thread_update_sec = Math.max(
+      60,
+      state.settings.thread_update_sec,
+    );
+  }
   monitor = new Monitor(
     state,
     {

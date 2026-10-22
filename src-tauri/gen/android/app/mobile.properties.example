@@ -1,6 +1,3 @@
-# Copy this file to mobile.properties and replace every value before a release build.
-# These values are public Firebase application identifiers, not server credentials.
+# Public HTTPS origins only. No credentials or signing keys.
 sureneco.apiBaseUrl=https://api.example.invalid
-sureneco.firebaseProjectId=replace-with-firebase-project-id
-sureneco.firebaseProjectNumber=replace-with-firebase-project-number
-sureneco.firebaseAppId=replace-with-firebase-app-id
+sureneco.ntfyOrigin=https://push.example.invalid

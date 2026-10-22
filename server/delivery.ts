@@ -23,6 +23,7 @@ interface Queued {
   attempts: number;
   token: string;
   active: number;
+  generation: string;
   current_revision: number;
 }
 export function retryDelay(
@@ -51,7 +52,7 @@ export async function deliver(
     sent: 0,
     retried: 0,
     discarded: 0,
-    invalidTokens: 0,
+    invalidEndpoints: 0,
     deferred: false,
   };
   db.prune(now);
@@ -67,7 +68,7 @@ export async function deliver(
     const at = clock();
     const row = db.transaction(() => {
       const queued = db.get<Queued>(
-        "SELECT o.*,s.token,s.active,s.revision AS current_revision FROM outbox o JOIN subscriptions s ON s.uid=o.uid WHERE o.id=? AND next_attempt<=?",
+        "SELECT o.*,s.token,s.active,s.generation,s.revision AS current_revision FROM outbox o JOIN subscriptions s ON s.uid=o.uid WHERE o.id=? AND next_attempt<=?",
         id,
         at,
       );
@@ -108,7 +109,7 @@ export async function deliver(
         throw new DeliveryError("invalid_payload", false);
       await send(
         row.token,
-        payload,
+        { ...payload, generation: row.generation },
         Math.min(
           5000,
           Math.max(1, Math.floor(budget - (performance.now() - started))),
@@ -130,9 +131,13 @@ export async function deliver(
         )
       )
         return;
-      if (failure?.code === "unregistered") {
-        db.run("DELETE FROM subscriptions WHERE uid=?", row.uid);
-        stats.invalidTokens++;
+      if (failure?.code === "invalid_endpoint") {
+        db.run(
+          "UPDATE subscriptions SET active=0,confirmed=0,challenge_hash=NULL WHERE uid=?",
+          row.uid,
+        );
+        db.run("DELETE FROM outbox WHERE uid=?", row.uid);
+        stats.invalidEndpoints++;
         return;
       }
       const next =
