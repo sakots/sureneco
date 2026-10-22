@@ -59,14 +59,23 @@ sudo ufw status
 
 ## 4. Node.js 24とアプリを配置する
 
-[Node.js公式の24系配布一覧](https://nodejs.org/download/release/latest-v24.x/)からLinux x64のバイナリーと対応する`SHASUMS256.txt`を取得し、ファイル名とSHA-256を照合します。運用で使用する24系のパッチ版を記録してください。アーカイブを専用の`/opt/node24`へ展開します。以下の`24.x.y`は取得した実バージョンに置き換えます。
+[NodeSourceの配布リポジトリー](https://github.com/nodesource/distributions/blob/master/DEV_README.md)からNode.js 24をaptで導入します。すでにこの方法で導入済みなら、インストールは省略してバージョンとパスの確認へ進んでください。
 
 ```sh
-sha256sum node-v24.x.y-linux-x64.tar.xz
-sudo install -d /opt/node24
-sudo tar -xJf node-v24.x.y-linux-x64.tar.xz -C /opt/node24 --strip-components=1
-export PATH="/opt/node24/bin:$HOME/.local/bin:$PATH"
-node --version
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/nodesource.gpg
+echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list
+sudo apt update
+sudo apt install -y nodejs
+/usr/bin/node --version
+/usr/bin/node -p 'process.execPath'
+```
+
+バージョンが`v24.`で始まり、実行パスが`/usr/bin/node`であることを確認して、運用するパッチ版を記録します。鍵ファイルは`gpg --yes`で更新するため、事前の`rm`は不要です。以後の鍵生成とsystemdも`/usr/bin/node`を使用します。
+
+pnpmはSSHユーザーの領域へ導入します。
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
 npm install --global --prefix "$HOME/.local" pnpm@12.14.0
 pnpm --version
 ```
@@ -95,13 +104,13 @@ VAPID鍵を専用ユーザーで生成します。生成スクリプトをサー
 sudo install -d -m 755 /opt/sureneco/scripts
 sudo install -m 644 scripts/generate-vapid.mjs /opt/sureneco/scripts/generate-vapid.mjs
 sudo chown sureneco:sureneco /etc/sureneco
-sudo -u sureneco /opt/node24/bin/node /opt/sureneco/scripts/generate-vapid.mjs /etc/sureneco/vapid.json mailto:operator@example.com
+sudo -u sureneco /usr/bin/node /opt/sureneco/scripts/generate-vapid.mjs /etc/sureneco/vapid.json mailto:operator@example.com
 sudo chown root:sureneco /etc/sureneco
 sudo install -o root -g sureneco -m 640 server/server.env.example /etc/sureneco/server.env
 sudoedit /etc/sureneco/server.env
 ```
 
-鍵を表示する必要はありません。環境変数ファイルの内容は次の形です。
+`mailto:operator@example.com`は実際の連絡先へ置き換えてください。鍵を表示する必要はありません。環境変数ファイルの内容は次の形です。
 
 ```ini
 SURENECO_SERVER_PORT=8787
@@ -110,15 +119,17 @@ SURENECO_NTFY_ORIGIN=https://push.example.com
 SURENECO_VAPID_FILE=/etc/sureneco/vapid.json
 ```
 
-サービス定義をコピーし、`ExecStart`のNode.jsを今回の配置先へ変更します。
+サービス定義をコピーします。設定例は`/usr/bin/node`を使用しています。
 
 ```sh
 sudo install -m 644 server/sureneco.service /etc/systemd/system/sureneco.service
 sudoedit /etc/systemd/system/sureneco.service
 ```
 
+以下は`/etc/systemd/system/sureneco.service`の`[Service]`内に書く設定です。シェルへコマンドとして入力しないでください。
+
 ```ini
-ExecStart=/opt/node24/bin/node /opt/sureneco/dist/server/main.mjs
+ExecStart=/usr/bin/node /opt/sureneco/dist/server/main.mjs
 ```
 
 ```sh
