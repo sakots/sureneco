@@ -391,7 +391,7 @@ it("通知を許可するワッチョイを一行一件で保存し、既定値�
   );
 });
 
-it("募集のIDを指定して雀魂を起動し、締め切り済みの募集は起動しない", async () => {
+it("満員（〆）と期限切れを区別し、募集中のIDだけで雀魂を起動する", async () => {
   const api = setup([
     {
       ...recruitment,
@@ -404,7 +404,7 @@ it("募集のIDを指定して雀魂を起動し、締め切り済みの募集�
       number: 13,
       closed: true,
       roomIds: ["23456"],
-      postedAt: Date.now(),
+      postedAt: Date.now() - 3600000,
     },
     {
       ...recruitment,
@@ -415,6 +415,12 @@ it("募集のIDを指定して雀魂を起動し、締め切り済みの募集�
   ]);
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: /^友人戦募集/ }));
+  const closed = screen.getByText("満員（〆）");
+  const expired = screen.getByText("期限切れ");
+  expect(closed.classList.contains("closed")).toBe(true);
+  expect(expired.classList.contains("expired")).toBe(true);
+  expect(within(closed.closest("article")!).getByText("レス 13")).toBeTruthy();
+  expect(within(expired.closest("article")!).getByText("レス 14")).toBeTruthy();
   await user.click(
     screen.getByRole("button", {
       name: "ルームID 01234をコピーして雀魂を起動",

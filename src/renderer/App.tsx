@@ -355,9 +355,11 @@ export function App({ api }: { api: Api }) {
                     <div className="recruitment-head">
                       <div className="recruitment-summary">
                         <strong>レス {item.number}</strong>
-                        <span className={`badge ${active ? "green" : ""}`}>
+                        <span
+                          className={`badge ${item.closed ? "closed" : active ? "green" : "expired"}`}
+                        >
                           {item.closed
-                            ? "締め切り"
+                            ? "満員（〆）"
                             : active
                               ? "募集中"
                               : "期限切れ"}

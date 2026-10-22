@@ -275,6 +275,10 @@ h3 {
   background: var(--soft);
   color: var(--accent);
 }
+.badge.closed {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
 .recruitment {
   border: 1px solid var(--border);
   padding: 10px 14px;
