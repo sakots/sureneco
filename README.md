@@ -33,7 +33,7 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 - [使い方](docs/usage.md)：監視・通知、設定フォルダ、雀魂の起動、更新、Electron版からの切り替え
 - [UnifiedPush＋自前ntfy](docs/unifiedpush-ntfy.md)：採用する通知構成、Android中継アプリ、端末認証・通知先登録と準備手順。実装と検証の進捗あり
 - [運用費の比較](docs/operation-cost.md)：掲載用の既存エックスサーバーと、[人数制限を設けないVPS運用](docs/vps-cost.md)。実装は[進捗を記録](docs/server-progress.md)
-- [Node.js＋VPSのサーバー構成](docs/node-vps.md)：常駐API・監視、自前ntfy、SQLite、systemd・HTTPSの準備計画
+- [Node.js＋VPSのサーバー構成](docs/node-vps.md)：常駐API・監視、自前ntfy、SQLite。[接続先の準備手順](docs/push-server-setup.md)にDNS・VPS・HTTPS・端末接続を記載
 - [開発](docs/development.md)：構成、環境構築、起動とチェック
 - [配布物の作成](docs/packaging.md)：Windows / Linuxビルド、署名、SSH先でのビルドと取得
 - [仕様と変更管理](docs/specification.md)：機能別仕様、OpenSpecの手順、検証
@@ -45,6 +45,7 @@ Android版「スレネコアラート」は[開発と配布準備](docs/android.
 
 ### [2026/10/22] v0.8.3
 
+- API・自前ntfyの接続先を用意できるよう、既存ドメインのDNS、VPS構築、HTTPS化、端末接続の準備手順を追加。
 - Firebaseへの依存をなくすため、端末別認証・所有確認付きWeb Push配送とAndroidのUnifiedPush登録・受信・通知設定を追加。Firebase SDK・公開設定を削除。実ntfy配送・VPS配備・実端末確認は未実施。
 
 - Firebaseに依存しない通知を採用するため、Android通知の計画をUnifiedPush＋自前ntfyへ修正。端末認証・中継アプリ・運用費の資料を更新し、旧Firebase設定手順を削除。実装の中断は維持。
