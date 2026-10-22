@@ -1,11 +1,23 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { App } from "../src/renderer/App";
 import { defaults } from "../src/core/settings";
 import type { Api, Snapshot, UpdateState } from "../src/core/types";
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  vi.unstubAllGlobals();
+  delete document.documentElement.dataset.theme;
+});
 function setup(
   recruitments: Snapshot["recruitments"] = [],
   update: UpdateState = {
@@ -61,7 +73,7 @@ function setup(
 }
 it("スレッドのトグルと更新を操作できる", async () => {
   const api = setup();
-  expect(screen.getByRole("button", { name: /テーマ：システム/ })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /テーマ：/ })).toBeNull();
   const user = userEvent.setup();
   await user.click(
     await screen.findByRole("switch", { name: "【雀魂】じゃんたまスレを監視" }),
@@ -484,10 +496,11 @@ it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表�
     requestPushPermission: vi.fn(async () => {}),
   };
   const api = setup([], undefined, { ...defaults, update_sec: 60 }, mobile);
-  expect(screen.getByRole("button", { name: /テーマ：システム/ })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /テーマ：/ })).toBeNull();
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: "設定" }));
   await screen.findByText("バックグラウンド通知");
+  expect(screen.getByRole("button", { name: /テーマ：システム/ })).toBeTruthy();
   expect(screen.queryByText("設定フォルダ")).toBeNull();
   expect(screen.queryByText("雀魂の起動")).toBeNull();
   expect(api.getUpdateState).not.toHaveBeenCalled();
@@ -499,4 +512,38 @@ it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表�
   await user.click(screen.getByRole("button", { name: "設定を保存" }));
   expect(api.saveSettings).not.toHaveBeenCalled();
   await screen.findByText("Androidの更新間隔は60秒以上にしてください。");
+});
+
+it("テーマ操作は設定だけに表示し、他の画面でも選択とシステム追従を維持する", async () => {
+  let dark = false;
+  const listeners = new Set<() => void>();
+  vi.stubGlobal("matchMedia", () => ({
+    get matches() {
+      return dark;
+    },
+    addEventListener: (_: string, listener: () => void) =>
+      listeners.add(listener),
+    removeEventListener: (_: string, listener: () => void) =>
+      listeners.delete(listener),
+  }));
+  setup();
+  const user = userEvent.setup();
+  expect(within(screen.getByRole("banner")).queryByRole("button")).toBeNull();
+  expect(screen.queryByRole("button", { name: /テーマ：/ })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "設定" }));
+  await user.click(
+    await screen.findByRole("button", { name: /テーマ：システム/ }),
+  );
+  await user.click(screen.getByRole("button", { name: /テーマ：ライト/ }));
+  await user.click(screen.getByRole("button", { name: /友人戦募集/ }));
+  expect(screen.queryByRole("button", { name: /テーマ：/ })).toBeNull();
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  await user.click(screen.getByRole("button", { name: "設定" }));
+  await user.click(screen.getByRole("button", { name: /テーマ：ダーク/ }));
+  await user.click(screen.getByRole("button", { name: /^スレッド/ }));
+  act(() => {
+    dark = true;
+    listeners.forEach((listener) => listener());
+  });
+  expect(document.documentElement.dataset.theme).toBe("dark");
 });

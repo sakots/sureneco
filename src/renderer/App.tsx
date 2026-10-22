@@ -178,15 +178,12 @@ export function App({ api }: { api: Api }) {
             <p>友人戦するにゃ！</p>
           </div>
         </div>
-        <div className="header-actions">
-          <ThemeToggle />
-          <span className="status">
-            <span className={`dot ${watched.length ? "active" : ""}`} />
-            {watched.length
-              ? `${watched.length}スレッドを監視中`
-              : "監視するスレッドを選択"}
-          </span>
-        </div>
+        <span className="status">
+          <span className={`dot ${watched.length ? "active" : ""}`} />
+          {watched.length
+            ? `${watched.length}スレッドを監視中`
+            : "監視するスレッドを選択"}
+        </span>
       </header>
       <nav aria-label="画面">
         <button
@@ -244,6 +241,19 @@ export function App({ api }: { api: Api }) {
         <p className="empty">読み込み中…</p>
       ) : (
         <main>
+          {/* Keep system-theme tracking active while other pages are shown. */}
+          <section
+            className="settings-card"
+            hidden={page !== "settings"}
+            aria-labelledby="theme-heading"
+          >
+            <h3 id="theme-heading">表示テーマ</h3>
+            <ThemeToggle />
+            <p className="help">
+              システム → ライト →
+              ダークの順に切り替えます。システムではOSの明暗設定に合わせます。
+            </p>
+          </section>
           {page === "threads" && (
             <>
               <div className="section-head">

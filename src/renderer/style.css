@@ -447,13 +447,6 @@ progress {
   }
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-}
 .theme-toggle {
   display: inline-flex;
   align-items: center;
