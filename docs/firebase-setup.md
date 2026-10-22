@@ -33,7 +33,9 @@ Android版はFirebase Cloud Messaging（FCM）で通知を受信します。利�
 | プロジェクト番号 | `project_info.project_number` | `123456789012` |
 | FirebaseアプリID | 対象clientの`client_info.mobilesdk_app_id` | `1:123456789012:android:0123456789abcdef` |
 
-このJSONはアプリ用の公開接続情報で、サーバーのサービスアカウント秘密鍵とは別物です。現行コードにはGoogle services GradleプラグインもFirebase SDKもまだないため、今は取得してGit管理外の場所に保管してください。SDK実装時にアプリモジュールへ組み込むか、FirebaseOptionsで初期化する必要があります。`google-services.json`は現時点ではGit除外されていないため、誤ってコミットしないでください。
+`google-services.json`はAndroidのアプリモジュールである **`src-tauri/gen/android/app/google-services.json`** に置いてください。`.gitignore`で、リポジトリー内の`google-services.json`をGit管理から除外しています。
+
+このJSONはアプリ用の公開接続情報で、サーバーのサービスアカウント秘密鍵とは別物です。現行コードにはGoogle services GradleプラグインもFirebase SDKもまだないため、配置だけでは読み込まれません。SDK実装時にアプリモジュールへ組み込むか、FirebaseOptionsで初期化する必要があります。現時点の公開設定は手順5の`mobile.properties`に入力してください。
 
 ## 2. 匿名認証を有効にする
 

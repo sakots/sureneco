@@ -9,5 +9,6 @@ src-tauri/gen/*
 src-tauri/gen/android/.idea/
 .secrets/
 .android-sdk/
+google-services.json
 server/data/
 server/worker/target/
