@@ -4,6 +4,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { App } from "./App";
 import { api } from "./api";
 import "./style.css";
+import { applyTheme, readTheme } from "./theme";
+
+applyTheme(readTheme());
 
 function DesktopApp() {
   useEffect(() => {

@@ -47,3 +47,7 @@ Chrome / Edgeは実行ファイルのフルパスと`Default`や`Profile 1`等�
 Tauri版の初回導入は手動で行ってください。Electron版をトレイから終了し、Tauri版を導入します。WindowsのElectronインストール版を削除する場合も設定フォルダーは残してください。Electron版とTauri版を同時起動しないでください。
 
 既存のstate.jsonを同じ場所から読み込み、設定・監視対象・取得済みレス番号を保持します。Windowsは`%APPDATA%/sureneco/state.json`、Ubuntuは`$XDG_CONFIG_HOME/sureneco/state.json`（未指定なら`~/.config/sureneco/state.json`）です。ウィンドウ状態はTauriの別ファイルに保存するため、切り替え直後は既定サイズで開きます。
+
+## 表示テーマ
+
+PC版・Android版共通で、ヘッダーのテーマボタンから「システム → ライト → ダーク → システム」の順に切り替えられます。初期値は「システム」で、OSの明暗設定の変更にも追従します。ライト・ダークを選ぶとOS設定によらず固定します。選択は端末のWebView内に保存し、次回起動時にも適用します。保存領域を利用できない場合も、その起動中は切り替えられます。

@@ -3,7 +3,9 @@ const css = await readFile(
   new URL("../src/renderer/style.css", import.meta.url),
   "utf8",
 );
-const roots = [...css.matchAll(/:root\s*\{([^}]+)\}/g)];
+const roots = [
+  ...css.matchAll(/:root(?:\[data-theme="dark"\])?\s*\{([^}]+)\}/g),
+];
 function luminance(hex) {
   const rgb = hex
     .match(/[a-f0-9]{2}/gi)

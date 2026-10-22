@@ -5,6 +5,7 @@ import { extractRoomIds, postReferences, splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot, UpdateState } from "../core/types";
 import { MobilePushPanel } from "./MobilePushPanel";
 import { UpdatePanel } from "./UpdatePanel";
+import { ThemeToggle } from "./ThemeToggle";
 const labels: Record<keyof Settings, string> = {
   update_sec: "友人戦募集の更新間隔（秒）",
   thread_update_sec: "スレッド一覧の更新間隔（秒）",
@@ -177,12 +178,15 @@ export function App({ api }: { api: Api }) {
             <p>友人戦するにゃ！</p>
           </div>
         </div>
-        <span className="status">
-          <span className={`dot ${watched.length ? "active" : ""}`} />
-          {watched.length
-            ? `${watched.length}スレッドを監視中`
-            : "監視するスレッドを選択"}
-        </span>
+        <div className="header-actions">
+          <ThemeToggle />
+          <span className="status">
+            <span className={`dot ${watched.length ? "active" : ""}`} />
+            {watched.length
+              ? `${watched.length}スレッドを監視中`
+              : "監視するスレッドを選択"}
+          </span>
+        </div>
       </header>
       <nav aria-label="画面">
         <button

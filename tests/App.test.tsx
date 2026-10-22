@@ -61,6 +61,7 @@ function setup(
 }
 it("スレッドのトグルと更新を操作できる", async () => {
   const api = setup();
+  expect(screen.getByRole("button", { name: /テーマ：システム/ })).toBeTruthy();
   const user = userEvent.setup();
   await user.click(
     await screen.findByRole("switch", { name: "【雀魂】じゃんたまスレを監視" }),
@@ -483,6 +484,7 @@ it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表�
     requestPushPermission: vi.fn(async () => {}),
   };
   const api = setup([], undefined, { ...defaults, update_sec: 60 }, mobile);
+  expect(screen.getByRole("button", { name: /テーマ：システム/ })).toBeTruthy();
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: "設定" }));
   await screen.findByText("バックグラウンド通知");
