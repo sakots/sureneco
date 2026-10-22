@@ -43,6 +43,7 @@ Android版「スレネコアラート」は[開発と配布準備](docs/android.
 
 ### [2026/10/22] v0.8.3
 
+- `google-services.json`の配置先を設定資料に追加し、Git管理から除外するようにした。
 - Firebase設定手順とPHPのFCM送信先のパッケージ名を、Android版の`sureneco.sakots`に合わせて修正。
 
 ### [2026/10/21] v0.8.3
