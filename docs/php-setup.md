@@ -1,5 +1,7 @@
 # PHPサーバーのセットアップ
 
+この手順は置換予定の現行PHP実装用です。今後は[VPS上の常駐Node.js](node-vps.md)へ移行します。新しいサーバーの導入はNode.js版の実装後に行い、このPHP手順を新構成のセットアップには使わないでください。
+
 [README](../README.md) / [Firebaseの設定](firebase-setup.md) / [Android開発](android.md)
 
 Android版の監視サーバーを配置する手順です。PHP APIで購読設定を保存し、毎分cronで5chの取得・募集判定・FCM送信を行います。常駐するNode.jsサーバーは不要です。PC版だけを使う場合、このサーバーは必要ありません。

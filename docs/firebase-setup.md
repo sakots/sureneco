@@ -1,5 +1,7 @@
 # Firebaseの設定手順
 
+通知サーバーは[VPS上の常駐Node.js](node-vps.md)へ切り替える方針です。FirebaseのプロジェクトとAndroid登録、匿名認証・App Check・FCMの準備は継続して利用します。この資料のPHP・cron・専用ワーカーに関する箇所は現行実装の説明であり、Node.js版の設定方法ではありません。Node.js版は未実装です。
+
 Android版はFirebase Cloud Messaging（FCM）で通知を受信します。利用者にntfyなどの追加アプリをインストールしてもらう必要はありません。PHP＋毎分cronが募集を検出し、FCMを通してsurenecoへ配送します。端末の認証にはFirebase Authenticationの匿名認証、アプリの検証にはApp Checkを使います。
 
 ## 現在できること
@@ -99,6 +101,8 @@ sureneco.firebaseAppId=1:123456789012:android:0123456789abcdef
 `mobile.properties`はGit除外されています。4項目はGradleがBuildConfigへ取り込み、リリースビルド時は空欄を拒否します。ただし、Firebase SDKを初期化するためのAPIキー等を含む設定は別途必要です。この4項目だけでSDK接続が完成したことにはなりません。
 
 ## 6. PHP APIとcronへ設定を渡す
+
+この節は置換予定のPHP実装用です。新しいVPS向けの準備と移植後の設定方針は[Node.js＋VPSの構成](node-vps.md)を参照してください。
 
 PHPの導入・ファイル配置・Webサーバー設定・cron登録の一連の手順は[PHPサーバーのセットアップ](php-setup.md)を参照してください。この節ではFirebaseに関係する環境変数を説明します。
 

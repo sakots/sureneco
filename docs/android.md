@@ -1,14 +1,16 @@
 # Android版の開発と配布準備
 
-現在は実装中です。ARM64のデバッグAPK生成、PHPの単発CLI・状態API・SQLite保存・排他、署名検証と購読操作、QuickJSによる既存パーサー・募集判定と実行上限を確認しました。cronの板・dat共有取得、購読別の更新周期、初回・再開の通知基準、取得基準とイベント・outboxの同時保存、締め・期限切れの除外も実装しました。FCM送信と永続再試行はローカルの署名・HTTPフィクスチャで確認しました。実際の5ch板一覧の取得・パースは確認済みですが、実際のFCM配送、実Firebase認証、Android画面のコマンド接続と受信処理、運用先のcron登録、署名付きAAB・Google Play公開は未完了です。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
+現在は実装中です。通知サーバーはVPS上の常駐Node.jsへ切り替える方針で、Node.js版はまだ実装していません。以下のPHPに関する結果は置換前のローカル検証です。ARM64のデバッグAPK生成、PHPの単発CLI・状態API・SQLite保存・排他、署名検証と購読操作、QuickJSによる既存パーサー・募集判定と実行上限を確認しました。cronの板・dat共有取得、購読別の更新周期、初回・再開の通知基準、取得基準とイベント・outboxの同時保存、締め・期限切れの除外も実装しました。FCM送信と永続再試行はローカルの署名・HTTPフィクスチャで確認しました。実際の5ch板一覧の取得・パースは確認済みですが、実際のFCM配送、実Firebase認証、Android画面のコマンド接続と受信処理、運用先のcron登録、署名付きAAB・Google Play公開は未完了です。進捗は[作業項目](../openspec/changes/android-google-play/tasks.md)に記録します。
 
 ## 完成時の構成
 
-PHPのHTTPS APIで端末の設定を受け付け、毎分cronで起動するPHPのCLIバッチが5chの板・監視スレッドの取得、判定、FCM送信を1回処理して終了します。常駐Node.jsや、バッチ内で20秒間隔に繰り返す方式は使いません。SQLiteへ監視条件、取得済みレス番号、通知イベントと送信待ちを保存し、次回のバッチで復元します。
+VPS上の常駐Node.jsサービスが購読APIと監視・FCM送信を担当し、systemdで起動・停止・再起動を管理します。PHP＋毎分cronから置き換える方針です。Node.js版は未実装で、現状のPHP版での検証結果とは区別します。構成と準備事項は[Node.js＋VPS](node-vps.md)を参照してください。
 
-Androidは別アプリの利用中・画面消灯中もプッシュを受け取ります。端末内で20秒ごとに常駐取得する方式ではありません。表示中の一覧取得とOS通知を分離し、通知はプッシュへ統一します。圏外、通知拒否、Android設定での強制停止、FCMの配送遅延等では受信できない場合があります。
+SQLiteへ購読設定、取得済みレス番号、通知イベントと送信待ちを保存し、再起動後に復元します。既存のTypeScript判定コアを分離ワーカーで実行し、重い正規表現でAPIや他の監視を停止させない構成にします。
 
-Androidのサーバー監視は最短約1分です。`update_sec`は既定60秒、`thread_update_sec`は既定300秒で、どちらも60秒以上の整数を受け付けます。実際には設定間隔を経過した後のcron実行回で処理するため、70秒設定なら通常約120秒間隔となり、負荷やcron・FCMの遅延でさらに遅れる場合があります。PC版の20秒更新は変更しません。
+Androidは別アプリの利用中・画面消灯中もプッシュを受け取ります。端末内で常駐取得する方式ではありません。表示中の一覧取得とOS通知を分離し、通知はプッシュへ統一します。圏外、通知拒否、Android設定での強制停止、FCMの配送遅延等では受信できない場合があります。
+
+Androidのサーバー監視は`update_sec`が既定60秒、`thread_update_sec`が既定300秒で、どちらも60秒以上の整数を受け付ける設計です。常駐スケジューラーが期限を迎えた購読を処理し、毎分cronの実行回には丸めません。負荷・通信・FCMによる遅延はあり、PC版の20秒更新は変更しません。
 
 PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、GitHub経由の更新はAndroidに持ち込みません。Androidのアプリ更新はGoogle Playから行います。
 
@@ -16,11 +18,11 @@ Firebase Consoleでの準備と設定値の対応は[Firebaseの設定手順](fi
 
 ## 必要な環境
 
-- アプリ開発用のNode.js、pnpm、Rust。バージョンと既存のチェック手順は[開発手順](development.md)を参照。運用サーバーにはNode.jsを要求しません。
+- アプリ開発用のNode.js、pnpm、Rust。バージョンと既存のチェック手順は[開発手順](development.md)を参照。運用サーバーはNode.js 24 LTSを使います。
 - Java 21、Android SDK Command-line Tools、Platform Tools、API 36以上、NDK、ARM64用Rustターゲット。
 - 実機またはエミュレーター。ネイティブ依存を含む16KBページサイズの動作も確認。
 - Google Playのアプリ登録と、Android用アップロード署名鍵。PC版の更新署名鍵は使いません。
-- PHPのWeb・CLI実行環境、毎分cron、SQLiteの永続保存領域、HTTPSのAPI公開先。SQLite・HTTPS通信・署名検証に必要なPHP拡張と実行時間制限を確認。
+- LinuxのVPS、systemd、SQLiteの永続保存領域、HTTPSのAPI公開先とリバースプロキシ。Node.jsサービス用のユーザー、再起動・バックアップ・障害監視を準備。
 - Firebaseプロジェクト。Androidアプリ登録、Cloud Messaging、匿名認証、App Check（公開時はPlay Integrity）を設定。
 
 現在用意されているのはAndroid端末です。Firebaseプロジェクトと運用先は未設定です。ローカル検証と実際のFirebase接続を必要とする確認は分けて記録します。
@@ -194,6 +196,8 @@ DevToolsからの一時的な画面変更はソースへ保存されません。
 公式資料：[Android Debug Bridge](https://developer.android.com/tools/adb)、[Logcat](https://developer.android.com/tools/logcat)、[WebViewのリモートデバッグ](https://developer.chrome.com/docs/devtools/remote-debugging/webviews)。
 
 ## PHPサーバーとcronの構成
+
+この節以降のPHP実装・判定ワーカー・配送処理の説明は現行コードの記録です。VPS上のNode.jsへ置き換える計画は[新構成](node-vps.md)と[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。PHPでの成功をNode.js版の完了根拠にはしません。
 
 実際の導入・配置・HTTPS API・cronの登録手順は[PHPサーバーのセットアップ](php-setup.md)を参照してください。
 
