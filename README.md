@@ -45,6 +45,7 @@ Android版「スレネコアラート」は[開発と配布準備](docs/android.
 
 ### [2026/10/22] v0.8.3
 
+- 開発起動時にAndroid SDKなどの監視で大量のENOSPCエラーが出る問題を修正。
 - Firebaseへの依存をなくすため、端末別認証・所有確認付きWeb Push配送とAndroidのUnifiedPush登録・受信・通知設定を追加。Firebase SDK・公開設定を削除。実ntfy配送・VPS配備・実端末確認は未実施。
 
 - Firebaseに依存しない通知を採用するため、Android通知の計画をUnifiedPush＋自前ntfyへ修正。端末認証・中継アプリ・運用費の資料を更新し、旧Firebase設定手順を削除。実装の中断は維持。

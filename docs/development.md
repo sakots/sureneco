@@ -29,3 +29,7 @@ pnpm dev
 現行仕様は [`openspec/specs/`](../openspec/specs/) に機能別で管理しています。[仕様の目次](specification.md)から各仕様と検証手順を参照できます。`openspec/config.yaml` に日本語での記述と資料ファーストの開発ルールを設定しています。
 
 OpenSpec CLIの確認コマンド、提案・実装・アーカイブの手順は[仕様の目次の変更手順](specification.md#openspecでの変更手順)を参照してください。アプリの動作確認には別途 `pnpm check` と変更した経路の実行が必要です。
+
+## 開発時のファイル監視
+
+Viteの監視から`.android-sdk/`、`src-tauri/`、`release/`を除外します。Android SDK・NDKやネイティブ生成物を再帰的に監視すると、Linuxの監視数上限に達して`file watcher error: ENOSPC`が大量に出るためです。フロントエンドの変更は引き続きViteが監視し、Rustの変更はTauriが監視します。この設定を更新した後は、起動中の`pnpm dev`を終了して再起動してください。[Vite公式の監視設定](https://vite.dev/config/server-options#server-watch)を参照してください。
