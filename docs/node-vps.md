@@ -60,7 +60,7 @@ node scripts/generate-vapid.mjs /absolute/private/vapid.json mailto:operator@exa
 
 環境変数を渡した状態で`node dist/server/main.mjs --check-config`を実行すると設定形式だけを検証します。`Push settings loaded; not sent.`は配送成功を示しません。`Push not configured.`では通知先を登録できません。旧Firebase試作のDBを使わず、新しいDBパスを指定してください。自動移行・削除はしません。
 
-`server/sureneco.service`と`server/nginx.conf.example`はNode.js用です。Node.js 24の実パス、配置先、ユーザー、TLSを環境に合わせ、systemdで起動・再起動を管理します。`GET /healthz`の開始・完了時刻と送信待ちを、API疎通とは別に監視してください。`monitoringReady: false`は実配送が未確認のため維持しています。
+`server/sureneco.service`と`server/nginx.conf.example`はNode.js用です。NodeSourceのapt版Node.js 24（`/usr/bin/node`）を使い、配置先・ユーザー・TLSを環境に合わせ、systemdで起動・再起動を管理します。`GET /healthz`の開始・完了時刻と送信待ちを、API疎通とは別に監視してください。`monitoringReady: false`は実配送が未確認のため維持しています。
 
 ## ntfyの権限を準備する
 
