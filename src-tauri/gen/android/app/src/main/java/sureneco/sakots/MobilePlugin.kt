@@ -48,7 +48,7 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
                             val vapid = PushState.prepare(activity)
                             activity.runOnUiThread {
                                 UnifiedPush.tryPickDistributor(activity) { success ->
-                                    if (success) { UnifiedPush.register(activity, messageForDistributor = "スレ猫チェッカーの友人戦募集通知", vapid = vapid); resolve(PushState.status(activity)) }
+                                    if (success) { UnifiedPush.register(activity, messageForDistributor = "スレネコチェッカーの友人戦募集通知", vapid = vapid); resolve(PushState.status(activity)) }
                                     else { PushState.mark(activity, "中継アプリ未導入：ntfyを導入して自前サーバーを設定してください"); resolve(PushState.status(activity)) }
                                 }
                             }

@@ -38,7 +38,7 @@ release/へ以下の形式で出力します。配布名とアプリのバージ
 - `sureneco_vx.x.x.AppImage`
 - `sureneco_vx.x.x_amd64.deb`
 
-PC版の表示名は「スレ猫チェッカー」ですが、Tauriの内部製品名は`sureneco`を維持します。製品名を変更するとLinuxのパッケージ名やWindows NSISのレジストリーキー・インストール先も変わるためです。Linuxのランチャー表示は`resources/sureneco.desktop.hbs`、Windowsの登録名とショートカット表示は`resources/installer.nsh`で設定します。セットアップ画面の製品名、DEBのパッケージ名、実行ファイル名、配布ファイル名は従来どおりです。アプリ識別子と通知の起動スキーム、設定保存先も変更しません。Windowsの更新では、旧名「スレネコアラート」のショートカットのうち更新先の実行ファイルを指すものだけを削除します。
+PC版の表示名は「スレネコチェッカー」ですが、Tauriの内部製品名は`sureneco`を維持します。製品名を変更するとLinuxのパッケージ名やWindows NSISのレジストリーキー・インストール先も変わるためです。Linuxのランチャー表示は`resources/sureneco.desktop.hbs`、Windowsの登録名とショートカット表示は`resources/installer.nsh`で設定します。セットアップ画面の製品名、DEBのパッケージ名、実行ファイル名、配布ファイル名は従来どおりです。アプリ識別子と通知の起動スキーム、設定保存先も変更しません。Windowsの更新では、旧名「スレネコアラート」のショートカットのうち更新先の実行ファイルを指すものだけを削除します。
 
 Ubuntuのアプリセンターで説明が文字化けしたり、`(none)`が表示されたりしないよう、配布パッケージの短い説明と長い説明は`src-tauri/tauri.conf.json`の`bundle.shortDescription`・`bundle.longDescription`に英語（ASCII）で指定します。アプリ内の日本語表示には影響しません。
 

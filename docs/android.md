@@ -16,7 +16,7 @@ Androidのサーバー監視は`update_sec`が既定60秒、`thread_update_sec`�
 
 PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、GitHub経由の更新はAndroidに持ち込みません。Androidのアプリ更新はGoogle Playから行います。
 
-Androidには別途中継アプリのntfyを導入し、自前サーバーを設定してもらいます。Firebaseを含まない構成の案内にはF-Droid版を使います。スレ猫チェッカーにUnifiedPush connectorを追加し、中継選択・未導入・通知先更新・解除を扱います。接続維持はntfyが担当するため、そちらの常駐通知・電池設定が必要になる場合があります。
+Androidには別途中継アプリのntfyを導入し、自前サーバーを設定してもらいます。Firebaseを含まない構成の案内にはF-Droid版を使います。スレネコチェッカーにUnifiedPush connectorを追加し、中継選択・未導入・通知先更新・解除を扱います。接続維持はntfyが担当するため、そちらの常駐通知・電池設定が必要になる場合があります。
 
 ## 必要な環境
 
@@ -31,7 +31,7 @@ Androidには別途中継アプリのntfyを導入し、自前サーバーを設
 
 ## Androidビルドの基盤
 
-Android版の表示名は「スレ猫チェッカー」、パッケージ名（applicationId）は`sureneco.sakots`です。TauriのAndroid専用設定、Gradleのnamespace/applicationId、Kotlinのパッケージと表示文字列を一致させます。PC版の表示名も「スレ猫チェッカー」とし、PC版の内部製品名・識別子、Rust crate名と配布ファイル名の`sureneco`は維持します。
+Android版の表示名は「スレネコチェッカー」、パッケージ名（applicationId）は`sureneco.sakots`です。TauriのAndroid専用設定、Gradleのnamespace/applicationId、Kotlinのパッケージと表示文字列を一致させます。PC版の表示名も「スレネコチェッカー」とし、PC版の内部製品名・識別子、Rust crate名と配布ファイル名の`sureneco`は維持します。
 
 旧パッケージでインストールしたAPKとは別アプリになります。`install -r`で旧アプリが置き換わったり、保存データが自動移行されたりはしません。旧アプリの削除やデータ移行は自動では行いません。
 
@@ -66,7 +66,7 @@ cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-deb
 
 API・ntfyの接続先が未準備の場合は、先に[接続先の準備手順](push-server-setup.md)を参照してください。
 
-ntfyアプリを導入して自前サーバー・個別アカウントを設定し、スレ猫チェッカーの設定で通知を許可します。保存する情報への同意を選択して「通知を有効にする」を押し、中継アプリを選びます。通知先の所有確認が完了すると「監視中」になります。[ntfyの権限準備](node-vps.md#ntfyの権限を準備する)も必要です。
+ntfyアプリを導入して自前サーバー・個別アカウントを設定し、スレネコチェッカーの設定で通知を許可します。保存する情報への同意を選択して「通知を有効にする」を押し、中継アプリを選びます。通知先の所有確認が完了すると「監視中」になります。[ntfyの権限準備](node-vps.md#ntfyの権限を準備する)も必要です。
 
 「同期を再試行」で未同期の設定を再送します。「監視を停止」は端末で先に通知を抑止し、圏外ならサーバー反映待ちとして保持します。「サーバー登録を削除」はAPI成功後に端末認証を消し、サーバーの購読・履歴を削除します。ntfy側のアカウント撤去は運用者が別途行います。アプリのバックアップは無効にして資格情報の復元・共有を防ぎます。
 
@@ -150,7 +150,7 @@ ABI一覧に`arm64-v8a`が必要です。ページサイズは通常4096また�
 
 ### 4. Logcatで起動時のログとクラッシュを保存する
 
-起動直後に落ちる場合はPIDを絞らず、まず次でログの取得を始めてから、**実機のホーム画面でスレ猫チェッカーのアイコンをタップして起動**します。症状を再現したらPowerShellで`Ctrl+C`を押して取得を終了します。端末に保持されている直前のログも含まれます。
+起動直後に落ちる場合はPIDを絞らず、まず次でログの取得を始めてから、**実機のホーム画面でスレネコチェッカーのアイコンをタップして起動**します。症状を再現したらPowerShellで`Ctrl+C`を押して取得を終了します。端末に保持されている直前のログも含まれます。
 
 ```powershell
 $log = "$HOME\Downloads\sureneco-logcat-$(Get-Date -Format yyyyMMdd-HHmmss).txt"
@@ -183,7 +183,7 @@ PowerShellの`$PID`は予約済みの自動変数なので、ここでは`$appPi
 
 1. 実機でデバッグAPKを起動し、WindowsのChromeで`chrome://inspect/#devices`を開きます。
 2. **Discover USB devices**を有効にします。
-3. スレ猫チェッカーのWebViewが表示されたら、その下の**inspect**を開きます。
+3. スレネコチェッカーのWebViewが表示されたら、その下の**inspect**を開きます。
 4. **Console**でJavaScriptの例外、**Network**で通信失敗、**Elements**で画面のレイアウトを確認します。
 
 WebViewの検査にはアプリ側でWebViewデバッグが有効である必要があります。APKが`debuggable`なだけで必ず表示されるとは限りません。出てこない場合はADB接続、実機でアプリが表示中か、デバッグAPKかを確認し、アプリ側のWebViewデバッグ設定を調べます。今回の環境ではChromeからの実機検査は未確認です。公開用APKへ無条件にWebViewデバッグを有効にする設定は追加しません。

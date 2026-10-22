@@ -4,7 +4,7 @@
 
 ### Requirement: Google Play提出用バンドル
 
-Android版はGoogle Play提出用の署名付きAABを生成し、生成コマンドだけでは公開しないことを保証しなければならない（SHALL）。Androidの表示名は「スレ猫チェッカー」、パッケージ名（applicationId）はsureneco.sakotsとし、PC版の内部製品名・識別子は変更しない。versionNameはpackage.jsonに合わせ、versionCodeは公開ごとに増加させる。2026-10-21時点の提出要件としてAPI 36以上を対象にし、ARM64を含む。ネイティブ依存を含め16KBページサイズ端末での動作を検証する。
+Android版はGoogle Play提出用の署名付きAABを生成し、生成コマンドだけでは公開しないことを保証しなければならない（SHALL）。Androidの表示名は「スレネコチェッカー」、パッケージ名（applicationId）はsureneco.sakotsとし、PC版の内部製品名・識別子は変更しない。versionNameはpackage.jsonに合わせ、versionCodeは公開ごとに増加させる。2026-10-21時点の提出要件としてAPI 36以上を対象にし、ARM64を含む。ネイティブ依存を含め16KBページサイズ端末での動作を検証する。
 
 #### Scenario: AABの生成
 
@@ -14,7 +14,7 @@ Android版はGoogle Play提出用の署名付きAABを生成し、生成コマ�
 #### Scenario: Androidアプリの名称と識別子
 
 - **WHEN** Android向けAPKまたはAABを生成する
-- **THEN** 表示名は「スレ猫チェッカー」、パッケージ名と起動Activityのパッケージはsureneco.sakotsとなり、PC版の識別子を変更しない
+- **THEN** 表示名は「スレネコチェッカー」、パッケージ名と起動Activityのパッケージはsureneco.sakotsとなり、PC版の識別子を変更しない
 
 #### Scenario: 署名情報が不足する
 

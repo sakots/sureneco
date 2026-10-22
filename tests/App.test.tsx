@@ -74,7 +74,7 @@ function setup(
 it("スレッドのトグルと更新を操作できる", async () => {
   const api = setup();
   expect(
-    screen.getByRole("heading", { name: "スレ猫チェッカー", level: 1 }),
+    screen.getByRole("heading", { name: "スレネコチェッカー", level: 1 }),
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: /テーマ：/ })).toBeNull();
   const user = userEvent.setup();
@@ -500,7 +500,7 @@ it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表�
   };
   const api = setup([], undefined, { ...defaults, update_sec: 60 }, mobile);
   expect(
-    screen.getByRole("heading", { name: "スレ猫チェッカー", level: 1 }),
+    screen.getByRole("heading", { name: "スレネコチェッカー", level: 1 }),
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: /テーマ：/ })).toBeNull();
   const user = userEvent.setup();
