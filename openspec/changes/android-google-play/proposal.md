@@ -1,5 +1,7 @@
 # Proposal
 
+現在は実装を一旦中断し、既存エックスサーバーと1分程度の通知、人数制限を設けないNode.js＋VPSの費用を比較中です。以下はVPS試作の計画として保持し、運用先の最終決定とは扱いません。docs/server-progress.md、docs/operation-cost.md、docs/vps-cost.mdを参照してください。
+
 ## Why
 
 現在のsurenecoはWindows・Ubuntu向けの常駐アプリであり、Android用の起動経路と配布設定がない。Google Playで配布するAndroid版を追加し、別のアプリで雀魂をプレイしている間や画面消灯中にも、条件に一致する募集をプッシュ通知で受け取れるようにする。
@@ -35,6 +37,6 @@
 - `src-tauri/Cargo.toml`、`build.rs`、`src/lib.rs`、`src/desktop.rs`と新規モバイル実装、Android生成プロジェクトとネイティブのFCM受信処理。
 - `src/core`の検出・検証・監視ロジック、`src/backend/engine.ts`、React API・画面。端末側の募集通知とプッシュ受信を重複させない。
 - Node.js/TypeScriptのAPI、常駐監視スケジューラー、SQLite、Firebase Admin SDK、認証・配信・障害復旧テストとVPS運用手順。同等の回帰確認後、PHP実装・専用テスト・サーバー用Rustワーカーと不要なビルド設定を撤去する。AndroidとPC版のRust/QuickJS基盤は維持する。
-- SDK/NDK、Android用Rustターゲット、Google Playアカウント、アップロード用署名鍵に加え、Node.js 24 LTSを動かせるVPS、systemd、HTTPS公開先、Firebaseプロジェクトとサーバー送信資格情報が必要。Node.js版は未実装で、運用先と実配信用の接続も未設定。
+- SDK/NDK、Android用Rustターゲット、Google Playアカウント、アップロード用署名鍵に加え、Node.js 24 LTSを動かせるVPS、systemd、HTTPS公開先、Firebaseプロジェクトとサーバー送信資格情報が必要。Node.js版は試作・実装中断中で、最終一括検証・運用先・実配信用の接続は未確認。
 - 運用費・監視・バックアップと個人情報管理が追加される。サーバーへは監視条件・端末識別・通知先を保存するため、説明とプライバシーポリシー・データセーフティ申告を用意する。
 - 2026-10-21時点のGoogle Play提出要件はAPI 36以上。ネイティブ依存を含む16KBページサイズ端末の検証も行う。ビルド成功・配信成功・審査通過・正式公開は区別する。

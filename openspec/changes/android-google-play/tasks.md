@@ -1,10 +1,10 @@
 # Tasks
 
-現在の実装はPHP版。VPS上のNode.jsへ切り替えるため、サーバー実装に依存する完了項目は未完了へ戻す。PHP版のローカル検証結果はGit履歴に残し、Node.js版の検証済み項目として数えない。
+Node.jsのAPI・監視・配送を試作したが、利用者の指示により実装を一旦中断。契約済みエックスサーバーで追加費用を抑え、1分程度で通知する運用を再検討する。以下はVPS案の作業項目として保持し、試作しただけの項目を完了にしない。進捗はdocs/server-progress.md、費用比較はdocs/operation-cost.mdを参照する。
 
 ## 1. Android・サーバー基盤と資料
 
-- [x] 1.1 Android対応手順にVPS上の常駐Node.js、systemd、SQLiteとFCM、更新周期、端末認証、保存データと対象外の機能を記載し、提案・設計・仕様差分の整合を確認する。Node.js版は未実装として区別する。
+- [x] 1.1 Android対応手順にVPS上の常駐Node.js、systemd、SQLiteとFCM、更新周期、端末認証、保存データと対象外の機能を記載し、提案・設計・仕様差分の整合を確認する。試作・未確認・実装中断の状態を区別する。
 - [x] 1.2 SDK/NDK・Android用Rustターゲットを準備し、モバイル用Cargo構成・ライブラリエントリーポイント・Android生成プロジェクトを追加する。Androidクロスビルドとデスクトップ専用依存が含まれないことを確認する。
 - [ ] 1.3 アプリID、API 36以上、ARM64、versionName/versionCode、公開用Firebase設定と固定HTTPS API設定を整える。Gradle設定とGit除外で、秘密情報とローカル出力が追跡されないことを確認する。
 - [ ] 1.4 server/にNode.js/TypeScriptのHTTP API、常駐スケジューラーとSQLiteの永続領域、build:server・server:startを用意する。正常停止・再起動時の状態復元、監視回の重複防止と同じDBへの二重起動拒否を先にテストし、実行確認する。

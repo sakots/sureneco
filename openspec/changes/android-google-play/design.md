@@ -4,7 +4,7 @@
 
 動機と合意範囲はproposal.mdを参照する。現行v0.8.3はdesktop featureが既定で、トレイ・OS操作・監視スレッドがsrc-tauri/src/desktop.rsにまとまっている。モバイルエントリーポイントとAndroid生成プロジェクトを追加し、ARM64デバッグAPKの生成は確認済み。募集判定はsrc/core、要求処理はsrc/backend/engine.ts、QuickJSホストはsrc-tauri/src/engine.rsに分離されている。
 
-Androidの通知はサーバー監視＋Firebase Cloud Messaging（FCM）とする。利用者の方針変更により、サーバーはPHP＋毎分cronからVPS上の常駐Node.jsへ切り替える。現在のコードはPHP版であり、Node.js版のAPI・監視・配送は未実装。PHPでのローカル検証結果をNode.js版の完了根拠には使わない。AndroidのデバッグAPK生成と表示名・識別子の確認は、この切り替えとは独立した結果として維持する。
+Androidの通知はサーバー監視＋Firebase Cloud Messaging（FCM）とする。VPS上の常駐Node.js版を試作したが、利用者の指示により実装を一旦中断した。契約済みエックスサーバーと1分程度の通知を前提に運用費を再検討する。以下はVPS案の設計記録であり、運用先の最終決定ではない。実装状況はdocs/server-progress.md、比較はdocs/operation-cost.mdを参照する。PHP版の検証をNode.js版の完了根拠には使わない。
 
 ## Goals / Non-Goals
 

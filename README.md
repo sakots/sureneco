@@ -31,8 +31,9 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 ## 資料
 
 - [使い方](docs/usage.md)：監視・通知、設定フォルダ、雀魂の起動、更新、Electron版からの切り替え
-- [Firebaseの設定](docs/firebase-setup.md)：プロジェクト作成、匿名認証・App Check・FCM、AndroidとPHPサーバーの設定
-- [Node.js＋VPSのサーバー構成](docs/node-vps.md)：常駐API・監視、Firebase、SQLiteとVPSの準備事項。Node.js版は未実装
+- [Firebaseの設定](docs/firebase-setup.md)：プロジェクト作成、匿名認証・App Check・FCM、AndroidとNode.jsサーバーの設定
+- [運用費の比較](docs/operation-cost.md)：契約済みエックスサーバーの活用と、[人数制限を設けないVPS運用](docs/vps-cost.md)。実装は[進捗を記録して中断中](docs/server-progress.md)
+- [Node.js＋VPSのサーバー構成](docs/node-vps.md)：環境構築、常駐API・監視、Firebase、SQLite、systemd・HTTPSと動作確認
 - [開発](docs/development.md)：構成、環境構築、起動とチェック
 - [配布物の作成](docs/packaging.md)：Windows / Linuxビルド、署名、SSH先でのビルドと取得
 - [仕様と変更管理](docs/specification.md)：機能別仕様、OpenSpecの手順、検証
@@ -43,6 +44,8 @@ Android版「スレネコアラート」は[開発と配布準備](docs/android.
 ## 更新履歴
 
 ### [2026/10/22] v0.8.3
+
+- Node.js通知サーバーの試作機能を追加。実装を一旦中断し、契約済みエックスサーバーの活用と人数制限を設けないVPS運用の費用比較・進捗資料を追加。実Firebase・Android配送とVPS配備は未確認。
 
 - Android通知サーバーをVPS上の常駐Node.jsへ切り替えるため、設計・仕様差分・作業項目・準備資料を修正。
 - PHPサーバーの実行環境・配置・HTTPS API・環境変数・cron・動作確認のセットアップ手順を追加。
