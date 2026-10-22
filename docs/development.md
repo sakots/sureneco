@@ -33,3 +33,5 @@ OpenSpec CLIの確認コマンド、提案・実装・アーカイブの手順�
 ## 開発時のファイル監視
 
 Viteの監視から`.android-sdk/`、`src-tauri/`、`release/`を除外します。Android SDK・NDKやネイティブ生成物を再帰的に監視すると、Linuxの監視数上限に達して`file watcher error: ENOSPC`が大量に出るためです。フロントエンドの変更は引き続きViteが監視し、Rustの変更はTauriが監視します。この設定を更新した後は、起動中の`pnpm dev`を終了して再起動してください。[Vite公式の監視設定](https://vite.dev/config/server-options#server-watch)を参照してください。
+
+通知サーバーの起動完了ログは、API待受・スケジューラー起動・終了ハンドラーの登録後に出します。起動完了直後のSIGTERMでも正常終了してDBの所有権を解放することを実プロセスのテストで確認します。
