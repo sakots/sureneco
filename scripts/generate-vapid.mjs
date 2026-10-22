@@ -1,4 +1,4 @@
-import { generateVAPIDKeys } from "web-push";
+import webpush from "web-push";
 import { writeFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 const [destination, subject] = process.argv.slice(2);
@@ -15,7 +15,7 @@ if (
   try {
     writeFileSync(
       destination,
-      JSON.stringify({ ...generateVAPIDKeys(), subject }) + "\n",
+      JSON.stringify({ ...webpush.generateVAPIDKeys(), subject }) + "\n",
       { mode: 0o600, flag: "wx" },
     );
     console.log("VAPID file created; keys were not printed.");
