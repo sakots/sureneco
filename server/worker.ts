@@ -2,7 +2,7 @@ import { scanPosts } from "../src/core/detection";
 import { candidates, parseDat, parseSubject } from "../src/core/parser";
 import type { Post, Recruitment, Settings } from "../src/core/types";
 
-// This module is embedded in the native worker. Request values are data, never code.
+// Runs inside the isolated Node.js worker. Request values are data, never code.
 export function run(json: string): string {
   try {
     const input = JSON.parse(json) as {

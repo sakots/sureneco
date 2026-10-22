@@ -4,6 +4,11 @@
 
 ### [2026/10/22] v0.8.3
 
+- Firebaseに依存しない通知を採用するため、Android通知の計画をUnifiedPush＋自前ntfyへ修正。端末認証・中継アプリ・運用費の資料を更新し、旧Firebase設定手順を削除。実装の中断は維持。
+
+- Node.js通知サーバーの試作機能を追加。実装を一旦中断し、契約済みエックスサーバーの活用と人数制限を設けないVPS運用の費用比較・進捗資料を追加。実Firebase・Android配送とVPS配備は未確認。
+
+- Android通知サーバーをVPS上の常駐Node.jsへ切り替えるため、設計・仕様差分・作業項目・準備資料を修正。
 - PHPサーバーの実行環境・配置・HTTPS API・環境変数・cron・動作確認のセットアップ手順を追加。
 - `google-services.json`の配置先を設定資料に追加し、Git管理から除外するようにした。
 - Firebase設定手順とPHPのFCM送信先のパッケージ名を、Android版の`sureneco.sakots`に合わせて修正。

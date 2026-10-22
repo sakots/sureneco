@@ -51,7 +51,7 @@ Google Play向けの資料は署名、テストトラック、掲載情報、プ
 
 ### Requirement: 配信設定とサーバー資格情報の分離
 
-AndroidのAABには公開用Firebase接続情報と固定HTTPS API設定だけを含め、サーバーの通知送信資格情報を含めてはならない（MUST NOT）。公開資料にはサーバーへ送る情報、保存期間、停止・削除方法とFCMの利用を反映する。実際のFirebaseと検証サーバーによる配信を確認してから提出準備完了とする。
+AndroidのAABには固定HTTPS APIと自前ntfyの接続設定だけを含め、サーバーの通知送信資格情報を含めてはならない（MUST NOT）。公開資料にはサーバーへ送る情報、保存期間、停止・削除方法とUnifiedPush・自前ntfy・中継アプリの利用を反映する。実際の自前ntfy・Androidと検証サーバーによる配信を確認してから提出準備完了とする。
 
 #### Scenario: Android配布物の検査
 
@@ -60,5 +60,5 @@ AndroidのAABには公開用Firebase接続情報と固定HTTPS API設定だけ�
 
 #### Scenario: 配信環境が未設定
 
-- **WHEN** Firebaseまたは検証用サーバーに接続できない
+- **WHEN** 自前ntfyまたは検証用サーバーに接続できない
 - **THEN** AAB生成と実配信の検証状態を区別し、バックグラウンド通知が確認済みとは報告しない

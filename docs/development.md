@@ -8,7 +8,7 @@ Tauri 2 + Rust + TypeScript + Reactで実装しています。募集検出と監
 
 ## 環境構築
 
-Node.js 22.12以上、pnpm 12.14.0、Rust stableを用意してください。WindowsはMSVC版Rust、Visual Studio C++ Build Tools、WebView2が必要です。Ubuntuは以下をインストールします。
+Node.js 24 LTS、pnpm 12.14.0、Rust stableを用意してください。WindowsはMSVC版Rust、Visual Studio C++ Build Tools、WebView2が必要です。Ubuntuは以下をインストールします。
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
@@ -18,7 +18,9 @@ pnpm dev
 
 `pnpm dev`でViteとTauriを起動します。バックエンドのTypeScriptを変更した場合は開発コマンドを再起動してください。`pnpm check`でTypeScript・Rustのテスト、フロントエンドと監視エンジンのビルド、Rust整形、テーマ診断、差分チェックを行います。初回はRust依存の取得・コンパイルに時間がかかります。
 
-`pnpm test`と`pnpm check`にはAndroidサーバーのPHPプロセステストも含まれます。PATH上のPHP CLI、PDO SQLite・cURL・mbstring拡張、外部プロセスの起動許可が必要です（Ubuntuでは`sudo apt install php-cli php-sqlite3 php-curl php-mbstring`）。WindowsでもPHP CLIと`pdo_sqlite`・`curl`・`mbstring`を有効にしてください。テスト前に`pnpm build:worker`がRust＋QuickJSの専用実行ファイルを生成します。PHPサーバーだけの確認は`pnpm test:server`、起動・cronと実行ファイルの配置手順は[PHPサーバーのセットアップ](php-setup.md)を参照してください。PC版アプリの配布物にPHPやサーバー用実行ファイルを同梱するものではありません。
+`pnpm test`と`pnpm check`はVPS向けNode.jsサーバーのテストも含み、先に`pnpm build:server`で分離ワーカーを生成します。PHP・サーバー用Rustワーカーは不要です。サーバーのみの確認は`pnpm test:server`、ローカル起動は`pnpm server:start`を使います。実装と検証にはNode.js 24以上が必要です。
+
+サーバー実装は中断中で、現行テストとコードはFirebase版の試作です。採用方針は[UnifiedPush＋自前ntfy](unifiedpush-ntfy.md)へ変更しました。実装再開時に認証・配送・設定・依存を置き換えます。[VPS準備](node-vps.md)と[進捗](server-progress.md)を参照してください。PC配布物にNode.jsサーバーは同梱しません。実配送とVPS配備は別に検証します。
 
 詳しい環境構築は[Tauriの前提条件](https://v2.tauri.app/start/prerequisites/)を参照してください。
 
