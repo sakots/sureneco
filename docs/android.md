@@ -66,6 +66,8 @@ cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-deb
 
 2026/10/23に自動登録画面を含む接続先設定済みAPKを生成しました。既存配布物を上書きせず、`release/sureneco_v0.8.9_android_ntfy-registration_debug.apk`へ保存しています。versionNameは現在のビルド設定どおり`0.8.9`です。署名検証（v2）・16KB zip整列、`sureneco.sakots`、表示名、ARM64、minSdk 24／targetSdk 36を確認しました。DEX内に設定済みのAPI／ntfy originと自動登録経路を確認しました。SHA-256は`f8a38a949c84530c3a6c836d27da65e1f38c4c2745dfb22b37fcd687bfa8bc28`です。公開APIの`/v1/ntfy-registration`は認証なしGETで404を返しており、新APIの公開は未確認です。VPS配備前のAPKを配送確認済みとは扱いません。接続済み実機がなく、インストール・ログイン・配送は未確認です。
 
+その後VPSへ自動登録APIと管理サービスを配備し、公開HTTPSから実ntfyへの登録・権限分離・通知先変更・停止・再開・削除を確認しました。上記404は配備前の記録で、現在は認証なしGETに401を返します。Android実機でのntfyログイン・所有確認・通知配送は引き続き未確認です。
+
 ## 通知を設定する
 
 設定画面の「バックグラウンド通知」にある「ntfyの準備・設定手順」を開くと、ntfyの役割、Google Play版・F-Droid版の導入、デフォルトサーバー、通知・電池設定、自動発行した端末用アカウントでのログイン、確認待ち時の対処を読めます。接続先はアプリの設定値を表示し、未設定の場合は配布元への確認を案内します。説明を開くだけでは通知を有効化しません。
