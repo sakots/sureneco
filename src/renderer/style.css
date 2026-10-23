@@ -321,6 +321,24 @@ h3 {
   background: var(--panel);
   margin-bottom: 12px;
 }
+.ntfy-help {
+  margin: 12px 0;
+  font-size: 13px;
+}
+.ntfy-help summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-weight: 600;
+}
+.ntfy-help ol {
+  padding-left: 1.5em;
+}
+.ntfy-help li + li {
+  margin-top: 14px;
+}
+.ntfy-help code {
+  overflow-wrap: anywhere;
+}
 label {
   display: block;
   font-size: 13px;
