@@ -38,6 +38,30 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
                 }
                 "permission" -> { if (Build.VERSION.SDK_INT >= 33) ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001); resolve() }
                 "copy" -> { val id = data.getString("id"); require(Regex("[0-9]{5}").matches(id)); activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("ルームID", id)); resolve() }
+                "copy_login" -> {
+                    synchronized(PushState) {
+                        val p = PushState.prefs(activity)
+                        require(!p.contains("pending") && PushState.desired(activity))
+                        val registration = JSONObject(p.getString("registration", null) ?: error("未登録"))
+                        require(registration.getString("state") != "stopped")
+                        val field = data.getString("field")
+                        val value = when (field) {
+                            "server" -> BuildConfig.SURENECO_NTFY_ORIGIN
+                            "username" -> registration.getString("username")
+                            "password" -> registration.getString("password")
+                            else -> error("不正な項目")
+                        }
+                        require(value.isNotEmpty())
+                        val clip = ClipData.newPlainText("ntfyログイン情報", value)
+                        if (field == "password") {
+                            clip.description.extras = android.os.PersistableBundle().apply {
+                                putBoolean("android.content.extra.IS_SENSITIVE", true)
+                            }
+                        }
+                        activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
+                    }
+                    resolve()
+                }
                 "open" -> { val url = data.getString("url"); val parsed = Uri.parse(url); require(parsed.scheme == "https" && (parsed.host?.endsWith(".5ch.io") == true || parsed.host?.endsWith(".5ch.net") == true)); activity.startActivity(Intent(Intent.ACTION_VIEW, parsed)); resolve() }
                 "stop", "delete" -> {
                     PushState.suppress(activity, args.operation)

@@ -345,11 +345,17 @@ h3 {
   border: 1px solid var(--border);
   border-radius: 7px;
 }
-.ntfy-credentials code {
-  overflow-wrap: anywhere;
-}
 .ntfy-credentials button {
-  margin-top: 8px;
+  margin: 8px 8px 0 0;
+}
+.ntfy-login-field {
+  margin-bottom: 16px;
+}
+.ntfy-credentials input {
+  min-width: 0;
+  max-width: 100%;
+  font-family: monospace;
+  font-weight: 400;
 }
 label {
   display: block;

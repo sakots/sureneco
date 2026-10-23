@@ -503,6 +503,7 @@ it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表�
     deletePush: vi.fn(async () => state),
     syncPush: vi.fn(async () => state),
     requestPushPermission: vi.fn(async () => {}),
+    copyPushLogin: vi.fn(async () => {}),
   };
   const api = setup([], undefined, { ...defaults, update_sec: 60 }, mobile);
   expect(

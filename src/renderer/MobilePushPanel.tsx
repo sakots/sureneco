@@ -8,6 +8,9 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
   const version = useRef(0);
   const actionInFlight = useRef(false);
   const [revealedFor, setRevealedFor] = useState<PushState | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [copyMessage, setCopyMessage] = useState("");
+  const copyVersion = useRef(0);
   const registration = state?.registration;
   const passwordVisible =
     revealedFor !== null &&
@@ -22,6 +25,8 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
     revealedFor.registration?.error === registration?.error;
   useEffect(() => {
     setRevealedFor(null);
+    ++copyVersion.current;
+    setCopyMessage("");
   }, [
     state?.ntfyOrigin,
     state?.enabled,
@@ -53,6 +58,7 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
     return () => {
       alive = false;
       ++version.current;
+      ++copyVersion.current;
       actionInFlight.current = false;
       clearInterval(timer);
     };
@@ -66,6 +72,8 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
     const requestVersion = ++version.current;
     setBusy(true);
     setError("");
+    ++copyVersion.current;
+    setCopyMessage("");
     if (pendingAction) {
       setState((previous) => ({
         ...previous,
@@ -88,6 +96,24 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
         actionInFlight.current = false;
         setBusy(false);
       }
+    }
+  }
+  async function copyLogin(field: "server" | "username" | "password") {
+    if (copying || busy) return;
+    const requestVersion = ++copyVersion.current;
+    setCopying(true);
+    setCopyMessage("");
+    try {
+      await api.copyPushLogin(field);
+      if (requestVersion === copyVersion.current)
+        setCopyMessage(
+          `${field === "server" ? "サーバーURL" : field === "username" ? "ユーザー名" : "パスワード"}をコピーしました。`,
+        );
+    } catch {
+      if (requestVersion === copyVersion.current)
+        setCopyMessage("コピーできませんでした。もう一度お試しください。");
+    } finally {
+      setCopying(false);
     }
   }
   return (
@@ -129,14 +155,49 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
           <fieldset className="ntfy-credentials">
             <legend>ntfyログイン情報</legend>
             <p>
-              接続先：<code>{state?.ntfyOrigin ?? "未設定"}</code>
+              ntfyの「設定」→「ユーザー管理」→「ユーザー追加」を開き、次の3項目を順に貼り付けて保存してください。
             </p>
-            <p>
-              ユーザー名：<code>{registration.username}</code>
-            </p>
-            <label>
-              ntfyパスワード
+            <div className="ntfy-login-field">
+              <label htmlFor="ntfy-server">① サーバーURL（接続先）</label>
               <input
+                id="ntfy-server"
+                value={state?.ntfyOrigin ?? ""}
+                readOnly
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                disabled={
+                  busy || copying || !state?.enabled || !state?.ntfyOrigin
+                }
+                onClick={() => void copyLogin("server")}
+              >
+                サーバーURLをコピー
+              </button>
+            </div>
+            <div className="ntfy-login-field">
+              <label htmlFor="ntfy-username">② ユーザー名</label>
+              <input
+                id="ntfy-username"
+                value={registration.username}
+                readOnly
+                autoComplete="off"
+                spellCheck={false}
+                autoCapitalize="none"
+              />
+              <button
+                type="button"
+                disabled={busy || copying || !state?.enabled}
+                onClick={() => void copyLogin("username")}
+              >
+                ユーザー名をコピー
+              </button>
+            </div>
+            <label>
+              ③ パスワード
+              <input
+                aria-label="ntfyパスワード"
                 type={passwordVisible ? "text" : "password"}
                 value={registration.password}
                 readOnly
@@ -151,9 +212,19 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
             >
               {passwordVisible ? "パスワードを隠す" : "パスワードを表示"}
             </button>
+            <button
+              type="button"
+              disabled={busy || copying || !state?.enabled}
+              onClick={() => void copyLogin("password")}
+            >
+              パスワードをコピー
+            </button>
+            <p role="status" className="help">
+              {copyMessage}
+            </p>
             <p className="help">
-              この端末専用の情報です。他の人へ共有しないでください。
-              ntfyの「設定」→「ユーザー管理」→「ユーザー追加」で接続先・ユーザー名・パスワードを保存します。
+              コピーした項目をntfyの同じ名前の欄へ貼り付けてください。パスワードは隠したままコピーできます。
+              この端末専用の情報です。他の人へ共有しないでください。貼り付け後は必要に応じてクリップボードの履歴を削除してください。
             </p>
           </fieldset>
         )}

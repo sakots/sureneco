@@ -31,6 +31,7 @@ async fn request(app: AppHandle, command: String, payload: Value) -> Result<Valu
             "mobile_notification_target" => native(&app, "notification_target", json!({})),
             "mobile_status" => native(&app, "status", json!({})),
             "mobile_permission" => native(&app, "permission", json!({})),
+            "mobile_copy_login" => native(&app, "copy_login", payload),
             "mobile_start" => {
                 if payload["consent"] != true {
                     return Err("通知利用への同意が必要です。".into());

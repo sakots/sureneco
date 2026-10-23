@@ -36,6 +36,7 @@ function setup(
     stopPush: vi.fn(async () => state),
     deletePush: vi.fn(async () => state),
     requestPushPermission: vi.fn(async () => {}),
+    copyPushLogin: vi.fn(async () => {}),
     ...methods,
   };
   render(<MobilePushPanel api={api} />);
@@ -95,9 +96,19 @@ it("発行された接続先とユーザー名を表示し、パスワードは�
     name: "ntfyログイン情報",
   });
   expect(
-    within(credentials).getByText("https://push.example.com"),
-  ).toBeTruthy();
-  expect(within(credentials).getByText("sur_test_device")).toBeTruthy();
+    (
+      within(credentials).getByRole("textbox", {
+        name: /サーバーURL/,
+      }) as HTMLInputElement
+    ).value,
+  ).toBe("https://push.example.com");
+  expect(
+    (
+      within(credentials).getByRole("textbox", {
+        name: /ユーザー名/,
+      }) as HTMLInputElement
+    ).value,
+  ).toBe(registration.username);
   const password = within(credentials).getByLabelText(
     "ntfyパスワード",
   ) as HTMLInputElement;
@@ -117,6 +128,43 @@ it("発行された接続先とユーザー名を表示し、パスワードは�
   expect(password.type).toBe("password");
   expect(screen.getByText(/読み取り権限の設定が完了/)).toBeTruthy();
   expect(screen.getByText(/ntfyでログインしてから/)).toBeTruthy();
+});
+
+it("パスワードを隠したままコピーし、完了メッセージに秘密を表示しない", async () => {
+  setup("https://push.example.com", { enabled: true, registration });
+  const user = userEvent.setup();
+  const copy = await screen.findByRole("button", {
+    name: "パスワードをコピー",
+  });
+  await user.click(copy);
+  expect(screen.getByText("パスワードをコピーしました。")).toBeTruthy();
+  expect(
+    (screen.getByLabelText("ntfyパスワード") as HTMLInputElement).type,
+  ).toBe("password");
+  expect(document.body.textContent).not.toContain(registration.password);
+});
+
+it("コピー処理中の連打を防ぎ、失敗時に秘密を含む例外を表示しない", async () => {
+  const { promise, reject } = Promise.withResolvers<void>();
+  setup(
+    "https://push.example.com",
+    { enabled: true, registration },
+    {
+      copyPushLogin: () => promise,
+    },
+  );
+  const user = userEvent.setup();
+  const copy = await screen.findByRole("button", {
+    name: "パスワードをコピー",
+  });
+  await user.click(copy);
+  expect((copy as HTMLButtonElement).disabled).toBe(true);
+  await act(async () => reject(new Error(registration.password)));
+  expect(
+    screen.getByText("コピーできませんでした。もう一度お試しください。"),
+  ).toBeTruthy();
+  expect(document.body.textContent).not.toContain(registration.password);
+  expect((copy as HTMLButtonElement).disabled).toBe(false);
 });
 
 it.each([

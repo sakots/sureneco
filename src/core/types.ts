@@ -117,4 +117,5 @@ export interface PushApi {
   deletePush(): Promise<PushState>;
   syncPush(): Promise<PushState>;
   requestPushPermission(): Promise<void>;
+  copyPushLogin(field: "server" | "username" | "password"): Promise<void>;
 }
