@@ -62,6 +62,25 @@ export class Store {
           uid TEXT PRIMARY KEY REFERENCES subscriptions(uid) ON DELETE CASCADE,
           attempted INTEGER NOT NULL, succeeded INTEGER, error TEXT
         );
+        -- Provisioning survives device deletion until external account cleanup.
+        CREATE TABLE IF NOT EXISTS ntfy_registrations (
+          uid TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL,
+          topic TEXT NOT NULL, desired INTEGER NOT NULL DEFAULT 1,
+          generation INTEGER NOT NULL DEFAULT 1, removed INTEGER NOT NULL DEFAULT 0,
+          state TEXT NOT NULL DEFAULT 'pending', error TEXT,
+          account_ready INTEGER NOT NULL DEFAULT 0, account_may_exist INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS ntfy_topics (
+          topic TEXT PRIMARY KEY, uid TEXT NOT NULL REFERENCES ntfy_registrations(uid),
+          granted INTEGER NOT NULL DEFAULT 0, applied_generation INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS ntfy_topics_owner ON ntfy_topics(uid);
+        CREATE TABLE IF NOT EXISTS ntfy_jobs (
+          uid TEXT PRIMARY KEY REFERENCES ntfy_registrations(uid),
+          generation INTEGER NOT NULL, operation TEXT NOT NULL DEFAULT 'reconcile',
+          topic TEXT, attempts INTEGER NOT NULL DEFAULT 0, next_attempt INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS ntfy_jobs_due ON ntfy_jobs(next_attempt);
         CREATE TABLE IF NOT EXISTS rates (identity TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS service_state (id INTEGER PRIMARY KEY, started INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0, error TEXT);
         INSERT OR IGNORE INTO service_state(id) VALUES(1);

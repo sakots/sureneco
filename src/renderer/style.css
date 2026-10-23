@@ -339,6 +339,24 @@ h3 {
 .ntfy-help code {
   overflow-wrap: anywhere;
 }
+.ntfy-credentials {
+  min-width: 0;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.ntfy-credentials button {
+  margin: 8px 8px 0 0;
+}
+.ntfy-login-field {
+  margin-bottom: 16px;
+}
+.ntfy-credentials input {
+  min-width: 0;
+  max-width: 100%;
+  font-family: monospace;
+  font-weight: 400;
+}
 label {
   display: block;
   font-size: 13px;

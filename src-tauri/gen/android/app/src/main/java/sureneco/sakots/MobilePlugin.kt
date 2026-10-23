@@ -15,7 +15,6 @@ import app.tauri.plugin.Plugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import org.json.JSONObject
-import org.unifiedpush.android.connector.UnifiedPush
 
 @InvokeArg
 class MobileArgs { var operation: String = ""; var payload: String = "{}" }
@@ -29,35 +28,64 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
         try {
             when (args.operation) {
                 "notification_target" -> { val p = PushState.prefs(activity); val target = p.getBoolean("showRecruitments", false); p.edit().remove("showRecruitments").commit(); resolve(target) }
-                "changing" -> { PushState.prefs(activity).edit().putLong("epoch", PushState.prefs(activity).getLong("epoch", 0) + 1).putLong("revision", 0).putString("status", "設定未同期").commit(); androidx.core.app.NotificationManagerCompat.from(activity).cancelAll(); resolve() }
+                "changing" -> { PushState.changing(activity); resolve() }
                 "foreground" -> resolve((activity as androidx.lifecycle.LifecycleOwner).lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
-                "status" -> { resolve(PushState.status(activity)); PushState.executor.execute { try { PushState.refreshStatus(activity) } catch (_: Exception) { PushState.failed(activity) } } }
+                "status" -> {
+                    val expected = PushState.epoch(activity)
+                    resolve(PushState.status(activity))
+                    if ((activity as androidx.lifecycle.LifecycleOwner).lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
+                        PushState.executor.execute { try { PushState.refreshStatus(activity) } catch (_: Exception) { PushState.failed(activity, expected) } }
+                }
                 "permission" -> { if (Build.VERSION.SDK_INT >= 33) ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2001); resolve() }
                 "copy" -> { val id = data.getString("id"); require(Regex("[0-9]{5}").matches(id)); activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("ルームID", id)); resolve() }
+                "copy_login" -> {
+                    synchronized(PushState) {
+                        val p = PushState.prefs(activity)
+                        require(!p.contains("pending") && PushState.desired(activity))
+                        val registration = JSONObject(p.getString("registration", null) ?: error("未登録"))
+                        require(registration.getString("state") != "stopped")
+                        val field = data.getString("field")
+                        val value = when (field) {
+                            "server" -> BuildConfig.SURENECO_NTFY_ORIGIN
+                            "username" -> registration.getString("username")
+                            "password" -> registration.getString("password")
+                            else -> error("不正な項目")
+                        }
+                        require(value.isNotEmpty())
+                        val clip = ClipData.newPlainText("ntfyログイン情報", value)
+                        if (field == "password") {
+                            clip.description.extras = android.os.PersistableBundle().apply {
+                                putBoolean("android.content.extra.IS_SENSITIVE", true)
+                            }
+                        }
+                        activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(clip)
+                    }
+                    resolve()
+                }
                 "open" -> { val url = data.getString("url"); val parsed = Uri.parse(url); require(parsed.scheme == "https" && (parsed.host?.endsWith(".5ch.io") == true || parsed.host?.endsWith(".5ch.net") == true)); activity.startActivity(Intent(Intent.ACTION_VIEW, parsed)); resolve() }
                 "stop", "delete" -> {
                     PushState.suppress(activity, args.operation)
-                    if (args.operation == "delete") UnifiedPush.unregister(activity)
-                    PushState.executor.execute { try { PushState.sync(activity); resolve(PushState.status(activity)) } catch (_: Exception) { PushState.failed(activity); invoke.reject("停止・削除はサーバー反映待ちです。再接続後に再試行してください。") } }
+                    val expected = PushState.epoch(activity)
+                    if (args.operation == "delete") org.unifiedpush.android.connector.UnifiedPush.unregister(activity)
+                    PushState.executor.execute { try { PushState.sync(activity); resolve(PushState.status(activity)) } catch (_: Exception) { PushState.failed(activity, expected); invoke.reject("停止・削除はサーバー受付またはntfy権限撤去の確認待ちです。再試行してください。") } }
                 }
                 "start" -> {
                     require(data.optBoolean("consent"))
-                    PushState.start(activity, data.getString("saved"))
+                    val expected = PushState.start(activity, data.getString("saved"))
                     PushState.executor.execute {
-                        try {
-                            val vapid = PushState.prepare(activity)
-                            activity.runOnUiThread {
-                                UnifiedPush.tryPickDistributor(activity) { success ->
-                                    if (success) { UnifiedPush.register(activity, messageForDistributor = "スレネコチェッカーの友人戦募集通知", vapid = vapid); resolve(PushState.status(activity)) }
-                                    else { PushState.mark(activity, "中継アプリ未導入：ntfyを導入して自前サーバーを設定してください"); resolve(PushState.status(activity)) }
-                                }
-                            }
-                        } catch (_: Exception) { PushState.failed(activity); invoke.reject("通知の登録に失敗しました。APIとntfyの設定を確認してください。") }
+                        try { PushState.register(activity, expected, pick = true) { resolve(PushState.status(activity)) } }
+                        catch (_: Exception) { PushState.failed(activity, expected); invoke.reject("通知の登録に失敗しました。APIとntfyの設定を確認してください。") }
                     }
                 }
                 "sync_settings", "sync" -> {
                     if (args.operation == "sync_settings") PushState.settings(activity, data.getString("saved"))
-                    PushState.executor.execute { try { PushState.sync(activity); resolve(PushState.status(activity)) } catch (_: Exception) { PushState.failed(activity); invoke.reject("通知設定は未同期です。再試行してください。") } }
+                    val expected = PushState.epoch(activity)
+                    PushState.executor.execute {
+                        try {
+                            if (PushState.active(activity, expected)) PushState.register(activity, expected, pick = false) { resolve(PushState.status(activity)) }
+                            else { PushState.sync(activity); resolve(PushState.status(activity)) }
+                        } catch (_: Exception) { PushState.failed(activity, expected); invoke.reject("通知設定または停止・削除の確認が未同期です。再試行してください。") }
+                    }
                 }
                 else -> invoke.reject("Androidでは未対応の操作です。")
             }

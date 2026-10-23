@@ -45,6 +45,8 @@ export const api: Api = {
           syncPush: () =>
             request<import("../core/types").PushState>("mobile_sync"),
           requestPushPermission: () => request<void>("mobile_permission"),
+          copyPushLogin: (field) =>
+            request<void>("mobile_copy_login", { field }),
         },
       }
     : {}),

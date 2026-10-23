@@ -3,6 +3,7 @@ import type { Store } from "./store";
 import { subscriptions, rateLimit } from "./subscriptions";
 import { DeviceAuth, AuthError } from "./device-auth";
 import { challenge, confirm, type PushChannel } from "./channels";
+import type { NtfyRegistration } from "./ntfy-registration";
 const MAX_BODY = 256 * 1024;
 export function health(db: Store) {
   const state = db.get<{
@@ -21,7 +22,11 @@ export function health(db: Store) {
     monitoringReady: false,
   };
 }
-export function createApi(db: Store, push: PushChannel | null = null) {
+export function createApi(
+  db: Store,
+  push: PushChannel | null = null,
+  registration: NtfyRegistration | null = null,
+) {
   const auth = new DeviceAuth(db);
   return createServer(
     { maxHeaderSize: 40000, requestTimeout: 10000, headersTimeout: 10000 },
@@ -40,7 +45,7 @@ export function createApi(db: Store, push: PushChannel | null = null) {
         const methods =
           path === "/healthz" || path === "/v1/push-config"
             ? ["GET"]
-            : path === "/v1/subscription"
+            : path === "/v1/subscription" || path === "/v1/ntfy-registration"
               ? ["GET", "PUT", "DELETE"]
               : path === "/v1/device"
                 ? ["POST", "DELETE"]
@@ -126,6 +131,37 @@ export function createApi(db: Store, push: PushChannel | null = null) {
           return reply(200, { deleted: true });
         }
         if (!uid) throw new AuthError();
+        if (path === "/v1/ntfy-registration") {
+          if (!registration)
+            return reply(503, { error: "ntfy_registration_unavailable" });
+          if (request.method === "PUT") {
+            if (
+              !input ||
+              typeof input !== "object" ||
+              Array.isArray(input) ||
+              Object.keys(input).length !== 1 ||
+              !("topic" in input) ||
+              typeof input.topic !== "string"
+            )
+              return reply(400, { error: "invalid_ntfy_topic" });
+            return reply(200, {
+              registration: registration.put(uid, input.topic),
+            });
+          }
+          if (
+            input !== null &&
+            (typeof input !== "object" ||
+              Array.isArray(input) ||
+              Object.keys(input).length)
+          )
+            return reply(400, { error: "invalid_request" });
+          return reply(200, {
+            registration:
+              request.method === "DELETE"
+                ? registration.stop(uid)
+                : registration.get(uid),
+          });
+        }
         if (path === "/v1/device/rotate") {
           if (
             !input ||
@@ -148,6 +184,7 @@ export function createApi(db: Store, push: PushChannel | null = null) {
             (typeof input !== "object" || Object.keys(input).length)
           )
             return reply(400, { error: "invalid_request" });
+          registration?.removeDevice(uid);
           auth.remove(uid);
           return reply(200, { deleted: true });
         }
@@ -162,6 +199,12 @@ export function createApi(db: Store, push: PushChannel | null = null) {
                 Date.now(),
                 push?.origin,
               );
+        if (
+          result.status === 200 &&
+          (path === "/v1/subscription/stop" ||
+            (path === "/v1/subscription" && request.method === "DELETE"))
+        )
+          registration?.stop(uid);
         if (result.status === 200 && request.method === "PUT" && push) {
           try {
             await challenge(db, uid, push);
@@ -171,6 +214,17 @@ export function createApi(db: Store, push: PushChannel | null = null) {
         }
         reply(result.status, result.body);
       } catch (error) {
+        if (error instanceof Error) {
+          const status =
+            error.message === "invalid_ntfy_topic"
+              ? 400
+              : error.message === "topic_conflict"
+                ? 409
+                : error.message === "unauthorized"
+                  ? 401
+                  : null;
+          if (status) return reply(status, { error: error.message });
+        }
         if (error instanceof AuthError)
           return reply(error.status, {
             error:

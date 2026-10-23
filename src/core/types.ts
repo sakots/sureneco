@@ -95,6 +95,14 @@ export interface PushState {
   status: string;
   permission: boolean;
   ntfyOrigin?: string;
+  registration?: {
+    topic: string;
+    username: string;
+    password: string;
+    state: "pending" | "ready" | "stopped";
+    error: string | null;
+  } | null;
+  pendingAction?: "stop" | "delete" | null;
   server?: {
     lastFetchSuccessAt: number | null;
     error: string | null;
@@ -109,4 +117,5 @@ export interface PushApi {
   deletePush(): Promise<PushState>;
   syncPush(): Promise<PushState>;
   requestPushPermission(): Promise<void>;
+  copyPushLogin(field: "server" | "username" | "password"): Promise<void>;
 }

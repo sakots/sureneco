@@ -5,11 +5,16 @@ import { createApi } from "./api";
 import { monitor } from "./monitor";
 import { deliver } from "./delivery";
 import { Scheduler } from "./scheduler";
+import { NtfyAdminClient } from "./ntfy-admin-service";
+import { NtfyRegistration } from "./ntfy-registration";
 async function main() {
   if (Number(process.versions.node.split(".")[0]) < 24) throw new Error();
   const port = Number(process.env.SURENECO_SERVER_PORT ?? "8787");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error();
   const config = pushConfig();
+  const adminSocket = process.env.SURENECO_NTFY_ADMIN_SOCKET;
+  const admin =
+    adminSocket === undefined ? null : new NtfyAdminClient(adminSocket);
   if (process.argv.includes("--check-config")) {
     console.log(
       config ? "Push settings loaded; not sent." : "Push not configured.",
@@ -20,6 +25,10 @@ async function main() {
   const db = new Store(
     process.env.SURENECO_SERVER_DB ?? resolve("server/data/monitor.sqlite"),
   );
+  const registration = admin ? new NtfyRegistration(db, admin) : null;
+  const registrationScheduler = registration
+    ? new Scheduler(() => registration.tick())
+    : null;
   const api = createApi(
     db,
     transport
@@ -29,6 +38,7 @@ async function main() {
           send: (...args) => transport.send(...args),
         }
       : null,
+    registration,
   );
   const sender = transport
     ? (token: string, payload: import("./monitor").Payload, timeout: number) =>
@@ -73,6 +83,7 @@ async function main() {
     throw new Error();
   }
   scheduler.start();
+  registrationScheduler?.start();
   let stopping = false;
   const stop = async () => {
     if (stopping) return;
@@ -84,6 +95,7 @@ async function main() {
     );
     api.closeIdleConnections();
     await scheduler.stop();
+    await registrationScheduler?.stop();
     await closed;
     db.close();
     clearTimeout(force);

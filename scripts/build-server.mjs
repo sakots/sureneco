@@ -5,7 +5,11 @@ await rm(new URL("../dist/server", import.meta.url), {
   force: true,
 });
 await build({
-  entryPoints: ["server/main.ts", "server/detection-worker.ts"],
+  entryPoints: [
+    "server/main.ts",
+    "server/detection-worker.ts",
+    "server/ntfy-admin-main.ts",
+  ],
   bundle: true,
   platform: "node",
   target: "node24",

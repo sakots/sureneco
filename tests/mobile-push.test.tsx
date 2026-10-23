@@ -31,6 +31,7 @@ it("requires consent before registration, reports missing distributor, and permi
     }),
     syncPush: vi.fn(),
     requestPushPermission: vi.fn(),
+    copyPushLogin: vi.fn(async () => {}),
   };
   render(<MobilePushPanel api={api} />);
   await screen.findByText("未登録");

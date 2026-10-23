@@ -2,7 +2,6 @@ package sureneco.sakots
 
 import android.content.Intent
 import android.os.Bundle
-import org.unifiedpush.android.connector.UnifiedPush
 import androidx.activity.enableEdgeToEdge
 
 class MainActivity : TauriActivity() {
@@ -15,23 +14,19 @@ class MainActivity : TauriActivity() {
       insets
     }
     rememberTarget(intent)
+    val expected = PushState.epoch(this)
     PushState.executor.execute {
       try {
-        if (PushState.desired(this)) {
-          val vapid = PushState.prepare(this)
-          runOnUiThread { UnifiedPush.tryUseCurrentOrDefaultDistributor(this) { success ->
-            if (success) UnifiedPush.register(this, messageForDistributor = "スレネコチェッカーの友人戦募集通知", vapid = vapid)
-            else PushState.mark(this, "中継アプリ未導入：ntfyの設定を確認してください")
-          } }
-        }
-        PushState.sync(this)
-      } catch (_: Exception) { PushState.failed(this) }
+        if (PushState.active(this, expected)) PushState.register(this, expected, pick = false) { }
+        else PushState.sync(this)
+      } catch (_: Exception) { PushState.failed(this, expected) }
     }
   }
   override fun onResume() {
     super.onResume()
     if (PushState.desired(this) && !androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled()) PushState.suppress(this, "stop")
-    if (PushState.prefs(this).getString("pending", null) != null) PushState.executor.execute { try { PushState.sync(this) } catch (_: Exception) { PushState.failed(this) } }
+    val expected = PushState.epoch(this)
+    PushState.executor.execute { try { PushState.refreshStatus(this) } catch (_: Exception) { PushState.failed(this, expected) } }
   }
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)

@@ -1,0 +1,30 @@
+[Unit]
+Description=sureneco restricted ntfy account manager
+After=ntfy.service
+
+[Service]
+Type=simple
+User=ntfy
+Group=sureneco-ntfy
+SupplementaryGroups=ntfy
+WorkingDirectory=/opt/sureneco
+EnvironmentFile=/etc/sureneco/ntfy-admin.env
+ExecStart=/usr/bin/node /opt/sureneco/dist/server/ntfy-admin-main.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+RuntimeDirectory=sureneco-ntfy
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ntfy
+MemoryMax=128M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

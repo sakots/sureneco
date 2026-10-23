@@ -1,45 +1,233 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PushApi, PushState } from "../core/types";
 export function MobilePushPanel({ api }: { api: PushApi }) {
   const [state, setState] = useState<PushState | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const version = useRef(0);
+  const actionInFlight = useRef(false);
+  const [revealedFor, setRevealedFor] = useState<PushState | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [copyMessage, setCopyMessage] = useState("");
+  const copyVersion = useRef(0);
+  const registration = state?.registration;
+  const passwordVisible =
+    revealedFor !== null &&
+    revealedFor.ntfyOrigin === state?.ntfyOrigin &&
+    revealedFor.enabled === state?.enabled &&
+    revealedFor.status === state?.status &&
+    revealedFor.pendingAction === state?.pendingAction &&
+    revealedFor.registration?.topic === registration?.topic &&
+    revealedFor.registration?.username === registration?.username &&
+    revealedFor.registration?.password === registration?.password &&
+    revealedFor.registration?.state === registration?.state &&
+    revealedFor.registration?.error === registration?.error;
+  useEffect(() => {
+    setRevealedFor(null);
+    ++copyVersion.current;
+    setCopyMessage("");
+  }, [
+    state?.ntfyOrigin,
+    state?.enabled,
+    state?.status,
+    state?.pendingAction,
+    registration?.topic,
+    registration?.username,
+    registration?.password,
+    registration?.state,
+    registration?.error,
+  ]);
   useEffect(() => {
     let alive = true;
     const read = () => {
-      if (!document.hidden)
-        void api
-          .getPushState()
-          .then((s) => {
-            if (alive) setState(s);
-          })
-          .catch(() => {
-            if (alive) setError("通知状態を確認できません。");
-          });
+      if (document.hidden || actionInFlight.current) return;
+      const requestVersion = ++version.current;
+      void api
+        .getPushState()
+        .then((s) => {
+          if (alive && requestVersion === version.current) setState(s);
+        })
+        .catch(() => {
+          if (alive && requestVersion === version.current)
+            setError("通知状態を確認できません。");
+        });
     };
     read();
     const timer = setInterval(read, 5000);
     return () => {
       alive = false;
+      ++version.current;
+      ++copyVersion.current;
+      actionInFlight.current = false;
       clearInterval(timer);
     };
   }, [api]);
-  async function act(fn: () => Promise<PushState>) {
+  async function act(
+    fn: () => Promise<PushState>,
+    pendingAction?: "stop" | "delete",
+  ) {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    const requestVersion = ++version.current;
     setBusy(true);
     setError("");
+    ++copyVersion.current;
+    setCopyMessage("");
+    if (pendingAction) {
+      setState((previous) => ({
+        ...previous,
+        permission: previous?.permission ?? false,
+        enabled: false,
+        status: "端末の通知を停止しました。",
+        pendingAction,
+      }));
+    }
     try {
-      setState(await fn());
-    } catch (e) {
-      setError(String(e));
+      const next = await fn();
+      if (requestVersion === version.current) setState(next);
+    } catch {
+      if (requestVersion === version.current)
+        setError(
+          "通知設定を変更できません。接続を確認して再試行してください。",
+        );
     } finally {
-      setBusy(false);
+      if (requestVersion === version.current) {
+        actionInFlight.current = false;
+        setBusy(false);
+      }
+    }
+  }
+  async function copyLogin(field: "server" | "username" | "password") {
+    if (copying || busy) return;
+    const requestVersion = ++copyVersion.current;
+    setCopying(true);
+    setCopyMessage("");
+    try {
+      await api.copyPushLogin(field);
+      if (requestVersion === copyVersion.current)
+        setCopyMessage(
+          `${field === "server" ? "サーバーURL" : field === "username" ? "ユーザー名" : "パスワード"}をコピーしました。`,
+        );
+    } catch {
+      if (requestVersion === copyVersion.current)
+        setCopyMessage("コピーできませんでした。もう一度お試しください。");
+    } finally {
+      setCopying(false);
     }
   }
   return (
     <section className="settings-card" aria-label="バックグラウンド通知">
       <h3>バックグラウンド通知</h3>
       <p role="status">{state?.status ?? "確認中…"}</p>
+      {state?.pendingAction ? (
+        <p>
+          端末の通知は停止済みです。
+          {state.pendingAction === "delete" ? "登録削除" : "停止"}
+          要求はサーバーには未反映です。接続を確認し、
+          {state.pendingAction === "delete"
+            ? "「サーバー登録を削除」"
+            : "「同期を再試行」"}
+          で再試行してください。権限撤去の完了はまだ確認できていません。
+        </p>
+      ) : registration?.state === "stopped" ? (
+        <p>ntfyアカウントと読み取り権限の撤去を確認しました。</p>
+      ) : registration?.state === "pending" ? (
+        <p>
+          {state?.enabled
+            ? "ntfyアカウントと読み取り権限を設定中です。画面を開いたまま待つか、「同期を再試行」で状態を確認してください。"
+            : "停止要求はサーバー受付済みです。ntfyアカウントと権限撤去は処理中です。「同期を再試行」で撤去完了を確認してください。"}
+        </p>
+      ) : registration?.state === "ready" ? (
+        <p>
+          ntfyの読み取り権限の設定が完了しました。通知の到達確認はまだ別に必要です。
+          初回は下の情報でntfyでログインしてから、「同期を再試行」を押してください。
+        </p>
+      ) : null}
+      {registration?.error && (
+        <p role="alert">
+          登録処理を完了できません。接続を確認し、「同期を再試行」を押してください。
+        </p>
+      )}
+      {registration &&
+        registration.state !== "stopped" &&
+        !state?.pendingAction && (
+          <fieldset className="ntfy-credentials">
+            <legend>ntfyログイン情報</legend>
+            <p>
+              ntfyの「設定」→「ユーザー管理」→「ユーザー追加」を開き、次の3項目を順に貼り付けて保存してください。
+            </p>
+            <div className="ntfy-login-field">
+              <label htmlFor="ntfy-server">① サーバーURL（接続先）</label>
+              <input
+                id="ntfy-server"
+                value={state?.ntfyOrigin ?? ""}
+                readOnly
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                disabled={
+                  busy || copying || !state?.enabled || !state?.ntfyOrigin
+                }
+                onClick={() => void copyLogin("server")}
+              >
+                サーバーURLをコピー
+              </button>
+            </div>
+            <div className="ntfy-login-field">
+              <label htmlFor="ntfy-username">② ユーザー名</label>
+              <input
+                id="ntfy-username"
+                value={registration.username}
+                readOnly
+                autoComplete="off"
+                spellCheck={false}
+                autoCapitalize="none"
+              />
+              <button
+                type="button"
+                disabled={busy || copying || !state?.enabled}
+                onClick={() => void copyLogin("username")}
+              >
+                ユーザー名をコピー
+              </button>
+            </div>
+            <label>
+              ③ パスワード
+              <input
+                aria-label="ntfyパスワード"
+                type={passwordVisible ? "text" : "password"}
+                value={registration.password}
+                readOnly
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <button
+              type="button"
+              aria-pressed={passwordVisible}
+              onClick={() => setRevealedFor(passwordVisible ? null : state)}
+            >
+              {passwordVisible ? "パスワードを隠す" : "パスワードを表示"}
+            </button>
+            <button
+              type="button"
+              disabled={busy || copying || !state?.enabled}
+              onClick={() => void copyLogin("password")}
+            >
+              パスワードをコピー
+            </button>
+            <p role="status" className="help">
+              {copyMessage}
+            </p>
+            <p className="help">
+              コピーした項目をntfyの同じ名前の欄へ貼り付けてください。パスワードは隠したままコピーできます。
+              この端末専用の情報です。他の人へ共有しないでください。貼り付け後は必要に応じてクリップボードの履歴を削除してください。
+            </p>
+          </fieldset>
+        )}
       <p>
         画面を閉じている間の通知には、中継アプリのntfyが必要です。
         通知は1分程度を目標に届けます。通信や電池設定で遅れる場合があります。
@@ -65,9 +253,18 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
             </p>
           </li>
           <li>
-            <strong>通知サーバーを設定する</strong>
+            <strong>この画面で通知を有効にする</strong>
             <p>
-              ntfyの「︙」→「設定」→「一般」→「デフォルトのサーバー」を開き、次のURLを保存します。
+              スレネコチェッカーへ戻り、保存内容への同意を選び、「通知を有効にする」を押します。
+              中継アプリの選択が表示されたらntfyを選びます。端末専用アカウントと読み取り権限を自動で設定します。
+              発行されたログイン情報がこの画面に表示されるまで待ちます。
+            </p>
+          </li>
+          <li>
+            <strong>ntfyで端末用アカウントにログインする</strong>
+            <p>
+              ntfyの「設定」→「一般」→「デフォルトのサーバー」に次のURLを保存します。
+              次に「設定」→「ユーザー管理」→「ユーザー追加」を開き、この画面の接続先・ユーザー名・パスワードを入力して保存します。
               項目名はntfyのバージョンによって多少異なります。
             </p>
             {state?.ntfyOrigin ? (
@@ -81,11 +278,10 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
             )}
           </li>
           <li>
-            <strong>端末用アカウントを登録する</strong>
+            <strong>この画面で同期を再試行する</strong>
             <p>
-              ntfyの「設定」→「ユーザー管理」→「ユーザー追加」を開きます。
-              サーバーURLには上記と同じ接続先を、ユーザー名・パスワードには運用者から案内された端末用アカウントの情報を入力して保存します。
-              アカウントがまだない場合は運用者へ発行を依頼してください。
+              ログイン後にスレネコチェッカーへ戻り、「同期を再試行」を押します。
+              「監視中」になったことを確認してください。
             </p>
           </li>
           <li>
@@ -97,20 +293,13 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
               ntfyの常駐通知が表示されることがあります。ntfyを強制停止すると通知が届かなくなる場合があります。
             </p>
           </li>
-          <li>
-            <strong>この画面で通知を有効にする</strong>
-            <p>
-              スレネコチェッカーへ戻り、保存内容への同意を選び、「通知を有効にする」を押します。
-              中継アプリの選択が表示されたらntfyを選びます。通知用のトピック（受信先）はこの操作で作成されます。
-            </p>
-          </li>
         </ol>
         <p>
           <strong>確認待ち・同期失敗が続く場合</strong>
         </p>
         <p>
-          接続先と端末用アカウントを確認してください。初回は、運用者が端末専用トピックの読み取り権限を設定する必要があります。
-          ntfyに表示されるスレネコチェッカー用のトピックを運用者へ伝えて設定を依頼し、ntfyの接続を再試行してください。
+          接続先と、この画面で発行された端末用アカウントのログイン設定を確認してください。
+          登録処理中の場合は完了を待ち、ntfyの接続を再試行してください。
           確認の再送には最短60秒の間隔があるため、1分ほど待ってから下の「同期を再試行」を押します。
           「監視中」になったことを確認してください。
         </p>
@@ -133,7 +322,8 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
           {state.server.lastFetchSuccessAt
             ? new Date(state.server.lastFetchSuccessAt).toLocaleString()
             : "取得未確認"}{" "}
-          {state.server.error ?? state.server.delivery?.error}
+          {(state.server.error || state.server.delivery?.error) &&
+            "サーバー状態を確認できません。接続を確認し、同期を再試行してください。"}
         </p>
       )}
       <div className="form-actions">
@@ -158,12 +348,15 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
         <button disabled={busy} onClick={() => void act(() => api.syncPush())}>
           同期を再試行
         </button>
-        <button disabled={busy} onClick={() => void act(() => api.stopPush())}>
+        <button
+          disabled={busy}
+          onClick={() => void act(() => api.stopPush(), "stop")}
+        >
           監視を停止
         </button>
         <button
           disabled={busy}
-          onClick={() => void act(() => api.deletePush())}
+          onClick={() => void act(() => api.deletePush(), "delete")}
         >
           サーバー登録を削除
         </button>

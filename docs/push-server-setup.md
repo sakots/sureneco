@@ -219,20 +219,60 @@ curl --fail https://push.example.com/v1/health
 
 ## 7. 端末のアカウントとアプリを接続する
 
-1. VPSで端末専用の一般ユーザーを作成します。例：`sudo -u ntfy ntfy user add device001`。対話で固有のパスワードを設定し、本人だけへ渡します。管理者権限は付けません。
-2. AndroidのF-Droid版ntfyで自前サーバー`https://push.example.com`とそのユーザーを設定します。サーバー設定、アカウント、UnifiedPushの既定サーバーを同じ接続先にそろえます。
-3. 開発PCのGit管理外の`src-tauri/gen/android/app/mobile.properties`へ次の2行を設定し、[Android資料](android.md#androidビルドの基盤)の手順でAPKを再ビルド・インストールします。
+新しいAndroid画面は自動登録APIを必要とします。先に以下の管理サービスを配置してください。既存の`device001`などの手動アカウントは削除・移行しません。
 
-   ```properties
-   sureneco.apiBaseUrl=https://api.example.com
-   sureneco.ntfyOrigin=https://push.example.com
-   ```
+### 限定管理サービスを追加する
 
-4. スレネコチェッカーで通知を許可し、同意後に「通知を有効にする」を押してntfyを選びます。
-5. ntfyアプリで、その登録用の`up...`トピックを確認します。運用者は端末との対応を確認して、VPSで`sudo -u ntfy ntfy access device001 up実際のトピック read-only`を実行します。`up*`全体の読み取り権限は付けません。
-6. ntfyの接続を再試行し、スレネコチェッカーの「同期を再試行」を押します。チャレンジ再送には最短60秒の制限があります。「監視中」になることを確認します。
+VPS上のチェックアウトを今回の実装へ更新し、`pnpm install --frozen-lockfile`・`pnpm test:server`・`pnpm typecheck`を通して`dist/server`を配置します。既存DB・VAPID鍵を維持し、既存のサービス・環境設定は変更前に非公開の場所へバックアップします。
 
-現在のアカウント・ACLの払い出しは手動です。初回はACL設定前の読み取りが拒否される可能性があり、ntfy側で再接続が必要です。この手順は実ntfyとの結合確認が未実施のため、失敗した場合は全トピックを公開せず、ntfyの登録先・本人用ACL・再接続状態を確認してください。[ntfyの認証・ACL](https://docs.ntfy.sh/config/#access-control)
+```sh
+command -v ntfy
+ntfy --version
+sudo systemctl cat ntfy sureneco
+sudo stat /etc/ntfy/server.yml /var/lib/ntfy
+getent passwd ntfy
+getent group ntfy
+getent group sureneco-ntfy || sudo groupadd --system sureneco-ntfy
+```
+
+ntfy 2.32.0を検証済みです。`server/ntfy-admin.env.example`の実行ファイル・設定パス、`server/sureneco-ntfy-admin.service`の実行ユーザー・グループ・`ReadWritePaths`を実環境へ合わせます。APIユーザーへntfyグループ、DBの権限、sudo権限は付けません。既存ファイルがある場合は以下を再実行して上書きせず、差分を確認してください。
+
+```sh
+sudo test ! -e /etc/sureneco/ntfy-admin.env &&
+  sudo install -o root -g ntfy -m 640 server/ntfy-admin.env.example /etc/sureneco/ntfy-admin.env
+sudoedit /etc/sureneco/ntfy-admin.env
+sudo test ! -e /etc/systemd/system/sureneco-ntfy-admin.service &&
+  sudo install -m 644 server/sureneco-ntfy-admin.service /etc/systemd/system/sureneco-ntfy-admin.service
+sudo install -d -m 755 /etc/systemd/system/sureneco.service.d
+sudo test ! -e /etc/systemd/system/sureneco.service.d/ntfy-admin.conf &&
+  sudo install -m 644 server/sureneco-ntfy-admin.conf /etc/systemd/system/sureneco.service.d/ntfy-admin.conf
+sudoedit /etc/sureneco/server.env
+```
+
+APIの`server.env`へ`SURENECO_NTFY_ADMIN_SOCKET=/run/sureneco-ntfy/admin.sock`を追加します。管理サービスはntfyのユーザーで動き、共有グループ`sureneco-ntfy`へAPIサービスだけを追加してUnixソケットへの接続を許可します。管理用の環境ファイルをAPIユーザーから読めるようにしません。DBが`/var/lib/ntfy`以外ならサービスの許可パスも変更します。
+
+```sh
+sudo systemd-analyze verify /etc/systemd/system/sureneco-ntfy-admin.service /etc/systemd/system/sureneco.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now sureneco-ntfy-admin
+sudo systemctl restart sureneco
+sudo systemctl status sureneco-ntfy-admin sureneco --no-pager
+sudo stat /run/sureneco-ntfy /run/sureneco-ntfy/admin.sock
+sudo systemctl show sureneco -p SupplementaryGroups
+```
+
+ディレクトリーは`ntfy:sureneco-ntfy`の`0750`、ソケットは同所有者の`0660`です。APIサービスの`SupplementaryGroups`が`sureneco-ntfy`を含むことを確認します。実際の接続確認は認証済み登録APIを使います。異常時にソケットを手動削除する前に管理サービスを停止してください。systemdは管理サービスの停止時にランタイムディレクトリーを撤去します。
+
+### Androidから自動登録を確認する
+
+1. ntfy（Google Play版・F-Droid版のいずれも可）で自前サーバーを設定します。UnifiedPushの既定サーバーも同じ接続先にそろえます。
+2. 開発PCのGit管理外の`src-tauri/gen/android/app/mobile.properties`へAPIとntfyのHTTPS originを設定し、[Android資料](android.md#androidビルドの基盤)の手順でAPKをビルド・インストールします。
+3. スレネコチェッカーで通知を許可し、同意後に「通知を有効にする」を押してntfyを選びます。
+4. 画面に自動発行された接続先・ユーザー名・パスワードをntfyの「ユーザー管理」へ入力します。トピックを運用者へ渡す必要はありません。
+5. ntfyの接続を再試行し、スレネコチェッカーの「同期を再試行」を押します。チャレンジ再送には最短60秒の制限があります。「監視中」になることを確認します。
+6. 通知先変更、圏外での停止と再試行、停止受付から権限撤去完了への変化、再開、端末登録削除、管理サービス停止と復旧・VPS再起動を確認します。削除後は端末認証がなくなるため、画面の「受付済み」をACL撤去完了とはみなしません。
+
+本手順の実VPS・Android結合確認は未実施です。失敗時に全トピックを公開せず、管理サービスの状態、本人用ACL、ntfyのログイン先と再接続状態を確認してください。[ntfyの認証・ACL](https://docs.ntfy.sh/config/#access-control)
 
 接続先はビルド時に決まります。`.invalid`ホストで生成した既存の検証APKは、サーバーを作るだけでは接続先が変わりません。端末認証トークンはアプリが同意後に発行を受けるため、手動でAPKへ埋め込みません。
 

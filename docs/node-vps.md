@@ -57,6 +57,7 @@ node scripts/generate-vapid.mjs /absolute/private/vapid.json mailto:operator@exa
 | `SURENECO_SERVER_DB` | 非公開の永続SQLiteパス |
 | `SURENECO_NTFY_ORIGIN` | 自前ntfyのHTTPS origin。パス・末尾スラッシュなし |
 | `SURENECO_VAPID_FILE` | 生成したJSONの絶対パス |
+| `SURENECO_NTFY_ADMIN_SOCKET` | 自動登録を有効にする場合だけ指定するローカルUnixソケットの絶対パス |
 
 環境変数を渡した状態で`node dist/server/main.mjs --check-config`を実行すると設定形式だけを検証します。`Push settings loaded; not sent.`は配送成功を示しません。`Push not configured.`では通知先を登録できません。旧Firebase試作のDBを使わず、新しいDBパスを指定してください。自動移行・削除はしません。
 
@@ -69,6 +70,8 @@ ntfy用ユーザー・DBとサービスをNode.jsから分け、`deny-all`を基
 端末で中継登録すると、その端末用の`up...`トピックが作られます。ntfyアプリ側で対象トピックを確認して本人の読み取りACLを設定し、スレネコチェッカーで同期を再試行します。購読チャレンジが返るまで監視は有効になりません。トピック・アカウントの作成、更新、失効時のACL撤去を検証環境で確認してください。サーバー登録削除はsurenecoのデータを削除しますが、ntfyアカウントの作成・削除は運用者の作業です。この払い出し手順の実ntfyでの確認は未実施です。
 
 例として`ntfy access 個別ユーザー 対象のupトピック read-only`で読み取りを付与します。全員へ`up*`の読み取りを許可せず、入力するユーザー・トピックが本人のものか確認します。具体的なコマンド引数と設定パスは[ntfy公式設定](https://docs.ntfy.sh/config/#access-control)を採用バージョンで確認してください。
+
+自動登録の第2段階では、認証済み端末の登録APIと、別ユーザーで動く限定管理プロセスを利用できます。[配置・権限・秘密情報保管](ntfy-registration-automation.md#ローカル管理プロセスの配置)を確認してください。第3段階のAndroid画面はこのAPIへ接続し、発行結果を表示します。新しい画面では自動登録APIが必須で、未配置時に手動方式へ黙って切り替えません。既存の手動アカウントは自動移行・削除しません。自動登録と実端末をつなぐVPS結合確認は未実施です。
 
 ## 検証の順序
 
