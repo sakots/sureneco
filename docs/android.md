@@ -1,8 +1,8 @@
 # Android版の開発と配布準備
 
-Node.js＋VPSとUnifiedPush＋自前ntfyを採用し、実装を再開しました。[進捗](server-progress.md)に実装・検証した範囲を記録しています。実端末での配送とVPS配備はまだ確認していません。
+Node.js＋VPSとUnifiedPush＋自前ntfyを採用しています。[進捗](server-progress.md)に実装・検証した範囲を記録しています。VPS配備と公開HTTPSでの自動登録経路を確認し、利用者からAndroid実機でログイン情報のコピー・ntfyへの貼り付け・「監視中」への移行・実際の通知受信まで成功した報告を受けています。
 
-Androidの画面接続・端末操作・通知設定、UnifiedPush connector 3.3.5による登録・受信とネイティブ通知判定を追加しました。Node.js側は端末別認証とWeb Push暗号化へ置き換え、Firebase SDK・公開設定を撤去しています。デバッグAPKを生成しました。実ntfy配送・実端末・署名付き公開AAB・Google Play提出は未完了です。[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
+Androidの画面接続・端末操作・通知設定、UnifiedPush connector 3.3.5による登録・受信とネイティブ通知判定を追加しました。Node.js側は端末別認証とWeb Push暗号化へ置き換え、Firebase SDK・公開設定を撤去しています。デバッグAPKで基本の実機通知経路を利用者が確認済みです。消灯中・停止／削除・再起動などの追加検証、署名付き公開AAB・Google Play提出は未完了です。[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
 
 ## 完成時の構成
 
@@ -27,7 +27,7 @@ Androidには別途中継アプリのntfyを導入し、自前サーバーを設
 - LinuxのVPS、systemd、SQLiteの永続保存領域、HTTPSのAPI公開先とリバースプロキシ。Node.jsサービス用のユーザー、再起動・バックアップ・障害監視を準備。
 - 自前ntfy、APIとntfyのHTTPS公開先、VAPID鍵とntfyの端末別認証・ACL設定。Firebaseプロジェクトは不要です。
 
-現在用意されているのはAndroid端末です。自前ntfyと運用VPSは未設定で、実配送は未確認です。
+Android端末・自前ntfy・運用VPSを使う基本の実機通知経路は利用者が確認済みです。消灯中や再起動後などの条件別確認は、基本の通知受信成功とは分けて扱います。
 
 ## Androidビルドの基盤
 
@@ -66,9 +66,11 @@ cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-deb
 
 2026/10/23に自動登録画面を含む接続先設定済みAPKを生成しました。既存配布物を上書きせず、`release/sureneco_v0.8.9_android_ntfy-registration_debug.apk`へ保存しています。versionNameは現在のビルド設定どおり`0.8.9`です。署名検証（v2）・16KB zip整列、`sureneco.sakots`、表示名、ARM64、minSdk 24／targetSdk 36を確認しました。DEX内に設定済みのAPI／ntfy originと自動登録経路を確認しました。SHA-256は`f8a38a949c84530c3a6c836d27da65e1f38c4c2745dfb22b37fcd687bfa8bc28`です。公開APIの`/v1/ntfy-registration`は認証なしGETで404を返しており、新APIの公開は未確認です。VPS配備前のAPKを配送確認済みとは扱いません。接続済み実機がなく、インストール・ログイン・配送は未確認です。
 
-その後VPSへ自動登録APIと管理サービスを配備し、公開HTTPSから実ntfyへの登録・権限分離・通知先変更・停止・再開・削除を確認しました。上記404は配備前の記録で、現在は認証なしGETに401を返します。Android実機でのntfyログイン・所有確認・通知配送は引き続き未確認です。
+その後VPSへ自動登録APIと管理サービスを配備し、公開HTTPSから実ntfyへの登録・権限分離・通知先変更・停止・再開・削除を確認しました。上記404は配備前の記録で、現在は認証なしGETに401を返します。2026/10/23に利用者から、Android実機でログイン情報のコピー・ntfyへの貼り付け・「監視中」への移行・実際の通知受信まで成功した報告を受けました。
 
 ログイン情報のコピーに対応した新しいAPKは`release/sureneco_v0.8.9_android_ntfy-login-copy_debug.apk`です。サーバーURL・ユーザー名・パスワードをそれぞれコピーし、ntfyの同じ入力欄へ貼り付けられます。パスワードは隠したままコピーでき、Androidの機密クリップボード属性を設定します。コピー履歴に残る可能性があるため、貼り付け後は必要に応じて履歴を削除してください。署名・16KB zip整列を確認しました。SHA-256は`dd43d846ecf6352ae083dd513038451af724d286a5779334496b6487601ab8b0`です。ブラウザーの390px画面で3項目のコピー内容・パスワードの非表示維持・横方向のはみ出しがないことを確認しました。ブラウザー確認は状態fixtureとWebクリップボードを使っており、Android実機での貼り付け・機密プレビュー抑止の確認とは区別します。
+
+上記のブラウザー確認後、コピー・貼り付けと通知受信は利用者の実機でも成功しています。機密クリップボードのプレビュー抑止、消灯中の受信、停止・削除・再起動後の動作を確認したとは扱いません。
 
 ## 通知を設定する
 
