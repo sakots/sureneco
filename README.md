@@ -30,6 +30,8 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 
 ## 資料
 
+- [端末登録・権限設定の自動化](docs/ntfy-registration-automation.md)：段階別の実装範囲と検証方法
+
 - [使い方](docs/usage.md)：監視・通知、設定フォルダ、雀魂の起動、更新、Electron版からの切り替え
 - [UnifiedPush＋自前ntfy](docs/unifiedpush-ntfy.md)：採用する通知構成、Android中継アプリ、端末認証・通知先登録と準備手順。実装と検証の進捗あり
 - [運用費の比較](docs/operation-cost.md)：掲載用の既存エックスサーバーと、[人数制限を設けないVPS運用](docs/vps-cost.md)。実装は[進捗を記録](docs/server-progress.md)
@@ -44,6 +46,8 @@ Android版「スレネコチェッカー」は[開発と配布準備](docs/andro
 ## 更新履歴
 
 ### [2026/10/23] v0.8.10（開発中）
+
+- ntfy登録自動化の第1段階として、端末用ユーザーの作成・限定トピックの権限付与／解除・ユーザー削除を扱う管理アダプターと検証を追加。API・Androidへの接続とVPSへの配備は後続段階。
 
 - ntfyの導入案内を、Google Play版・F-Droid版の両方に対応する説明へ訂正。自前サーバーへの接続ではGoogle Play版もFirebaseを使わないことを明記。
 

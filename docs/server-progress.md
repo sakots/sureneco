@@ -1,6 +1,8 @@
 # UnifiedPush通知の実装進捗
 
-2026/10/22に実装を再開しました。作業ブランチは`feat/unifiedpush-ntfy`です。Node.js＋VPSの監視とUnifiedPush＋自前ntfyの方針に沿い、Firebase版の試作を置き換えました。VPS契約・配備・実ntfy配送・実端末確認・Play公開は行っていません。
+2026/10/23時点では、利用者からVPSへの配備、APIとntfyのHTTPS疎通、証明書更新試験、手動登録した端末での通知テスト成功の報告を受けています。配布向けの自動登録は[段階別の計画](ntfy-registration-automation.md)に沿って進め、第1段階のntfy管理アダプターを一時DBの実ntfy 2.32.0で検証しました。API・Androidへの接続とVPS配備は後続段階です。
+
+以下は2026/10/22に実装を再開した時点の記録です。当時の作業ブランチは`feat/unifiedpush-ntfy`で、Node.js＋VPSの監視とUnifiedPush＋自前ntfyの方針に沿い、Firebase版の試作を置き換えました。当時はVPS配備・実ntfy配送・実端末確認・Play公開を行っていませんでした。
 
 ## 実装したもの
 
