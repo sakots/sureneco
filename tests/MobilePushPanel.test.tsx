@@ -35,6 +35,10 @@ it("ntfyの案内を開閉して接続先を確認しても、同意・有効化
   expect(details.open).toBe(false);
   await user.click(summary);
   expect(details.open).toBe(true);
+  expect(within(details).getByText(/Google PlayまたはF-Droid/)).toBeTruthy();
+  expect(
+    within(details).getByText(/Google Play版でもFirebaseを使いません/),
+  ).toBeTruthy();
   expect(within(details).getByText("https://push.example.com")).toBeTruthy();
   expect(within(details).getByText(/ユーザー管理/)).toBeTruthy();
   expect(within(details).getByText(/読み取り権限/)).toBeTruthy();

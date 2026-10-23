@@ -48,14 +48,20 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
         <summary>ntfyの準備・設定手順</summary>
         <p>
           ntfy（エヌティファイ）は、通知サーバーとの接続を保ち、スレネコチェッカーへ通知を届ける無料の中継アプリです。
-          スレネコチェッカーと同じスマホへインストールしてください。この通知方式ではFirebaseを使いません。
+          スレネコチェッカーと同じスマホへインストールしてください。
         </p>
         <ol>
           <li>
-            <strong>F-Droid版のntfyを導入する</strong>
+            <strong>ntfyをインストールする</strong>
             <p>
-              F-Droidで「ntfy」を検索してインストールし、一度開きます。
-              F-DroidはオープンソースのAndroidアプリを配布するストアです。
+              Google
+              PlayまたはF-Droidで「ntfy」を検索してインストールし、一度開きます。
+              どちらの配布版も利用できます。
+            </p>
+            <p>
+              このアプリで設定する自前サーバーへの通知では、Google
+              Play版でもFirebaseを使いません。
+              F-Droid版はFirebaseの機能自体を含まない配布版です。
             </p>
           </li>
           <li>

@@ -4,6 +4,18 @@ use std::{io::Read, time::Duration};
 use url::Url;
 pub const MAX_BYTES: u64 = 5 * 1024 * 1024;
 
+#[cfg(target_os = "android")]
+pub fn initialize_android_tls() -> Result<(), String> {
+    let context = ndk_context::android_context();
+    // Tauri owns these VM/context handles for the application lifetime.
+    let vm = unsafe { jni::JavaVM::from_raw(context.vm().cast()) };
+    vm.attach_current_thread(|env| {
+        let application = unsafe { jni::objects::JObject::from_raw(env, context.context().cast()) };
+        rustls_platform_verifier::android::init_with_env(env, application)
+    })
+    .map_err(|_| "Androidの証明書検証を初期化できません。".to_string())
+}
+
 pub fn allowed_url(input: &str) -> Result<Url, String> {
     let url = Url::parse(input).map_err(|error| error.to_string())?;
     let host = url.host_str().unwrap_or("");

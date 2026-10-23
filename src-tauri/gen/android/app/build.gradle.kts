@@ -22,6 +22,15 @@ val mobileProperties = Properties().apply {
     }
 }
 
+// Keep the JNI implementation paired with the version selected by Cargo.
+val rustlsVerifierVersion = providers.fileContents(
+    rootProject.layout.projectDirectory.file("../../Cargo.lock")
+).asText.map { lock ->
+    Regex("""name = "rustls-platform-verifier-android"\r?\nversion = "([^"]+)"""")
+        .find(lock)?.groupValues?.get(1)
+        ?: error("rustls-platform-verifier-android not found in Cargo.lock")
+}
+
 val releaseBuild = gradle.startParameter.taskNames.any {
     it.contains("Release", ignoreCase = true)
 }
@@ -119,6 +128,7 @@ rust {
 }
 
 dependencies {
+    implementation("org.rustls:rustls-platform-verifier:${rustlsVerifierVersion.get()}")
     implementation("org.unifiedpush.android:connector:3.3.5")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
