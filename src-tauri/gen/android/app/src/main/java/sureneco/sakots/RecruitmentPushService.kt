@@ -17,13 +17,23 @@ import org.unifiedpush.android.connector.FailedReason
 class RecruitmentPushService : PushService() {
     override fun onNewEndpoint(endpoint: PushEndpoint, instance: String) {
         if (instance != INSTANCE_DEFAULT) return
-        PushState.executor.execute { try { PushState.endpoint(this, endpoint) } catch (_: Exception) { PushState.failed(this) } }
+        val expected = PushState.epoch(this)
+        try {
+            val operation = PushState.endpoint(this, endpoint, expected) ?: return
+            PushState.executor.execute {
+                try { if (PushState.active(this, operation)) PushState.sync(this) }
+                catch (_: Exception) { PushState.failed(this, operation) }
+            }
+        } catch (_: Exception) { PushState.failed(this, expected) }
     }
-    override fun onRegistrationFailed(reason: FailedReason, instance: String) { PushState.mark(this, "中継アプリ登録失敗") }
+    override fun onRegistrationFailed(reason: FailedReason, instance: String) {
+        if (instance == INSTANCE_DEFAULT) PushState.mark(this, "中継アプリ登録失敗", PushState.epoch(this))
+    }
     override fun onUnregistered(instance: String) {
-        if (instance != INSTANCE_DEFAULT) return
+        if (instance != INSTANCE_DEFAULT || !PushState.desired(this)) return
         PushState.suppress(this, "stop")
-        PushState.executor.execute { try { PushState.sync(this) } catch (_: Exception) { PushState.failed(this) } }
+        val expected = PushState.epoch(this)
+        PushState.executor.execute { try { PushState.sync(this) } catch (_: Exception) { PushState.failed(this, expected) } }
     }
     override fun onMessage(message: PushMessage, instance: String) {
         if (instance != INSTANCE_DEFAULT || !message.decrypted || message.content.size > 4096) return
@@ -31,7 +41,8 @@ class RecruitmentPushService : PushService() {
             val data = JSONObject(String(message.content, Charsets.UTF_8))
             if (data.optLong("expiresAt") <= System.currentTimeMillis() / 1000) return
             if (data.optString("type") == "challenge") {
-                PushState.executor.execute { try { PushState.confirm(this, data) } catch (_: Exception) { PushState.failed(this) } }
+                val expected = PushState.epoch(this)
+                PushState.executor.execute { try { PushState.confirm(this, data, expected) } catch (_: Exception) { PushState.failed(this, expected) } }
                 return
             }
             if (data.optString("type") != "recruitment") return
@@ -56,7 +67,12 @@ class RecruitmentPushService : PushService() {
                 .setContentTitle("友人戦募集 · ${data.getString("threadTitle").take(80)}")
                 .setContentText("レス ${item.getInt("number")}：${item.getString("body").take(220)}")
                 .setContentIntent(pending).setAutoCancel(true).setTimeoutAfter((data.getLong("expiresAt") - now) * 1000).build()
-            NotificationManagerCompat.from(this).notify(event.hashCode(), notification)
+            synchronized(PushState) {
+                if (!NotificationPolicy.accepts(PushState.desired(this), NotificationManagerCompat.from(this).areNotificationsEnabled(), message.decrypted,
+                        data.getLong("revision"), p.getLong("revision", 0), data.getString("generation"), p.getString("generation", "")!!,
+                        data.getLong("expiresAt"), System.currentTimeMillis() / 1000, false)) return
+                NotificationManagerCompat.from(this).notify(event.hashCode(), notification)
+            }
         } catch (_: Exception) { /* malformed or stale messages are never displayed */ }
     }
 }
