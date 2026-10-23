@@ -22,3 +22,5 @@
 # Rust registers this plugin by its fully qualified class name.
 -keep class sureneco.sakots.MobilePlugin { *; }
 -keep class sureneco.sakots.MobileArgs { *; }
+# Rust calls the certificate verifier through JNI.
+-keep,includedescriptorclasses class org.rustls.platformverifier.** { *; }

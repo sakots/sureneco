@@ -97,6 +97,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            http::initialize_android_tls()?;
             let file = app.path().app_data_dir()?.join("state.json");
             let saved = storage::read(&file)?;
             let handle = app.handle().clone();

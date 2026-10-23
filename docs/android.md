@@ -31,6 +31,8 @@ Androidには別途中継アプリのntfyを導入し、自前サーバーを設
 
 ## Androidビルドの基盤
 
+スレッドのHTTPS取得にはreqwest 0.13のAndroid証明書検証を使います。起動時にAndroidのVM・Context・クラスローダーを登録し、GradleにはCargo.lockの`rustls-platform-verifier-android`と一致するJava側ライブラリーを含めます。リリースの縮小処理でもJNIから呼ぶ検証クラスを保持します。Android単体テストで必要クラスの存在を確認し、APK生成後に署名と接続先を検証します。実機でのスレッド検索・通信失敗後の再試行は別途確認が必要です。[公式のAndroid初期化手順](https://github.com/rustls/rustls-platform-verifier#android)を参照してください。
+
 Android版の表示名は「スレネコチェッカー」、パッケージ名（applicationId）は`sureneco.sakots`です。TauriのAndroid専用設定、Gradleのnamespace/applicationId、Kotlinのパッケージと表示文字列を一致させます。PC版の表示名も「スレネコチェッカー」とし、PC版の内部製品名・識別子、Rust crate名と配布ファイル名の`sureneco`は維持します。
 
 旧パッケージでインストールしたAPKとは別アプリになります。`install -r`で旧アプリが置き換わったり、保存データが自動移行されたりはしません。旧アプリの削除やデータ移行は自動では行いません。

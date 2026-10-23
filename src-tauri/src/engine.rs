@@ -233,4 +233,38 @@ mod tests {
             json!([])
         );
     }
+
+    #[test]
+    fn failed_https_fetch_is_reported_and_can_be_retried() {
+        let calls = std::cell::Cell::new(0);
+        let engine = Engine::new(
+            None,
+            move |_| {
+                calls.set(calls.get() + 1);
+                if calls.get() == 1 {
+                    Err("証明書検証に失敗しました。".into())
+                } else {
+                    Ok("1791471600.dat<>【雀魂】じゃんたま (1)".into())
+                }
+            },
+            |_| Ok(()),
+            |_| {},
+            |_| Ok(()),
+        )
+        .unwrap();
+        engine.context.with(|ctx| {
+            ctx.eval::<(), _>("Date.now = () => new Date('2026-10-09T00:00:10+09:00').getTime()")
+                .unwrap();
+        });
+        engine.request("refresh", json!({})).unwrap();
+        let failed = engine.request("snapshot", json!({})).unwrap();
+        assert_eq!(
+            failed["errors"][0],
+            "スレッド一覧: 証明書検証に失敗しました。"
+        );
+        engine.request("refresh", json!({})).unwrap();
+        let recovered = engine.request("snapshot", json!({})).unwrap();
+        assert_eq!(recovered["errors"], json!([]));
+        assert_eq!(recovered["threads"][0]["id"], "1791471600");
+    }
 }
