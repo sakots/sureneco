@@ -1,5 +1,6 @@
 import type { Store } from "./store";
 import type { Payload } from "./monitor";
+import { ntfyDeliveryAllowed } from "./ntfy-registration";
 export class DeliveryError extends Error {
   constructor(
     readonly code: string,
@@ -22,6 +23,7 @@ interface Queued {
   payload: string;
   attempts: number;
   token: string;
+  endpoint: string;
   active: number;
   generation: string;
   current_revision: number;
@@ -68,7 +70,7 @@ export async function deliver(
     const at = clock();
     const row = db.transaction(() => {
       const queued = db.get<Queued>(
-        "SELECT o.*,s.token,s.active,s.generation,s.revision AS current_revision FROM outbox o JOIN subscriptions s ON s.uid=o.uid WHERE o.id=? AND next_attempt<=?",
+        "SELECT o.*,s.token,s.endpoint,s.active,s.generation,s.revision AS current_revision FROM outbox o JOIN subscriptions s ON s.uid=o.uid WHERE o.id=? AND next_attempt<=?",
         id,
         at,
       );
@@ -76,7 +78,8 @@ export async function deliver(
       if (
         !queued.active ||
         queued.revision !== queued.current_revision ||
-        queued.expires <= at
+        queued.expires <= at ||
+        !ntfyDeliveryAllowed(db, queued.uid, queued.endpoint)
       ) {
         db.run("DELETE FROM outbox WHERE id=?", id);
         stats.discarded++;

@@ -4,6 +4,7 @@ import type { Store } from "./store";
 import { hashToken } from "./device-auth";
 import { bad, subscriptions, type Reply } from "./subscriptions";
 import type { PushData } from "./web-push";
+import { ntfyDeliveryAllowed } from "./ntfy-registration";
 export interface PushChannel {
   origin: string;
   publicKey: string;
@@ -21,11 +22,13 @@ export async function challenge(
 ) {
   const row = db.get<{
     token: string;
+    endpoint: string;
     generation: string;
     confirmed: number;
     challenge_sent: number;
   }>("SELECT * FROM subscriptions WHERE uid=?", uid);
   if (!row || row.confirmed || row.challenge_sent > now - 60000) return;
+  if (!ntfyDeliveryAllowed(db, uid, row.endpoint)) return;
   const token = randomBytes(32).toString("base64url");
   const expires = now + 300000;
   db.run(

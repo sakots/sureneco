@@ -12,7 +12,7 @@
     "dev:frontend": "pnpm build:backend && vite --host 127.0.0.1 --port 5173 --strictPort",
     "tauri": "tauri",
     "test": "pnpm build:server && vitest run && pnpm build:backend && cargo test --manifest-path src-tauri/Cargo.toml",
-    "test:server": "pnpm build:server && vitest run tests/node-server.test.ts tests/node-api.test.ts tests/device-auth.test.ts tests/web-push.test.ts tests/ntfy-admin.test.ts tests/ntfy-admin.integration.test.ts --maxWorkers=1",
+    "test:server": "pnpm build:server && vitest run tests/node-server.test.ts tests/node-api.test.ts tests/device-auth.test.ts tests/web-push.test.ts tests/ntfy*.test.ts --maxWorkers=1",
     "typecheck": "tsc --noEmit",
     "build": "pnpm typecheck && vite build && pnpm build:backend",
     "build:backend": "node scripts/build-backend.mjs",
@@ -25,7 +25,8 @@
     "format:check": "prettier --check src tests scripts server/*.ts vite.config.ts tsconfig.json package.json src-tauri/*.json src-tauri/capabilities/*.json",
     "release:manifest": "node scripts/release-manifest.mjs",
     "build:server": "node scripts/build-server.mjs",
-    "server:start": "node dist/server/main.mjs"
+    "server:start": "node dist/server/main.mjs",
+    "server:ntfy-admin": "node dist/server/ntfy-admin-main.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",
