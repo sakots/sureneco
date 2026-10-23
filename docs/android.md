@@ -16,7 +16,7 @@ Androidのサーバー監視は`update_sec`が既定60秒、`thread_update_sec`�
 
 PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、GitHub経由の更新はAndroidに持ち込みません。Androidのアプリ更新はGoogle Playから行います。
 
-Androidには別途中継アプリのntfyを導入し、自前サーバーを設定してもらいます。Firebaseを含まない構成の案内にはF-Droid版を使います。スレネコチェッカーにUnifiedPush connectorを追加し、中継選択・未導入・通知先更新・解除を扱います。接続維持はntfyが担当するため、そちらの常駐通知・電池設定が必要になる場合があります。
+Androidには別途中継アプリのntfyを導入し、自前サーバーを設定してもらいます。Google Play版・F-Droid版の両方を利用できます。自前サーバーへの接続ではGoogle Play版もFirebaseを使いません。F-Droid版はFirebaseの機能自体を含まない配布版です。[ntfy公式説明](https://docs.ntfy.sh/subscribe/phone/#instant-delivery)を参照してください。スレネコチェッカーにUnifiedPush connectorを追加し、中継選択・未導入・通知先更新・解除を扱います。接続維持はntfyが担当するため、そちらの常駐通知・電池設定が必要になる場合があります。
 
 ## 必要な環境
 
@@ -66,7 +66,7 @@ cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-deb
 
 ## 通知を設定する
 
-設定画面の「バックグラウンド通知」にある「ntfyの準備・設定手順」を開くと、ntfyの役割、F-Droid版の導入、デフォルトサーバーと端末用ユーザーの登録、通知・電池設定、スレネコチェッカーでの有効化、確認待ち時の対処を読めます。接続先はアプリの設定値を表示し、未設定の場合は配布元への確認を案内します。説明を開くだけでは通知を有効化しません。
+設定画面の「バックグラウンド通知」にある「ntfyの準備・設定手順」を開くと、ntfyの役割、Google Play版・F-Droid版の導入、デフォルトサーバーと端末用ユーザーの登録、通知・電池設定、スレネコチェッカーでの有効化、確認待ち時の対処を読めます。接続先はアプリの設定値を表示し、未設定の場合は配布元への確認を案内します。説明を開くだけでは通知を有効化しません。
 
 API・ntfyの接続先が未準備の場合は、先に[接続先の準備手順](push-server-setup.md)を参照してください。
 
