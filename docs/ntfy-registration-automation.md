@@ -54,6 +54,12 @@ API用環境へ同じ`SURENECO_NTFY_ADMIN_SOCKET`だけを追加して再起動�
 
 登録APIは既存の端末Bearer認証を要求します。GET・PUT・DELETEの成功応答は`{registration: ...}`で、他端末の資格情報は返しません。`ready`はACL管理の完了であり、所有確認チャレンジやAndroid配送の成功を示しません。Android画面は第3段階で接続しました。実VPSへの配置と端末配送は第4段階で確認します。
 
+### 第4段階の配備ファイルと確認範囲
+
+`server/sureneco-ntfy-admin.service`と`server/ntfy-admin.env.example`を管理プロセス専用に使います。`server/sureneco-ntfy-admin.conf`はAPIサービス用drop-inで、ソケットの共有グループだけを追加します。APIへntfy DBの権限は付けません。管理プロセスのランタイムディレクトリーはsystemdが作成・撤去し、手動起動時は既存ソケットを自動削除しません。
+
+配備前に対象コミット、実ntfyのバイナリーパスとバージョン、設定・DBのパスと所有権、既存サービス定義を確認します。既存の設定・DB・同名APKは上書きしません。公開APIの疎通だけで自動登録や端末配送の成功とは判断しません。
+
 ## 第3段階のAndroid接続契約
 
 - 同意して中継登録し、固定ntfy originの`up...`通知先を受け取った後、端末Bearer認証で登録APIへPUTします。`ready`になるまで購読チャレンジを開始しません。画面表示中の状態確認と「同期を再試行」で管理状態を再取得します。

@@ -27,6 +27,14 @@
 
 Windowsクロスビルド、UbuntuのGUI起動、Android実端末の操作は今回未確認です。`monitoringReady: false`を維持しています。
 
+## 第4段階の配備準備
+
+2026/10/23に設定済み公開APIの`healthz`・`push-config`とntfyの`v1/health`のHTTPS応答を確認しました。自動登録用`/v1/ntfy-registration`への認証なしGETは404でした。新APIが認証要求まで到達することは未確認で、既存手動登録の通知成功報告とは区別します。
+
+管理用systemdサービス・環境設定例・APIの共有グループdrop-inと配備手順を追加しました。ローカルには`/usr/bin/node`がないため、そのままの`systemd-analyze verify`は実行ファイル未検出で失敗しました。検証用コピーのNodeパスだけをローカルの実在パスへ変え、drop-inを含めて検証を通しました。VPSでの起動や専用ユーザー権限の実確認は未実施です。
+
+自動登録対応APKを`release/sureneco_v0.8.9_android_ntfy-registration_debug.apk`へ新規保存し、署名・16KB zip整列・接続先・アプリIDを確認しました。SSH接続先は未設定（SSH設定ファイルも空）、ADB接続端末もないため、VPSへの配備と実機結合は準備待ちです。APKは既存ファイルを上書きしていません。
+
 ## 残っていること
 
 1. 第4段階としてVPSへ限定管理プロセスを配置し、Android実機から個別アカウント・トピックACLの払い出し、更新・撤去と所有確認を通して検証する。新しいAndroid画面は自動登録APIを必要とし、ntfyアプリへの初回ログインは利用者が行う。
