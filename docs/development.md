@@ -20,6 +20,8 @@ pnpm dev
 
 `pnpm test`と`pnpm check`はVPS向けNode.jsサーバーのテストも含み、先に`pnpm build:server`で分離ワーカーを生成します。PHP・サーバー用Rustワーカーは不要です。サーバーのみの確認は`pnpm test:server`、ローカル起動は`pnpm server:start`を使います。実装と検証にはNode.js 24以上が必要です。
 
+`pnpm test`も`test:server`と同様にVitestを1ワーカーで実行します。多数のテストファイルと判定ワーカーの同時起動によるCPU・ディスク競合を抑えるためです。本番の判定ワーカーの1秒制限や各テストの期待値は変更しません。
+
 サーバーとAndroidの実装を再開し、[UnifiedPush＋自前ntfy](unifiedpush-ntfy.md)へ置き換えました。Firebase SDKは削除済みです。[VPS準備](node-vps.md)と[進捗](server-progress.md)を参照してください。PC配布物にNode.jsサーバーは同梱しません。実配送・実端末とVPS配備はローカルテストとは別に確認します。
 
 詳しい環境構築は[Tauriの前提条件](https://v2.tauri.app/start/prerequisites/)を参照してください。
