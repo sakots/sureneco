@@ -72,6 +72,8 @@ cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-deb
 
 上記のブラウザー確認後、コピー・貼り付けと通知受信は利用者の実機でも成功しています。別アプリ利用中も受信でき、届いた通知の遅延は体感で約1分との報告です。2026/10/24に利用者から状態遷移・復旧確認は完了済みと報告を受けました。停止・削除、端末再起動、圏外、中継停止、通知先・認証更新、通知タップ・ルームIDコピー・外部URLを残課題から除外します。画面消灯中は、当初の成功報告が訂正されて未受信となっており、原因未特定の未解決事項です。機密クリップボードのプレビュー抑止の実機確認とは区別します。
 
+2026/10/24に、統合済みコミット`0c512c6`から資格情報の置き換え注意を含むAPKを再生成しました。保存先は`release/sureneco_v0.8.9_android_ntfy-login-warning_debug.apk`、SHA-256は`8e3a6b5e3a90cd878809b0d0efaca5390bd44fce5ab3a9eac7fda6ce97f6ef23`です。署名（v2）・16KB zip整列、`sureneco.sakots`、versionName `0.8.9`／versionCode `1`、ARM64、minSdk 24／targetSdk 36を確認しました。Windowsへ転送後に同じハッシュを確認し、接続中のPixel 7 Pro（Android 17）へ`adb install -r`で上書きしました。インストール成功・Activity起動成功に加え、端末認証とntfy資格情報の保持、「監視中」の維持、実際の設定画面で赤系の太字・背景・左枠線による注意表示を確認しました。起動後の当該PIDのLogcatにfatal exceptionやChromiumのUncaught／Error出力はありませんでした。このAPKでの新たな通知受信・消灯中の配送確認は行っていません。
+
 ## 通知を設定する
 
 設定画面の「バックグラウンド通知」にある「ntfyの準備・設定手順」を開くと、ntfyの役割、Google Play版・F-Droid版の導入、デフォルトサーバー、通知・電池設定、自動発行した端末用アカウントでのログイン、確認待ち時の対処を読めます。接続先はアプリの設定値を表示し、未設定の場合は配布元への確認を案内します。説明を開くだけでは通知を有効化しません。
@@ -221,7 +223,7 @@ DevToolsからの一時的な画面変更はソースへ保存されません。
 
 端末の機種・Androidバージョン・ABI・ページサイズ、APKのversionName/versionCode、実行した操作、発生時刻、表示されたエラー、機密情報を除いたLogcatを添えます。「初回インストール／上書き」「前面／ホーム／画面消灯／強制停止」のどれかも記録します。
 
-この資料ではAPKの生成・識別情報とホスト側ADBのコマンドを確認しています。Windowsからの実機インストール、起動、Logcat取得、Chrome検査、16KB端末での動作は未確認です。実施後に端末と結果を記録し、未確認の項目を成功扱いにしないでください。
+WindowsからPixel 7 Pro（Android 17）への上書きインストール・起動、設定画面の注意表示、起動後のLogcatは2026/10/24に直接確認しました。Chrome検査、16KBページサイズ端末での動作は未確認です。上記のAPKごとの確認記録と区別し、未確認の項目を成功扱いにしないでください。
 
 公式資料：[Android Debug Bridge](https://developer.android.com/tools/adb)、[Logcat](https://developer.android.com/tools/logcat)、[WebViewのリモートデバッグ](https://developer.chrome.com/docs/devtools/remote-debugging/webviews)。
 
