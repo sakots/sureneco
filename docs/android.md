@@ -4,6 +4,8 @@ Node.js＋VPSとUnifiedPush＋自前ntfyを採用しています。[進捗](serv
 
 Androidの登録・受信・設定画面とUnifiedPush connector 3.3.5によるネイティブ通知判定を実装し、Firebase依存を撤去しました。基本通知経路・別アプリ利用中の受信・状態遷移・復旧に加え、2026/10/24の利用者報告で消灯中の受信成功例を確認しました。管理サービス停止／復旧・VPS再起動後の登録保持・検証用通知先への暗号化配送と実機ntfyの自動再接続も直接確認済みです。長時間消灯後の検証は保留し、ベータテストで確認します。運用・負荷確認、署名付き公開AAB・Google Play提出は未完了です。[最新の確認範囲](server-progress.md)と[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
 
+既存デバッグAPKによる少人数・招待制ベータは[実施方法](android-beta.md)を参照してください。この配布の更新はAPKの個別案内で行い、以下のGoogle Play更新方針とは区別します。一般公開・Play提出や403調査の再開は行いません。
+
 ## 完成時の構成
 
 VPS上の常駐Node.jsが購読APIと監視・Web Push送信を担当し、同じVPSの自前ntfyが端末へ中継します。systemdで別々の専用サービスとして管理します。[採用構成](unifiedpush-ntfy.md)と[VPS準備](node-vps.md)を参照してください。
