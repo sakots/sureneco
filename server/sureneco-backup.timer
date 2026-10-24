@@ -1,0 +1,12 @@
+# Managed by sureneco encrypted backup installer.
+[Unit]
+Description=Daily encrypted sureneco backup at 03:30 Japan time
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Asia/Tokyo
+Persistent=true
+AccuracySec=1min
+Unit=sureneco-backup.service
+
+[Install]
+WantedBy=timers.target

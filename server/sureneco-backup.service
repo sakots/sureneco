@@ -1,0 +1,23 @@
+# Managed by sureneco encrypted backup installer.
+[Unit]
+Description=Encrypted offsite sureneco backup
+Wants=network-online.target
+After=network-online.target sureneco.service sureneco-ntfy-admin.service ntfy.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/sureneco-backup
+ExecStopPost=/usr/bin/rm -rf --one-file-system -- /var/lib/sureneco-backup/snapshot
+TimeoutStartSec=6h
+TimeoutStopSec=45s
+KillMode=control-group
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+NoNewPrivileges=true
