@@ -1,0 +1,12 @@
+# Managed by scripts/install-notification-monitor.sh.
+[Unit]
+Description=Check sureneco health every minute from Oracle
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=true
+Unit=sureneco-monitor.service
+
+[Install]
+WantedBy=timers.target
