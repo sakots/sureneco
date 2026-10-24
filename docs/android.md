@@ -78,6 +78,10 @@ cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-deb
 
 2026/10/24に、統合済みコミット`0c512c6`から資格情報の置き換え注意を含むAPKを再生成しました。保存先は`release/sureneco_v0.8.9_android_ntfy-login-warning_debug.apk`、SHA-256は`8e3a6b5e3a90cd878809b0d0efaca5390bd44fce5ab3a9eac7fda6ce97f6ef23`です。署名（v2）・16KB zip整列、`sureneco.sakots`、versionName `0.8.9`／versionCode `1`、ARM64、minSdk 24／targetSdk 36を確認しました。Windowsへ転送後に同じハッシュを確認し、接続中のPixel 7 Pro（Android 17）へ`adb install -r`で上書きしました。インストール成功・Activity起動成功に加え、端末認証とntfy資格情報の保持、「監視中」の維持、実際の設定画面で赤系の太字・背景・左枠線による注意表示を確認しました。起動後の当該PIDのLogcatにfatal exceptionやChromiumのUncaught／Error出力はありませんでした。このAPKでの新たな通知受信・消灯中の配送確認は行っていません。
 
+2026/10/24に招待制ベータ用の`release/sureneco_v0.9.0test_android_debug.apk`を生成しました。ソースは`ba42621`を基準にAndroid専用設定のversionを`0.9.0-test`、versionCodeを`2`へ変更したものです。PC版のpackage.json・Rust crateの版は変更していません。Linuxの独立した作業ディレクトリーでNode.js 24.22.1・pnpm 12.14.0・Java 21・NDK 28.2.13676358を使い、上記のデバッグAPKビルドコマンドを実行しました。共有キャッシュ利用時に未生成だったTauriActivityは、TauriのAndroid向けキャッシュ再生成後にビルド成功しました。アプリの機能コード変更はありません。
+
+APKの`versionName 0.9.0-test`／`versionCode 2`、アプリID`sureneco.sakots`、表示名、ARM64、minSdk 24／targetSdk 36、署名（v2）、16KB zip整列を確認しました。SHA-256は`d33de00006e8b4d1bae1a9573427def7476422af480a4ce949d13fbf202bce9d`で、Windows転送後も一致しました。旧ntfy-login-warning APKと署名証明書のSHA-256も一致しています。実機へのインストール・起動・通知配送は今回未確認です。403調査・負荷試験・本番変更・外部公開は行っていません。配布と観察は[招待制ベータ手順](android-beta.md)に従います。
+
 ## 通知を設定する
 
 設定画面の「バックグラウンド通知」にある「ntfyの準備・設定手順」を開くと、ntfyの役割、Google Play版・F-Droid版の導入、デフォルトサーバー、通知・電池設定、自動発行した端末用アカウントでのログイン、確認待ち時の対処を読めます。接続先はアプリの設定値を表示し、未設定の場合は配布元への確認を案内します。説明を開くだけでは通知を有効化しません。

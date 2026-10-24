@@ -12,14 +12,14 @@ ntfy同時購読403の調査は[中断記録](ntfy-403-investigation.md)のと�
 
 | 項目 | 内容 |
 | --- | --- |
-| APK | `release/sureneco_v0.8.9_android_ntfy-login-warning_debug.apk` |
-| SHA-256 | `8e3a6b5e3a90cd878809b0d0efaca5390bd44fce5ab3a9eac7fda6ce97f6ef23` |
+| APK | `release/sureneco_v0.9.0test_android_debug.apk` |
+| SHA-256 | `d33de00006e8b4d1bae1a9573427def7476422af480a4ce949d13fbf202bce9d` |
 | アプリID | `sureneco.sakots` |
-| 版 | versionName `0.8.9`、versionCode `1` |
+| 版 | versionName `0.9.0-test`、versionCode `2` |
 | 対応範囲 | ARM64、Android 7.0（API 24）以上。全機種での動作保証ではありません |
 | 種類 | デバッグAPK。公開用署名付きAABではありません |
 
-APKのハッシュは本書作成時に既存の[生成記録](android.md)と一致しました。今回ビルドし直したものではなく、最新のサーバー変更を含むアプリ版や「v0.8.10」のAPKとは案内しません。既存資料には署名・整列確認、Pixel 7 Proへの上書き・起動・資格情報保持の確認があります。このAPKで新たに通知・消灯中受信を確認した記録はありません。
+招待制ベータを識別しやすくするため、`0.9.0test`という配布名でビルドしました。内部バージョンはTauriのSemVer要件に合わせて`0.9.0-test`とし、Android専用設定で指定しています。PC版のバージョンは変更していません。従来のv0.8.9 APKは残しています。署名（v2）・16KB zip整列・APK内の版とARM64を確認し、Windows転送後もハッシュが一致しました。旧ntfy-login-warning APKと署名証明書は一致していますが、今回のAPKでの実機上書き・起動・通知・消灯中受信は未確認です。
 
 APKを入れ替える場合は、別ファイル名で保存し、生成元・版・署名・接続先・ハッシュ・確認結果を更新してから配布します。古い配布物を上書きしません。デバッグ署名から将来のPlay版へ上書きできるかは未確認です。アンインストールによる端末内データ消失に注意してください。
 
@@ -40,7 +40,7 @@ APKを入れ替える場合は、別ファイル名で保存し、生成元・�
 1. 運用者から受け取ったAPK名・ハッシュを照合します。Windowsでは次のコマンドを使えます。
 
    ```powershell
-   certutil -hashfile .\sureneco_v0.8.9_android_ntfy-login-warning_debug.apk SHA256
+   certutil -hashfile .\sureneco_v0.9.0test_android_debug.apk SHA256
    ```
 
 2. 招待された配布元からAPKを開き、必要な場合だけ、そのインストールに使うアプリへ「不明なアプリのインストール」を許可します。導入後は許可を戻します。Play Protectなどの保護を一律に無効化しません。警告や署名不一致で止まったら運用者へ連絡し、データ削除やアンインストールで強行しません。
