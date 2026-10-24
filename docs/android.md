@@ -4,6 +4,8 @@ Node.js＋VPSとUnifiedPush＋自前ntfyを採用しています。[進捗](serv
 
 Androidの登録・受信・設定画面とUnifiedPush connector 3.3.5によるネイティブ通知判定を実装し、Firebase依存を撤去しました。基本通知経路・別アプリ利用中の受信・状態遷移・復旧に加え、2026/10/24の利用者報告で消灯中の受信成功例を確認しました。管理サービス停止／復旧・VPS再起動後の登録保持・検証用通知先への暗号化配送と実機ntfyの自動再接続も直接確認済みです。長時間消灯後の検証は保留し、ベータテストで確認します。運用・負荷確認、署名付き公開AAB・Google Play提出は未完了です。[最新の確認範囲](server-progress.md)と[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
 
+既存デバッグAPKによる少人数・招待制ベータは[実施方法](android-beta.md)を参照してください。この配布の更新はAPKの個別案内で行い、以下のGoogle Play更新方針とは区別します。一般公開・Play提出や403調査の再開は行いません。
+
 ## 完成時の構成
 
 VPS上の常駐Node.jsが購読APIと監視・Web Push送信を担当し、同じVPSの自前ntfyが端末へ中継します。systemdで別々の専用サービスとして管理します。[採用構成](unifiedpush-ntfy.md)と[VPS準備](node-vps.md)を参照してください。
@@ -75,6 +77,10 @@ cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-deb
 2026/10/24の追加報告では、11:56:45の募集を11:57台に画面が消えたまま受信しました。上記の未受信報告後、この条件での受信成功を確認しています。長時間消灯後の検証は実施が難しいため保留し、ベータテストで確認します。以前の原因特定や検証全体の完了とは区別します。
 
 2026/10/24に、統合済みコミット`0c512c6`から資格情報の置き換え注意を含むAPKを再生成しました。保存先は`release/sureneco_v0.8.9_android_ntfy-login-warning_debug.apk`、SHA-256は`8e3a6b5e3a90cd878809b0d0efaca5390bd44fce5ab3a9eac7fda6ce97f6ef23`です。署名（v2）・16KB zip整列、`sureneco.sakots`、versionName `0.8.9`／versionCode `1`、ARM64、minSdk 24／targetSdk 36を確認しました。Windowsへ転送後に同じハッシュを確認し、接続中のPixel 7 Pro（Android 17）へ`adb install -r`で上書きしました。インストール成功・Activity起動成功に加え、端末認証とntfy資格情報の保持、「監視中」の維持、実際の設定画面で赤系の太字・背景・左枠線による注意表示を確認しました。起動後の当該PIDのLogcatにfatal exceptionやChromiumのUncaught／Error出力はありませんでした。このAPKでの新たな通知受信・消灯中の配送確認は行っていません。
+
+2026/10/24に招待制ベータ用の`release/sureneco_v0.9.0test_android_debug.apk`を生成しました。ソースは`ba42621`を基準にAndroid専用設定のversionを`0.9.0-test`、versionCodeを`2`へ変更したものです。PC版のpackage.json・Rust crateの版は変更していません。Linuxの独立した作業ディレクトリーでNode.js 24.22.1・pnpm 12.14.0・Java 21・NDK 28.2.13676358を使い、上記のデバッグAPKビルドコマンドを実行しました。共有キャッシュ利用時に未生成だったTauriActivityは、TauriのAndroid向けキャッシュ再生成後にビルド成功しました。アプリの機能コード変更はありません。
+
+APKの`versionName 0.9.0-test`／`versionCode 2`、アプリID`sureneco.sakots`、表示名、ARM64、minSdk 24／targetSdk 36、署名（v2）、16KB zip整列を確認しました。SHA-256は`d33de00006e8b4d1bae1a9573427def7476422af480a4ce949d13fbf202bce9d`で、Windows転送後も一致しました。旧ntfy-login-warning APKと署名証明書のSHA-256も一致しています。実機へのインストール・起動・通知配送は今回未確認です。403調査・負荷試験・本番変更・外部公開は行っていません。配布と観察は[招待制ベータ手順](android-beta.md)に従います。
 
 ## 通知を設定する
 
