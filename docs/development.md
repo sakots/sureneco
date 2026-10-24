@@ -8,7 +8,7 @@ Tauri 2 + Rust + TypeScript + Reactで実装しています。募集検出と監
 
 ## 環境構築
 
-Node.js 24 LTS、pnpm 12.14.0、Rust stableを用意してください。WindowsはMSVC版Rust、Visual Studio C++ Build Tools、WebView2が必要です。Ubuntuは以下をインストールします。
+Node.js 24 LTS、pnpm 12.15.0、Rust stableを用意してください。WindowsはMSVC版Rust、Visual Studio C++ Build Tools、WebView2が必要です。Ubuntuは以下をインストールします。
 
 ```sh
 sudo apt install libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
@@ -19,6 +19,8 @@ pnpm dev
 `pnpm dev`でViteとTauriを起動します。バックエンドのTypeScriptを変更した場合は開発コマンドを再起動してください。`pnpm check`でTypeScript・Rustのテスト、フロントエンドと監視エンジンのビルド、Rust整形、テーマ診断、差分チェックを行います。初回はRust依存の取得・コンパイルに時間がかかります。
 
 `pnpm test`と`pnpm check`はVPS向けNode.jsサーバーのテストも含み、先に`pnpm build:server`で分離ワーカーを生成します。PHP・サーバー用Rustワーカーは不要です。サーバーのみの確認は`pnpm test:server`、ローカル起動は`pnpm server:start`を使います。実装と検証にはNode.js 24以上が必要です。
+
+`pnpm test`も`test:server`と同様にVitestを1ワーカーで実行します。多数のテストファイルと判定ワーカーの同時起動によるCPU・ディスク競合を抑えるためです。本番の判定ワーカーの1秒制限や各テストの期待値は変更しません。
 
 サーバーとAndroidの実装を再開し、[UnifiedPush＋自前ntfy](unifiedpush-ntfy.md)へ置き換えました。Firebase SDKは削除済みです。[VPS準備](node-vps.md)と[進捗](server-progress.md)を参照してください。PC配布物にNode.jsサーバーは同梱しません。実配送・実端末とVPS配備はローカルテストとは別に確認します。
 
