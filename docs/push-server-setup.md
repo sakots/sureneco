@@ -76,7 +76,7 @@ pnpmはSSHユーザーの領域へ導入します。
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
-npm install --global --prefix "$HOME/.local" pnpm@12.14.0
+npm install --global --prefix "$HOME/.local" pnpm@12.15.0
 pnpm --version
 ```
 
