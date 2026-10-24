@@ -141,7 +141,7 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
       ) : registration?.state === "ready" ? (
         <p>
           ntfyの読み取り権限の設定が完了しました。通知の到達確認はまだ別に必要です。
-          初回は下の情報でntfyでログインしてから、「同期を再試行」を押してください。
+          下の情報でntfyのログイン情報を設定してから、「同期を再試行」を押してください。
         </p>
       ) : null}
       {registration?.error && (
@@ -154,8 +154,17 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
         !state?.pendingAction && (
           <fieldset className="ntfy-credentials">
             <legend>ntfyログイン情報</legend>
+            <p className="ntfy-login-warning">
+              <strong>
+                重要：ntfyに保存済みのユーザー名・パスワードは自動更新されません。
+                下の情報をコピーし、必ず両方を置き換えてください。
+              </strong>
+            </p>
             <p>
-              ntfyの「設定」→「ユーザー管理」→「ユーザー追加」を開き、次の3項目を順に貼り付けて保存してください。
+              ntfyの「設定」→「ユーザー管理」で、下のサーバーURLの既存ユーザーを編集してください。
+              ユーザーがない場合だけ「ユーザー追加」を開き、次の3項目を貼り付けて保存してください。
+              トピックが自動作成されていても、ログイン情報の設定は必要です。
+              サーバー登録を削除して再登録した場合も、新しい情報で両方を置き換えてください。
             </p>
             <div className="ntfy-login-field">
               <label htmlFor="ntfy-server">① サーバーURL（接続先）</label>
@@ -264,7 +273,8 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
             <strong>ntfyで端末用アカウントにログインする</strong>
             <p>
               ntfyの「設定」→「一般」→「デフォルトのサーバー」に次のURLを保存します。
-              次に「設定」→「ユーザー管理」→「ユーザー追加」を開き、この画面の接続先・ユーザー名・パスワードを入力して保存します。
+              次に「設定」→「ユーザー管理」で同じ接続先の既存ユーザーを編集し、この画面のユーザー名・パスワードを両方コピーして置き換え、保存します。
+              ユーザーがない場合だけ「ユーザー追加」を開き、接続先・ユーザー名・パスワードを入力します。
               項目名はntfyのバージョンによって多少異なります。
             </p>
             {state?.ntfyOrigin ? (

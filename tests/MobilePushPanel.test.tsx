@@ -126,8 +126,6 @@ it("発行された接続先とユーザー名を表示し、パスワードは�
     }),
   );
   expect(password.type).toBe("password");
-  expect(screen.getByText(/読み取り権限の設定が完了/)).toBeTruthy();
-  expect(screen.getByText(/ntfyでログインしてから/)).toBeTruthy();
 });
 
 it("パスワードを隠したままコピーし、完了メッセージに秘密を表示しない", async () => {

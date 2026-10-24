@@ -345,6 +345,13 @@ h3 {
   border: 1px solid var(--border);
   border-radius: 7px;
 }
+.ntfy-login-warning {
+  color: var(--error-text);
+  background: var(--error-bg);
+  border-left: 4px solid currentColor;
+  border-radius: 4px;
+  padding: 12px;
+}
 .ntfy-credentials button {
   margin: 8px 8px 0 0;
 }
