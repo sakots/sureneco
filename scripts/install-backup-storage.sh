@@ -170,10 +170,16 @@ if [[ ! -d $chroot ]]; then install -d -o root -g root -m 0755 -- "$chroot"; fi
 if [[ -e $chroot/data || -L $chroot/data ]]; then
     [[ -d $chroot/data && ! -L $chroot/data ]] || fail 'existing /data is not a real directory'
     [[ $(stat -c '%u:%g:%a' -- "$chroot/data") = "$uid:$gid:700" ]] || fail 'existing /data must be dedicated-user:dedicated-group 0700'
-    [[ -z $(find "$chroot/data" -mindepth 1 -maxdepth 1 ! -name repository -print -quit) ]] || fail 'existing /data contains unrelated data'
+    [[ -z $(find "$chroot/data" -mindepth 1 -maxdepth 1 ! -name repository ! -name backup-status.json ! -name backup-status.pending -print -quit) ]] || fail 'existing /data contains unrelated data'
     if [[ -e $chroot/data/repository || -L $chroot/data/repository ]]; then
         [[ -d $chroot/data/repository && ! -L $chroot/data/repository ]] || fail 'existing repository must be a real directory'
     fi
+    for status in "$chroot/data/backup-status.json" "$chroot/data/backup-status.pending"; do
+        if [[ -e $status || -L $status ]]; then
+            [[ -f $status && ! -L $status ]] || fail 'existing backup status must be a regular non-symlink file'
+            [[ $(stat -c '%u:%g:%a:%h' -- "$status") = "$uid:$gid:600:1" ]] || fail 'existing backup status must be dedicated-user:dedicated-group 0600 and single-link'
+        fi
+    done
 else
     install -d -o "$uid" -g "$gid" -m 0700 -- "$chroot/data"
 fi

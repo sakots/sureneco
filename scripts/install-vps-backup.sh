@@ -2,7 +2,8 @@
 # Managed by sureneco encrypted backup installer.
 # Usage (root): bash install-vps-backup.sh prepare
 #               bash install-vps-backup.sh enable /absolute/path/to/verified_known_hosts
-# Bundle vps-backup.sh beside this script and units beside it or in ../server/.
+# Bundle vps-backup.sh and publish-backup-status.sh beside this script, and all
+# three systemd units beside it or in ../server/.
 # Export /etc/sureneco-backup/password securely off this VPS before enable; never print it.
 set -Eeuo pipefail
 umask 077
@@ -23,7 +24,7 @@ if ! command -v restic >/dev/null; then
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends restic
 fi
-for command in restic ssh-keygen flock cp find install od; do
+for command in restic ssh-keygen flock cp find install od timeout date mktemp stat sftp; do
     command -v "$command" >/dev/null || fail 'a required system tool is unavailable.'
 done
 safe_directory() {
@@ -125,9 +126,9 @@ fi
 restic -o "sftp.command=$ssh_command" snapshots --json >/dev/null || fail 'repository validation failed.'
 base=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
 units=$base/../server
-[[ -f $units/sureneco-backup.service && -f $units/sureneco-backup.timer ]] || units=$base
-for file in "$base/vps-backup.sh" "$units/sureneco-backup.service" "$units/sureneco-backup.timer"; do
-    [[ -f $file && ! -L $file ]] || fail 'bundle requires vps-backup.sh and both systemd units.'
+[[ -f $units/sureneco-backup.service && -f $units/sureneco-backup.timer && -f $units/sureneco-backup-status@.service ]] || units=$base
+for file in "$base/vps-backup.sh" "$base/publish-backup-status.sh" "$units/sureneco-backup.service" "$units/sureneco-backup.timer" "$units/sureneco-backup-status@.service"; do
+    [[ -f $file && ! -L $file ]] || fail 'bundle requires both runtime scripts and all three systemd units.'
     # A staged bundle is operator-supplied; the marker also protects unrelated installed paths.
     /usr/bin/node -e 'const fs=require("node:fs");if(!fs.readFileSync(process.argv[1],"utf8").split("\n").slice(0,2).includes(process.argv[2]))process.exit(1)' "$file" "$marker" || fail 'unrecognized installation bundle.'
 done
@@ -141,8 +142,10 @@ managed_install() {
 }
 # The installed runtime is self-contained and independent of this staging bundle.
 managed_install "$base/vps-backup.sh" /usr/local/sbin/sureneco-backup 700
+managed_install "$base/publish-backup-status.sh" /usr/local/sbin/sureneco-backup-status 700
 managed_install "$units/sureneco-backup.service" /etc/systemd/system/sureneco-backup.service 644
 managed_install "$units/sureneco-backup.timer" /etc/systemd/system/sureneco-backup.timer 644
+managed_install "$units/sureneco-backup-status@.service" /etc/systemd/system/sureneco-backup-status@.service 644
 systemctl daemon-reload
 # Release the installation lock before the service acquires the same root-only lock.
 flock -u 9

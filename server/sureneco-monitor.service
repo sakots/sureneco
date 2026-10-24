@@ -1,0 +1,36 @@
+# Managed by scripts/install-notification-monitor.sh.
+[Unit]
+Description=Independent sureneco Oracle health and Gmail monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 -I /usr/local/lib/sureneco-monitor/notification-monitor.py
+TimeoutStartSec=180
+TimeoutStopSec=5
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/sureneco-backup/data /etc/sureneco-monitor
+ReadWritePaths=/var/lib/sureneco-monitor
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+InaccessiblePaths=-/etc/sureneco-backup -/var/lib/sureneco-backup/.ssh

@@ -84,6 +84,40 @@ sudo journalctl -u sureneco-backup.service --no-pager
 
 復旧用パスワードは本番VPS外のWindows端末の所有者限定フォルダー`.sureneco-backup-recovery-20261024/restic.password`へ退避し、一致確認後にVPS上の一時exportを削除しました。このファイルを失うと暗号化データを復号できません。Gitやチャットへ貼り付けず、端末喪失にも備えて利用者が安全に保管してください。ソースVPSを失った場合は、このパスワードとOracle管理権限で復旧用アクセスを再設定し、隔離先へ復元します。専用SSH鍵は再発行できますが、暗号化パスワードは復旧に必須です。OS・サービス用ユーザー・実行バイナリーの再構築を含む災害復旧全体は未検証です。
 
+## OracleからのGmail障害通知
+
+通知先・送信元は利用者指定の`sakots8000@gmail.com`、送信はOracleから`smtp.gmail.com:465`へ証明書検証付きTLSと専用アプリパスワードで行います。2026-10-24にOracleへ配置し、Linux上の13件のテスト、API・ntfy・暗号化バックアップの正常プローブを確認しました。利用者による非表示の認証情報登録と本番VPSの更新後、新しいバックアップ成功状態の受信、テストメールのSMTP受付、1分タイマーの有効・稼働、systemdサービスでの初回監視成功を確認しました。認証情報の値は表示・記録していません。
+
+利用者からテストメールがGmailへ到達したとの報告を受け、通常送信の到達確認を完了しました。登録管理サービスを一時停止して実際のバックアップを失敗させ、サービス復帰後にOracleが失敗状態を検知し、2026-10-24 04:43:32 UTCの障害メールが利用者のGmailへ到達したことを確認しました。直後の再チェックでは同じ障害メールを再送しませんでした。その後の正常バックアップは成功し、Oracleが新しいスナップショットと成功状態を検知、04:46:02 UTCに復旧メールのSMTP受付を確認しました。利用者から復旧メールのGmail到達報告も受け、バックアップの障害検知・障害通知・正常復帰・復旧通知の実地確認を完了しました。続けた再チェックで復旧メールの重複送信はなく、API・登録管理・ntfyはすべて稼働中、毎日のバックアップタイマーも有効です。API・ntfy自体の停止によるメール通知と26時間のバックアップ未更新の実地確認は未実施で、判定・状態遷移は自動テストで確認しています。
+
+Oracleで1分ごとにAPI・ntfyのHTTPS疎通を確認し、連続3回の接続失敗を通知対象とします。API監視処理の完了時刻が5分を超えて進まない場合も異常とし、`monitoringReady: false`は既存仕様のため判定に使いません。バックアップはOracleの暗号化スナップショットの更新が26時間を超えた場合、または送信元から届いた新しい失敗状態を検出した場合に通知します。暗号化パスワードを監視用にOracleへ複製しません。
+
+バックアップ結果は専用SFTP鍵で非秘密の状態ファイルを送る方式とし、本番VPSからメール送信はしません。SFTP自体が失敗すると結果も届かないため、その場合は最終スナップショットから26時間を超えた時点の検知になります。同じ異常を毎分連投せず、異常が通知済みの対象が正常化したときに復旧を通知します。SMTP送信が失敗した場合は通知済みにせず、次回の監視で再送します。SMTP受付とGmail受信箱への到達は区別します。Oracle自体の停止・回線断やGoogle側の障害を別の監視元が検出する構成ではありません。
+
+### 認証情報の登録と有効化
+
+管理端末のPowerShellから次を実行し、Googleで作成した16文字のアプリパスワードを非表示入力します。値をチャット・コマンド引数へ貼り付けないでください。通常のGoogleログインパスワードとは別の値です。
+
+```powershell
+ssh -t Oracle "sudo /usr/local/sbin/sureneco-monitor-mail-credential"
+```
+
+認証情報はOracleの`/etc/sureneco-monitor/gmail-app-password`へroot:root・0600、親ディレクトリー0700で保存します。この操作では送信・タイマー有効化を行いません。更新時のみ同じコマンドへ`--replace`を付けます。
+
+本番VPSにはバックアップ結果の送信スクリプトとsystemdユニットの更新を配置済みです。次は本番VPSのsudo認証が必要で、既存の検証済みホスト鍵・暗号化パスワードをそのまま使い、バックアップを1回実行します。バックアップの取得中は書き込みサービスを一時停止し、自動復帰します。
+
+```powershell
+ssh -t sureneco "sudo bash /home/sureneco/sureneco-backup-deploy/scripts/install-vps-backup.sh enable /etc/sureneco-backup/known_hosts"
+```
+
+上記の登録・更新後、Oracleで以下を実行すると、正常プローブと明示的なテストメールのSMTP受付に成功した場合だけ1分タイマーを有効にします。受信者がGmailでテストメールを確認するまでは到達確認済みとしません。
+
+```sh
+sudo bash /home/ubuntu/sureneco-monitor-deploy/scripts/install-notification-monitor.sh enable
+systemctl list-timers sureneco-monitor.timer
+sudo journalctl -u sureneco-monitor.service --since today --no-pager
+```
+
 ## ビルド・鍵・起動
 
 開発用Node.js 24 LTSで依存を導入してビルドします。PC向け配布物へサーバーを同梱するものではありません。

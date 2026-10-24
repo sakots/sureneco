@@ -3,6 +3,8 @@
 Description=Encrypted offsite sureneco backup
 Wants=network-online.target
 After=network-online.target sureneco.service sureneco-ntfy-admin.service ntfy.service
+OnSuccess=sureneco-backup-status@success.service
+OnFailure=sureneco-backup-status@failure.service
 
 [Service]
 Type=oneshot
