@@ -33,6 +33,7 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 - [端末登録・権限設定の自動化](docs/ntfy-registration-automation.md)：段階別の実装範囲と検証方法
 
 - [使い方](docs/usage.md)：監視・通知、設定フォルダ、雀魂の起動、更新、Electron版からの切り替え
+- [プライバシーポリシー](docs/privacy-policy.html)：取り扱う情報、通知サーバーへの送信、保存・削除、問い合わせ窓口。ストア掲載用HTML（公開手順は[Play提出資料](docs/google-play.md#プライバシーポリシーの公開手順)）
 - [UnifiedPush＋自前ntfy](docs/unifiedpush-ntfy.md)：採用する通知構成、Android中継アプリ、端末認証・通知先登録と準備手順。実装と検証の進捗あり
 - [運用費の比較](docs/operation-cost.md)：掲載用の既存エックスサーバーと、[人数制限を設けないVPS運用](docs/vps-cost.md)。実装は[進捗を記録](docs/server-progress.md)
 - [Node.js＋VPSのサーバー構成](docs/node-vps.md)：常駐API・監視、自前ntfy、SQLite。[接続先の準備手順](docs/push-server-setup.md)にDNS・VPS・HTTPS・端末接続を記載
@@ -48,6 +49,10 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 テスターの方は[0.9.0test テスターガイド](docs/android-beta-tester.md)を参照してください。インストール、ntfy設定、試す条件、報告テンプレート、参加終了の手順をまとめています。
 
 ## 更新履歴
+
+### [2026/10/25] v0.8.10（開発中）
+
+- ストア掲載用の日本語プライバシーポリシーを追加し、PC・Androidの情報の取り扱い、保存・削除、GitHub Issuesへの問い合わせ方法と公開手順を記載。
 
 ### [2026/10/24] v0.9.0test（Android招待制ベータ）
 
