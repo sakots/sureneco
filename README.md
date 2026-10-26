@@ -36,6 +36,7 @@ WindowsではWebView2が必要です。インストーラーは必要に応じ�
 
 - [使い方](docs/usage.md)：監視・通知、設定フォルダ、雀魂の起動、更新、Electron版からの切り替え
 - [プライバシーポリシー](docs/privacy-policy.html)：取り扱う情報、通知サーバーへの送信、保存・削除、問い合わせ窓口。ストア掲載用HTML（公開手順は[Play提出資料](docs/google-play.md#プライバシーポリシーの公開手順)）
+- [Google Play提出資料](docs/google-play.md#ストア掲載用画像)：掲載用アイコン・フィーチャーグラフィック・スマートフォン画像4枚と、登録先・代替テキスト・撮影条件
 - [UnifiedPush＋自前ntfy](docs/unifiedpush-ntfy.md)：採用する通知構成、Android中継アプリ、端末認証・通知先登録と準備手順。実装と検証の進捗あり
 - [運用費の比較](docs/operation-cost.md)：掲載用の既存エックスサーバーと、[人数制限を設けないVPS運用](docs/vps-cost.md)。実装は[進捗を記録](docs/server-progress.md)
 - [Node.js＋VPSのサーバー構成](docs/node-vps.md)：常駐API・監視、自前ntfy、SQLite。[接続先の準備手順](docs/push-server-setup.md)にDNS・VPS・HTTPS・端末接続を記載
@@ -51,6 +52,16 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 テスターの方は[0.9.0test テスターガイド](docs/android-beta-tester.md)を参照してください。インストール、ntfy設定、試す条件、報告テンプレート、参加終了の手順をまとめています。
 
 ## 更新履歴
+
+### [2026/10/27] v0.9.0（Android提出用・未公開）
+
+- Google Play提出用にAndroidの版を`0.9.0`／versionCode `3`へ更新し、新しいアップロード鍵で署名したAABを生成。
+- Android専用の版番号でAAB名を生成するよう修正し、署名・bundletool・APK変換・16KB静的整列の[確認結果と鍵の保管手順](docs/android.md#署名付きaabの準備)を追加。
+
+### [2026/10/27] v0.8.10
+
+- Google Play掲載用の512pxアイコン、フィーチャーグラフィック、Android表示のスクリーンショット4枚を追加。
+- ストア画像の登録手順・代替テキストと、実機ではなくサンプルデータを使ったブラウザー撮影であることを資料に追加。
 
 ### [2026/10/26] v0.8.10
 
