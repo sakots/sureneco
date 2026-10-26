@@ -253,6 +253,150 @@ it("rejects URL traversal and redirects and decodes bounded CP932/UTF-8 data", a
     ),
   ).rejects.toMatchObject({ code: "http_error" });
 });
+it("health distinguishes this service start, running work, failures and stalled monitoring", async () => {
+  let now = 1800000000000;
+  const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+  cleanup.push(() => clock.mockRestore());
+  const { base, db } = await api();
+  const read = async () => {
+    const response = await fetch(base + "/healthz");
+    expect(response.status).toBe(200);
+    return response.json();
+  };
+  db.run(
+    "UPDATE service_state SET started=?,finished=?,error='batch_failed' WHERE id=1",
+    now - 2000,
+    now - 1000,
+  );
+  expect(await read()).toMatchObject({
+    serviceStartedAt: now,
+    monitorStatus: "starting",
+  });
+  now += 300001;
+  expect((await read()).monitorStatus).toBe("stalled");
+  now += 1;
+  db.run("UPDATE service_state SET started=?,error=NULL WHERE id=1", now);
+  expect((await read()).monitorStatus).toBe("running");
+  now += 300001;
+  expect((await read()).monitorStatus).toBe("stalled");
+  now += 1;
+  db.run("UPDATE service_state SET finished=? WHERE id=1", now);
+  expect((await read()).monitorStatus).toBe("idle");
+  now += 300000;
+  expect((await read()).monitorStatus).toBe("idle");
+  now += 1;
+  expect((await read()).monitorStatus).toBe("stalled");
+  db.run(
+    "UPDATE service_state SET started=?,error='batch_failed' WHERE id=1",
+    now,
+  );
+  expect((await read()).monitorStatus).toBe("failed");
+  now += 1;
+  db.run(
+    "UPDATE service_state SET started=?,finished=?,error=NULL WHERE id=1",
+    now,
+    now,
+  );
+  expect((await read()).monitorStatus).toBe("idle");
+});
+
+it("health aggregates active fetch and delivery failures, retains successful times and excludes private data", async () => {
+  const { base, db } = await api();
+  const uids: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const device = await (
+      await fetch(base + "/v1/device", {
+        method: "POST",
+        body: JSON.stringify({ consent: true }),
+      })
+    ).json();
+    const response = await fetch(base + "/v1/subscription", {
+      method: "PUT",
+      headers: { Authorization: "Bearer " + device.token },
+      body: JSON.stringify(input()),
+    });
+    expect(response.status).toBe(200);
+    uids.push(device.deviceId);
+  }
+  db.run("UPDATE subscriptions SET active=1");
+  const at = Date.now();
+  for (const uid of uids) {
+    db.run(
+      "INSERT INTO fetch_state(uid,board,resource,attempted,succeeded,error) VALUES(?,?,?,?,?,?)",
+      uid,
+      defaults.url,
+      "subject.txt",
+      at,
+      at - 1000,
+      "fetch_failed",
+    );
+    db.run(
+      "INSERT INTO delivery_state(uid,attempted,succeeded,error) VALUES(?,?,?,?)",
+      uid,
+      at,
+      at - 2000,
+      "delivery_unavailable",
+    );
+  }
+  db.run("UPDATE subscriptions SET active=0 WHERE uid=?", uids[1]);
+  db.run("INSERT INTO events VALUES(?,?,?)", "queued", uids[0], at + 600000);
+  db.run(
+    "INSERT INTO outbox(id,uid,revision,expires,payload,created) VALUES(?,?,?,?,?,?)",
+    "queued",
+    uids[0],
+    1,
+    at + 600000,
+    "private-payload",
+    at - 5000,
+  );
+  const failed = await (await fetch(base + "/healthz")).json();
+  expect(failed.fetch).toEqual({
+    lastAttemptedAt: at,
+    lastSucceededAt: at - 1000,
+    errorCount: 1,
+  });
+  expect(failed.delivery).toEqual({
+    lastAttemptedAt: at,
+    lastSucceededAt: at - 2000,
+    errorCount: 1,
+  });
+  expect(failed.outbox).toEqual({ count: 1, oldestCreatedAt: at - 5000 });
+  const serialized = JSON.stringify(failed);
+  for (const privateValue of [
+    ...uids,
+    "private-payload",
+    "https://push.example",
+    "fetch_failed",
+    "delivery_unavailable",
+  ])
+    expect(serialized).not.toContain(privateValue);
+  db.run(
+    "UPDATE fetch_state SET attempted=?,succeeded=?,error=NULL WHERE uid=?",
+    at + 1,
+    at + 1,
+    uids[0],
+  );
+  db.run(
+    "UPDATE delivery_state SET attempted=?,succeeded=?,error=NULL WHERE uid=?",
+    at + 1,
+    at + 1,
+    uids[0],
+  );
+  db.run("DELETE FROM outbox");
+  const recovered = await (await fetch(base + "/healthz")).json();
+  expect(recovered.fetch).toEqual({
+    lastAttemptedAt: at + 1,
+    lastSucceededAt: at + 1,
+    errorCount: 0,
+  });
+  expect(recovered.delivery).toEqual({
+    lastAttemptedAt: at + 1,
+    lastSucceededAt: at + 1,
+    errorCount: 0,
+  });
+  expect(recovered.outbox).toEqual({ count: 0, oldestCreatedAt: null });
+});
+
 it("starts, rejects a second process, releases ownership on SIGKILL and restarts", async () => {
   const dbpath = join(directory(), "service.sqlite");
   // Obtain an unused port using an ephemeral local listener.
@@ -296,6 +440,9 @@ it("starts, rejects a second process, releases ownership on SIGKILL and restarts
   const first = await start();
   const health = await (await fetch(`http://127.0.0.1:${port}/healthz`)).json();
   expect(health.lastFinishedAt).toBeGreaterThan(0);
+  expect(health.serviceStartedAt).toBeGreaterThan(0);
+  expect(health.lastFinishedAt).toBeGreaterThanOrEqual(health.serviceStartedAt);
+  expect(health.monitorStatus).toBe("idle");
   const second = spawn(process.execPath, ["dist/server/main.mjs"], {
     env,
     stdio: "ignore",
@@ -305,6 +452,14 @@ it("starts, rejects a second process, releases ownership on SIGKILL and restarts
   first.kill("SIGKILL");
   await once(first, "exit");
   const restarted = await start();
+  const recovered = await (
+    await fetch(`http://127.0.0.1:${port}/healthz`)
+  ).json();
+  expect(recovered.serviceStartedAt).toBeGreaterThan(health.serviceStartedAt);
+  expect(recovered.lastFinishedAt).toBeGreaterThanOrEqual(
+    recovered.serviceStartedAt,
+  );
+  expect(recovered.monitorStatus).toBe("idle");
   restarted.kill("SIGTERM");
   const [end] = await once(restarted, "exit");
   expect(end).toBe(0);
