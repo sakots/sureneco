@@ -48,6 +48,7 @@ export interface Snapshot {
   threads: Thread[];
   recruitments: Recruitment[];
   errors: string[];
+  notices: string[];
   refreshing: boolean;
   updatedAt: number | null;
   notificationAvailable: boolean;

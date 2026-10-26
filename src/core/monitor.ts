@@ -16,6 +16,7 @@ export class Monitor {
   private threads: Thread[] = [];
   private items: Recruitment[] = [];
   private errors: string[] = [];
+  private notices = new Map<string, string>();
   private updatedAt: number | null = null;
   private refreshing = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -47,6 +48,7 @@ export class Monitor {
         .slice()
         .reverse(),
       errors: this.errors,
+      notices: [...this.notices.values()],
       updatedAt: this.updatedAt,
       refreshing: this.refreshing,
       notificationAvailable: this.notificationAvailable,
@@ -100,6 +102,10 @@ export class Monitor {
             datCounts.set(id, posts.length);
             const thread = this.threads.find((t) => t.id === id);
             if (thread) thread.count = posts.length;
+            if (posts.length > 1000) {
+              await this.stopCompletedThread(id, thread?.title);
+              continue;
+            }
             const cursor = this.state.cursors[id];
             const now = this.now();
             const rescan = this.startupChecks.has(id) || cursor === 0;
@@ -161,6 +167,8 @@ export class Monitor {
           candidates([t], settings, this.now()).length,
       );
       for (const thread of this.threads) {
+        if (thread.count > 1000 && this.state.watched.includes(thread.id))
+          await this.stopCompletedThread(thread.id, thread.title);
         const count = datCounts.get(thread.id);
         if (count !== undefined) thread.count = count;
       }
@@ -173,21 +181,32 @@ export class Monitor {
       this.forceThreads = false;
     }
   }
+  private async setWatching(id: string, enabled: boolean): Promise<void> {
+    const watched = this.state.watched.filter((x) => x !== id);
+    if (enabled) watched.push(id);
+    const cursors = { ...this.state.cursors };
+    if (this.state.watched.includes(id) !== enabled) {
+      if (enabled) cursors[id] = 0;
+      else delete cursors[id];
+    }
+    const next = { ...this.state, watched, cursors };
+    await this.save(next);
+    Object.assign(this.state, next);
+    if (!enabled) this.startupChecks.delete(id);
+  }
+  private async stopCompletedThread(id: string, title = id): Promise<void> {
+    await this.setWatching(id, false);
+    this.notices.set(
+      id,
+      `${title}: レス数が1000を超えたため、監視を自動停止しました。`,
+    );
+  }
   watch(id: string, enabled: boolean): Promise<void> {
     if (!validThreadId(id) || typeof enabled !== "boolean")
       return Promise.reject(new Error("監視対象が不正です。"));
     return this.serialize(async () => {
-      const watched = this.state.watched.filter((x) => x !== id);
-      if (enabled) watched.push(id);
-      const cursors = { ...this.state.cursors };
-      if (this.state.watched.includes(id) !== enabled) {
-        if (enabled) cursors[id] = 0;
-        else delete cursors[id];
-      }
-      const next = { ...this.state, watched, cursors };
-      await this.save(next);
-      Object.assign(this.state, next);
-      if (!enabled) this.startupChecks.delete(id);
+      await this.setWatching(id, enabled);
+      if (enabled) this.notices.delete(id);
       this.emit();
     });
   }
@@ -207,6 +226,7 @@ export class Monitor {
         this.startupChecks.clear();
         this.threads = [];
         this.items = [];
+        this.notices.clear();
         this.lastThreadsAt = null;
         this.lastRecruitmentsAt = null;
         this.retryThreads = false;
