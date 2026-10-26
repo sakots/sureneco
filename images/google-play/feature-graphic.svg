@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500" role="img" aria-labelledby="title desc">
+  <title id="title">スレネコチェッカー</title>
+  <desc id="desc">雀魂スレッドの友人戦募集をチェック。スレッドと募集を表す吹き出しを緑色で描いたイラスト。</desc>
+  <defs>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.4" fill="#b8d6c5"/>
+    </pattern>
+  </defs>
+  <path fill="#e8f3ed" d="M0 0h1024v500H0z"/>
+  <path fill="#d8ebdf" d="M725 0h299v500H652c-58-89-21-164 41-228S776 83 725 0Z"/>
+  <path fill="url(#dots)" d="M838 0h186v150H838zM0 380h150v120H0z"/>
+  <g font-family="'Noto Sans CJK JP', 'Noto Sans JP', sans-serif">
+    <path fill="#24654c" d="M68 74h6v28h-6z"/>
+    <text x="88" y="97" font-size="25" font-weight="700" fill="#24654c">スレネコチェッカー</text>
+    <g font-size="52" font-weight="700" letter-spacing="-1" fill="#203e33">
+      <text x="64" y="204">スレッドから、</text>
+      <text x="64" y="274">友人戦へ。</text>
+    </g>
+    <text x="68" y="327" font-size="21" fill="#426453">雀魂スレッドの募集チェックと通知</text>
+    <path d="M68 362h448" stroke="#bdd4c7" stroke-width="1"/>
+    <text x="68" y="398" font-size="17" font-weight="500" fill="#426453">スレッド選択  /  ルームIDコピー  /  NG設定</text>
+    <g transform="translate(625 90)">
+      <path d="M28 92v151c0 15 12 27 27 27h177l25 25v-47" fill="none" stroke="#78a58c" stroke-width="3" stroke-linecap="round"/>
+      <rect x="0" y="4" width="280" height="117" rx="20" fill="#bdd7c7"/>
+      <rect x="14" y="-6" width="280" height="117" rx="20" fill="#f8fcf9" stroke="#bad3c4" stroke-width="2"/>
+      <circle cx="42" cy="27" r="5" fill="#24654c"/>
+      <path d="M60 27h152M38 51h219M38 74h165" stroke="#9cbaaa" stroke-width="7" stroke-linecap="round"/>
+      <rect x="61" y="131" width="264" height="140" rx="20" fill="#bed8c8"/>
+      <path d="M48 121h238a18 18 0 0 1 18 18v99a18 18 0 0 1-18 18H104l-32 24v-24H48a18 18 0 0 1-18-18v-99a18 18 0 0 1 18-18Z" fill="#24654c"/>
+      <text x="54" y="164" font-size="23" font-weight="700" fill="#ffffff">友人戦募集</text>
+      <path d="M54 184h222" stroke="#66917c"/>
+      <text x="54" y="219" font-size="17" fill="#c5e6d3">ルームID</text>
+      <text x="150" y="222" font-size="29" font-weight="700" fill="#ffffff">12345</text>
+      <circle cx="282" cy="121" r="34" fill="#9cdebb" stroke="#e8f3ed" stroke-width="5"/>
+      <g transform="translate(262 101)" fill="none" stroke="#24654c" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 27h22l-4-6v-7a7 7 0 0 0-14 0v7zM17 32a3 3 0 0 0 6 0M20 5v2M5 12l-2-2M35 12l2-2"/>
+      </g>
+    </g>
+  </g>
+</svg>

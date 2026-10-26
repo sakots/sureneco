@@ -2,7 +2,7 @@
 
 Node.js＋VPSとUnifiedPush＋自前ntfyを採用しています。[進捗](server-progress.md)に実装・検証した範囲を記録しています。VPS配備と公開HTTPSでの自動登録経路を確認し、利用者からAndroid実機でログイン情報のコピー・ntfyへの貼り付け・「監視中」への移行・実際の通知受信まで成功した報告を受けています。
 
-Androidの登録・受信・設定画面とUnifiedPush connector 3.3.5によるネイティブ通知判定を実装し、Firebase依存を撤去しました。基本通知経路・別アプリ利用中の受信・状態遷移・復旧に加え、2026/10/24の利用者報告で消灯中の受信成功例を確認しました。管理サービス停止／復旧・VPS再起動後の登録保持・検証用通知先への暗号化配送と実機ntfyの自動再接続も直接確認済みです。長時間消灯後の検証は保留し、ベータテストで確認します。運用・負荷確認、署名付き公開AAB・Google Play提出は未完了です。[最新の確認範囲](server-progress.md)と[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
+Androidの登録・受信・設定画面とUnifiedPush connector 3.3.5によるネイティブ通知判定を実装し、Firebase依存を撤去しました。基本通知経路・別アプリ利用中の受信・状態遷移・復旧に加え、2026/10/24の利用者報告で消灯中の受信成功例を確認しました。管理サービス停止／復旧・VPS再起動後の登録保持・検証用通知先への暗号化配送と実機ntfyの自動再接続も直接確認済みです。長時間消灯後の検証は保留し、ベータテストで確認します。2026/10/27に署名付き公開AABを生成・静的検証しました。運用・負荷確認、16KB端末での実動作とGoogle Play提出は未完了です。[最新の確認範囲](server-progress.md)と[作業項目](../openspec/changes/android-google-play/tasks.md)を参照してください。
 
 既存デバッグAPKによる少人数・招待制ベータは[実施方法](android-beta.md)を参照してください。この配布の更新はAPKの個別案内で行い、以下のGoogle Play更新方針とは区別します。一般公開・Play提出や403調査の再開は行いません。
 
@@ -98,7 +98,29 @@ ntfyアプリを導入して自前サーバーを設定し、スレネコチェ�
 
 Git管理外の`src-tauri/gen/android/keystore.properties`へ`storeFile`（絶対パス）・`storePassword`・`keyAlias`・`keyPassword`を設定します。Android用アップロード鍵を使い、PC更新用鍵は使いません。`SURENECO_ANDROID_SIGNING_FILE`で設定ファイルの絶対パスも指定できます。
 
-`pnpm package:android`はチェック後にAABを生成し、`release/sureneco_vVERSION_android.aab`へ配置します。署名設定不足・公開接続先不足・同名出力では失敗し、PlayやGitHubへ公開しません。実際のアップロード鍵による公開AABの生成・検証はまだ行っていません。
+初回Play提出向けビルドでは、Android版を`0.9.0`／versionCode `3`にし、PC版の版番号は変更しません。利用者の承認に基づいて、新しいAndroidアップロード鍵をGit管理外の`.secrets/android-upload.p12`へ作成し、署名設定は`src-tauri/gen/android/keystore.properties`へ保存します。署名設定にはパスワードが含まれます。鍵と署名設定を別の安全な保管先へバックアップし、チャット・Git・公開配布物へ含めないでください。公開証明書は`release/sureneco_android_upload_certificate.pem`へ書き出します。デバッグ鍵とは異なるため、既存ベータAPKへのデータ保持付き上書きはできません。
+
+`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionを使って`release/sureneco_vVERSION_android.aab`へ配置します。署名設定不足・公開接続先不足・同名出力では失敗し、PlayやGitHubへ公開しません。公開AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。
+
+### 初回提出用AABの生成記録（2026/10/27）
+
+`pnpm package:android`で`release/sureneco_v0.9.0_android.aab`を生成しました。Java 21.0.12.1、NDK 28.2.13676358、ARM64ターゲットを使用しています。`pnpm check`はTypeScript側182件成功・1件スキップ、Rust 27件成功、型・フロントエンドビルド・テーマ・書式・差分チェックを通過しました。
+
+| 項目 | 確認結果 |
+| --- | --- |
+| ファイルサイズ | 8,569,064 bytes |
+| applicationId / 表示名 | `sureneco.sakots` / スレネコチェッカー |
+| versionName / versionCode | `0.9.0` / `3` |
+| minSdk / targetSdk / ABI | 24 / 36 / `arm64-v8a` |
+| SHA-256 | `6c2f0a944361b20f32f4cff67a7f59d6977d9a156cf8665b2b5a107f5cd8c5b8` |
+| アップロード証明書SHA-256 | `66:F3:00:83:AA:4E:CA:DB:4C:19:C4:2A:6A:A5:36:0A:D3:4C:8D:4A:B3:2C:3D:AA:54:11:95:DF:D4:FC:B2:B8` |
+
+- JAR署名検証と公式bundletool 1.18.3の`validate`に成功。bundletoolで一時的なuniversal APKへ変換し、APK署名v2/v3、表示名・版・ABIと`zipalign -c -P 16 4`の成功を確認しました。一時APKは配布せず削除しました。
+- AABの`BundleConfig`は`PAGE_ALIGNMENT_16K`で、同梱する`libsureneco.so`の4つのLOADセグメントはすべて`0x4000`整列でした。公開接続先`https://api.oekakibbs.moe`と`https://push.oekakibbs.moe`をリリースDEXから確認しました。デバッグ不可で、秘密鍵・署名設定ファイルを含まないことも確認しました。
+- `release/sureneco_v0.9.0_android.aab.sha256`にチェックサム、`release/sureneco_v0.9.0_android_mapping.txt`にR8の難読化対応表を保存しました。対応表はAAB内にも含まれます。公開証明書は`release/sureneco_android_upload_certificate.pem`です。
+- `jarsigner`は検証成功に加えて、自己署名証明書・タイムスタンプなし・POSIX属性・JarInputStreamからのManifest/署名の読み取り差異を警告しました。bundletoolの検証とAPK生成は成功していますが、Play Console側の受付は未確認です。
+- Gradle/Tauri依存の非推奨API・Java 8ターゲットの警告は残っています。実機へのインストール・16KB端末での起動・今回のAABによる通知配送・Playへのアップロード・審査・公開は行っていません。プライバシーポリシー公開・アプリ内リンク等の残項目は[Play提出資料](google-play.md#公開前に埋める項目)を確認してください。
+
 
 ## WindowsからAndroid実機をデバッグする
 
