@@ -5,7 +5,7 @@ import { DeviceAuth, AuthError } from "./device-auth";
 import { challenge, confirm, type PushChannel } from "./channels";
 import type { NtfyRegistration } from "./ntfy-registration";
 const MAX_BODY = 256 * 1024;
-export function health(db: Store) {
+export function health(db: Store, serviceStartedAt: number) {
   const state = db.get<{
     started: number;
     finished: number;
@@ -14,10 +14,34 @@ export function health(db: Store) {
   const pending = db.get(
     "SELECT COUNT(*) AS count,MIN(created) AS oldestCreatedAt FROM outbox",
   )!;
+  const currentRun = state.started >= serviceStartedAt && state.started > 0;
+  const lastProgress = currentRun
+    ? Math.max(state.started, state.finished)
+    : serviceStartedAt;
+  const monitorStatus =
+    Date.now() - lastProgress > 300000
+      ? "stalled"
+      : !currentRun
+        ? "starting"
+        : state.error
+          ? "failed"
+          : state.started > state.finished
+            ? "running"
+            : "idle";
+  const fetch = db.get(
+    "SELECT MAX(f.attempted) AS lastAttemptedAt,MAX(f.succeeded) AS lastSucceededAt,COUNT(CASE WHEN f.error IS NOT NULL THEN 1 END) AS errorCount FROM fetch_state f JOIN subscriptions s ON s.uid=f.uid WHERE s.active=1",
+  )!;
+  const delivery = db.get(
+    "SELECT MAX(d.attempted) AS lastAttemptedAt,MAX(d.succeeded) AS lastSucceededAt,COUNT(CASE WHEN d.error IS NOT NULL THEN 1 END) AS errorCount FROM delivery_state d JOIN subscriptions s ON s.uid=d.uid WHERE s.active=1",
+  )!;
   return {
+    serviceStartedAt,
+    monitorStatus,
     lastStartedAt: state.started,
     lastFinishedAt: state.finished,
     error: state.error,
+    fetch,
+    delivery,
     outbox: pending,
     monitoringReady: false,
   };
@@ -28,6 +52,7 @@ export function createApi(
   registration: NtfyRegistration | null = null,
 ) {
   const auth = new DeviceAuth(db);
+  const serviceStartedAt = Date.now();
   return createServer(
     { maxHeaderSize: 40000, requestTimeout: 10000, headersTimeout: 10000 },
     async (request, response) => {
@@ -61,7 +86,8 @@ export function createApi(
             { error: "method_not_allowed" },
             methods.join(", "),
           );
-        if (path === "/healthz") return reply(200, health(db));
+        if (path === "/healthz")
+          return reply(200, health(db, serviceStartedAt));
         if (path === "/v1/push-config")
           return push
             ? reply(200, {
