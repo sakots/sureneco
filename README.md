@@ -53,6 +53,11 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
+### [2026/10/27] v0.9.0（Android提出用・未公開）
+
+- Google Play提出用にAndroidの版を`0.9.0`／versionCode `3`へ更新し、新しいアップロード鍵で署名したAABを生成。
+- Android専用の版番号でAAB名を生成するよう修正し、署名・bundletool・APK変換・16KB静的整列の[確認結果と鍵の保管手順](docs/android.md#署名付きaabの準備)を追加。
+
 ### [2026/10/27] v0.8.10
 
 - Google Play掲載用の512pxアイコン、フィーチャーグラフィック、Android表示のスクリーンショット4枚を追加。
