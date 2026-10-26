@@ -352,7 +352,7 @@ function pollingFixture(count = 1) {
   };
   const client = {
     subject: vi.fn(async () => data.subject),
-    dat: vi.fn(async () =>
+    dat: vi.fn(async (_url: string, _id: string) =>
       Array(data.count)
         .fill("名無し<>sage<>2026/10/04(日) 10:00:00 ID:abc<>雑談<>")
         .join("\n"),
@@ -535,4 +535,113 @@ it("定期的な一覧取得中に手動更新が来ても一覧と募集の取�
   await Promise.all([automatic, manual]);
   expect(client.subject).toHaveBeenCalledTimes(2);
   expect(client.dat).toHaveBeenCalledTimes(2);
+});
+
+it.each(["dat", "subject"])(
+  "%sで1000レスを超えた対象だけを解除し、次回取得と再起動後の監視を止める",
+  async (source) => {
+    const { state, client, clock, data, id, nextId } = pollingFixture(1000);
+    const save = vi.fn(async (_next: SavedState) => {});
+    const monitor = new Monitor(state, client, save, vi.fn(), () => clock.now);
+    await monitor.watch(nextId, true);
+    await monitor.refresh();
+    expect(state.watched).toEqual([id, nextId]);
+    expect(monitor.snapshot().notices).toEqual([]);
+    client.dat.mockClear();
+    if (source === "dat") {
+      data.count = 1001;
+      client.dat.mockImplementation(async (_url?: string, target?: string) =>
+        Array(target === id ? 1001 : 1000)
+          .fill("名無し<>sage<>2026/10/04(日) 10:00:00 ID:abc<>雑談<>")
+          .join("\n"),
+      );
+    } else {
+      data.subject = `${id}.dat<>雀魂 (1001)`;
+      clock.now += 300_000;
+      client.dat.mockImplementation(async () => {
+        throw new Error("HTTP 404");
+      });
+    }
+    await monitor.refresh();
+    expect(state.watched).toEqual([nextId]);
+    expect(state.cursors[id]).toBeUndefined();
+    const persisted = structuredClone(save.mock.calls.at(-1)![0]);
+    expect(persisted.watched).toEqual([nextId]);
+    expect(persisted.cursors[id]).toBeUndefined();
+    expect(monitor.snapshot().notices).toEqual([
+      "雀魂: レス数が1000を超えたため、監視を自動停止しました。",
+    ]);
+    client.dat.mockClear();
+    await monitor.refresh();
+    expect(client.dat.mock.calls.map((call) => call[1])).toEqual([nextId]);
+    expect(monitor.snapshot().notices).toHaveLength(1);
+    client.dat.mockClear();
+    const restarted = new Monitor(
+      persisted,
+      client,
+      save,
+      vi.fn(),
+      () => clock.now,
+    );
+    await restarted.refresh();
+    expect(client.dat.mock.calls.map((call) => call[1])).toEqual([nextId]);
+  },
+);
+
+it("一覧にない複数の完走スレッドもすべて解除し、IDで停止理由を示す", async () => {
+  const { monitor, client, state, id, nextId } = pollingFixture(1001);
+  await monitor.watch(nextId, true);
+  client.subject.mockResolvedValue("");
+  await monitor.refresh();
+  expect(state.watched).toEqual([]);
+  expect(state.cursors).toEqual({});
+  expect(monitor.snapshot().notices).toEqual(
+    [id, nextId].map(
+      (target) =>
+        `${target}: レス数が1000を超えたため、監視を自動停止しました。`,
+    ),
+  );
+});
+
+it("自動停止の保存失敗では解除済みにせず、次回取得で再試行する", async () => {
+  const { state, client, clock, id } = pollingFixture(1001);
+  const save = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("disk full"))
+    .mockResolvedValue(undefined);
+  const monitor = new Monitor(state, client, save, vi.fn(), () => clock.now);
+  await monitor.refresh();
+  expect(state.watched).toEqual([id]);
+  expect(monitor.snapshot().notices).toEqual([]);
+  expect(monitor.snapshot().errors.join("")).toContain("disk full");
+  await monitor.refresh();
+  expect(state.watched).toEqual([]);
+  expect(monitor.snapshot().notices).toHaveLength(1);
+  expect(monitor.snapshot().errors).toEqual([]);
+});
+
+it("起動時に一覧で完走を確認した対象はdatを取得せず、未監視スレッドは停止通知しない", async () => {
+  const { monitor, client, state, data, id, nextId } = pollingFixture();
+  data.subject = `${id}.dat<>雀魂 (1001)\n${nextId}.dat<>雀魂 次スレ (1001)`;
+  await monitor.refresh();
+  expect(state.watched).toEqual([]);
+  expect(client.dat).not.toHaveBeenCalled();
+  expect(monitor.snapshot().notices).toEqual([
+    "雀魂: レス数が1000を超えたため、監視を自動停止しました。",
+  ]);
+});
+
+it("停止メッセージは監視再開と板URL変更で消える", async () => {
+  const { monitor, state, id } = pollingFixture(1001);
+  await monitor.refresh();
+  expect(monitor.snapshot().notices).toHaveLength(1);
+  await monitor.watch(id, true);
+  expect(monitor.snapshot().notices).toEqual([]);
+  await monitor.refresh();
+  expect(monitor.snapshot().notices).toHaveLength(1);
+  await monitor.saveSettings({
+    ...state.settings,
+    url: "https://egg.5ch.net/mj/",
+  });
+  expect(monitor.snapshot().notices).toEqual([]);
 });

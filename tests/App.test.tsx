@@ -44,6 +44,7 @@ function setup(
     ],
     recruitments,
     errors: [],
+    notices: [],
     updatedAt: null,
     refreshing: false,
     notificationAvailable: true,

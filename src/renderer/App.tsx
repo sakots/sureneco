@@ -227,6 +227,11 @@ export function App({ api }: { api: Api }) {
           {notice}
         </div>
       )}
+      {snapshot?.notices.map((message) => (
+        <div className="message" role="status" key={message}>
+          {message}
+        </div>
+      ))}
       {snapshot?.errors.map((e, i) => (
         <div className="message error" role="alert" key={i}>
           {e}
