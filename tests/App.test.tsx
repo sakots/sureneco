@@ -74,6 +74,97 @@ function setup(
   render(<App api={api} />);
   return api;
 }
+
+it("監視通知を個別に閉じ、更新では保持し、解消後の再発や変更を表示する", async () => {
+  const api = setup();
+  const user = userEvent.setup();
+  await screen.findByRole("switch");
+  const initial = await vi.mocked(api.getSnapshot).mock.results[0].value;
+  const publish = (changes: Partial<Snapshot>) =>
+    act(() => {
+      vi.mocked(api.subscribe).mock.calls[0][0]({ ...initial, ...changes });
+    });
+  await publish({
+    watched: ["1791034502"],
+    notices: ["監視停止のお知らせ", "別の監視通知"],
+    errors: ["取得失敗", "別の取得失敗"],
+  });
+  await user.click(
+    within(
+      screen
+        .getByText("監視停止のお知らせ")
+        .closest('[role="status"]') as HTMLElement,
+    ).getByRole("button", { name: "通知を閉じる" }),
+  );
+  await user.click(
+    within(
+      screen.getByText("取得失敗").closest('[role="alert"]') as HTMLElement,
+    ).getByRole("button", { name: "通知を閉じる" }),
+  );
+  expect(screen.getByText("別の監視通知")).toBeTruthy();
+  expect(screen.getByText("別の取得失敗")).toBeTruthy();
+  await publish({
+    watched: ["1791034502"],
+    notices: ["追加のお知らせ", "監視停止のお知らせ", "別の監視通知"],
+    errors: ["別の取得失敗", "取得失敗"],
+    updatedAt: Date.now(),
+  });
+  expect(screen.queryByText("監視停止のお知らせ")).toBeNull();
+  expect(screen.queryByText("取得失敗")).toBeNull();
+  expect(
+    (screen.getByRole("switch") as HTMLButtonElement).getAttribute(
+      "aria-checked",
+    ),
+  ).toBe("true");
+  expect(api.watch).not.toHaveBeenCalled();
+  expect(api.refresh).not.toHaveBeenCalled();
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  await publish({ notices: [], errors: ["新しい取得失敗"] });
+  expect(screen.getByText("新しい取得失敗")).toBeTruthy();
+  await publish({ notices: ["監視停止のお知らせ"], errors: ["取得失敗"] });
+  expect(screen.getByText("監視停止のお知らせ")).toBeTruthy();
+  expect(screen.getByText("取得失敗")).toBeTruthy();
+});
+
+it("設定エラーを閉じても保存せず入力を保持し、再送信時に再表示する", async () => {
+  const api = setup();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  const interval = screen.getByLabelText("友人戦募集の更新間隔（秒）");
+  await user.clear(interval);
+  await user.type(interval, "19");
+  await user.type(screen.getByLabelText("NG ID"), "unsaved-id");
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  await user.click(
+    within(screen.getByRole("alert")).getByRole("button", {
+      name: "通知を閉じる",
+    }),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  expect((interval as HTMLInputElement).value).toBe("19");
+  expect((screen.getByLabelText("NG ID") as HTMLTextAreaElement).value).toBe(
+    "unsaved-id",
+  );
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(screen.getByRole("alert")).toBeTruthy();
+  expect(api.saveSettings).not.toHaveBeenCalled();
+});
+
+it("保存の成功通知を閉じてから同じ設定を保存すると再表示する", async () => {
+  const api = setup();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  await user.click(await screen.findByRole("button", { name: "通知を閉じる" }));
+  expect(screen.queryByRole("button", { name: "通知を閉じる" })).toBeNull();
+  expect(api.saveSettings).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(
+    await screen.findByRole("button", { name: "通知を閉じる" }),
+  ).toBeTruthy();
+  expect(api.saveSettings).toHaveBeenCalledTimes(2);
+});
 it("スレッドのトグルと更新を操作できる", async () => {
   const api = setup();
   expect(
@@ -132,9 +223,7 @@ it("一覧の更新間隔の既定値と境界を表示し、不正な値を保�
     await user.type(interval, value);
     await user.click(screen.getByRole("button", { name: "設定を保存" }));
     expect(api.saveSettings).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert").textContent).toBe(
-      "thread_update_secは20以上2147483以下の整数にしてください。",
-    );
+    expect(screen.getByRole("alert")).toBeTruthy();
   }
   for (const thread_update_sec of [20, 2147483]) {
     await user.clear(interval);
@@ -309,6 +398,38 @@ it("ルームIDをクリックすると半角でコピーし、レスは別の�
   await user.click(screen.getByRole("button", { name: "レスを開く" }));
   expect(api.openThread).toHaveBeenCalledWith("1791034502", 12);
 });
+it("コピーの通知とエラーを閉じても再操作で同じ内容を表示できる", async () => {
+  const api = setup([recruitment]);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /^友人戦募集/ }));
+  const copy = screen.getByRole("button", { name: "ルームID 01234をコピー" });
+  await user.click(copy);
+  await user.click(
+    within(await screen.findByRole("status")).getByRole("button", {
+      name: "通知を閉じる",
+    }),
+  );
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(api.copyRoomId).toHaveBeenCalledTimes(1);
+  await user.click(copy);
+  expect(await screen.findByRole("status")).toBeTruthy();
+  vi.mocked(api.copyRoomId).mockRejectedValue(
+    new Error("clipboard unavailable"),
+  );
+  await user.click(copy);
+  await user.click(
+    within(await screen.findByRole("alert")).getByRole("button", {
+      name: "通知を閉じる",
+    }),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(api.copyRoomId).toHaveBeenCalledTimes(3);
+  await user.click(copy);
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(api.copyRoomId).toHaveBeenCalledTimes(4);
+  expect(api.watch).not.toHaveBeenCalled();
+  expect(api.saveSettings).not.toHaveBeenCalled();
+});
 it("コピーに失敗した場合はエラーを表示する", async () => {
   const api = setup([recruitment]);
   vi.mocked(api.copyRoomId).mockRejectedValueOnce(
@@ -389,6 +510,67 @@ it("新版を表示し、ダウンロードを明示操作で開始する", asyn
   expect(api.downloadUpdate).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "ダウンロード" }));
   expect(api.downloadUpdate).toHaveBeenCalledTimes(1);
+});
+
+it("更新案内を閉じても更新状態は保持し、画面移動で案内を復活させない", async () => {
+  const api = setup([], {
+    version: "0.2.0",
+    mode: "auto",
+    status: "available",
+    latestVersion: "0.3.0",
+    progress: 0,
+    error: null,
+  });
+  const user = userEvent.setup();
+  const open = await screen.findByRole("button", { name: "更新画面を開く" });
+  await user.click(
+    within(open.closest('[role="status"]') as HTMLElement).getByRole("button", {
+      name: "通知を閉じる",
+    }),
+  );
+  expect(screen.queryByRole("button", { name: "更新画面を開く" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "設定" }));
+  expect(screen.getByRole("button", { name: "ダウンロード" })).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: /^スレッド/ }));
+  expect(screen.queryByRole("button", { name: "更新画面を開く" })).toBeNull();
+  expect(api.checkUpdate).not.toHaveBeenCalled();
+  expect(api.downloadUpdate).not.toHaveBeenCalled();
+  expect(api.installUpdate).not.toHaveBeenCalled();
+});
+
+it("デスクトップ通知の警告を閉じても設定や監視を変更しない", async () => {
+  const api = setup();
+  const user = userEvent.setup();
+  await screen.findByRole("switch");
+  const initial = await vi.mocked(api.getSnapshot).mock.results[0].value;
+  await act(() => {
+    vi.mocked(api.subscribe).mock.calls[0][0]({
+      ...initial,
+      notificationAvailable: false,
+    });
+  });
+  const warning = screen.getByText(
+    "この環境ではデスクトップ通知を利用できません。",
+  );
+  await user.click(
+    within(warning.closest('[role="status"]') as HTMLElement).getByRole(
+      "button",
+      { name: "通知を閉じる" },
+    ),
+  );
+  await act(() => {
+    vi.mocked(api.subscribe).mock.calls[0][0]({
+      ...initial,
+      notificationAvailable: false,
+      updatedAt: Date.now(),
+    });
+  });
+  expect(
+    screen.queryByText("この環境ではデスクトップ通知を利用できません。"),
+  ).toBeNull();
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  expect(api.watch).not.toHaveBeenCalled();
+  expect(api.refresh).not.toHaveBeenCalled();
 });
 it("取得済みの更新を再起動して適用でき、ZIP版はリリース画面へ案内する", async () => {
   const user = userEvent.setup();

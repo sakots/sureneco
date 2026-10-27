@@ -195,3 +195,45 @@ it("破棄後の変更失敗は再照会せず、新しいカードにエラー�
   expect(checkbox().checked).toBe(true);
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+it("取得エラーを閉じても未確認のチェックボックスを有効にせず、再試行の失敗を再表示する", async () => {
+  const api = createApi(true);
+  vi.mocked(api.getAutostart)
+    .mockRejectedValueOnce(new Error("登録先を読み取れません"))
+    .mockRejectedValueOnce(new Error("登録先を読み取れません"));
+  const view = render(<AutostartPanel api={api} />);
+  await screen.findByRole("alert");
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  view.rerender(<AutostartPanel api={api} />);
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(checkbox().disabled).toBe(true);
+  expect(checkbox().indeterminate).toBe(true);
+  expect(retry().disabled).toBe(false);
+  expect(api.getAutostart).toHaveBeenCalledTimes(1);
+  expect(api.setAutostart).not.toHaveBeenCalled();
+  await user.click(retry());
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(checkbox().disabled).toBe(true);
+  await user.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  await user.click(retry());
+  expect(checkbox().checked).toBe(true);
+  expect(checkbox().disabled).toBe(false);
+});
+
+it("変更エラーを閉じてもOSの状態を維持し、次の変更を操作できる", async () => {
+  const api = createApi(true);
+  vi.mocked(api.setAutostart).mockRejectedValueOnce(new Error("変更失敗"));
+  render(<AutostartPanel api={api} />);
+  await waitFor(() => expect(checkbox().disabled).toBe(false));
+  const user = userEvent.setup();
+  await user.click(checkbox());
+  await screen.findByRole("alert");
+  await user.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  expect(checkbox().checked).toBe(true);
+  expect(checkbox().disabled).toBe(false);
+  expect(api.setAutostart).toHaveBeenCalledTimes(1);
+  await user.click(checkbox());
+  expect(checkbox().checked).toBe(false);
+  expect(api.setAutostart).toHaveBeenCalledTimes(2);
+});
