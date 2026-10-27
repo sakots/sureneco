@@ -70,7 +70,7 @@ Play Consoleの「メインのストアの掲載情報」→「グラフィッ�
 
 ## 内部テストの手順案
 
-1. 現在の提出候補は`release/sureneco_v0.9.0_android.aab`（versionName `0.9.0`／versionCode `5`）です。2026/10/27の全OS共通リリース向けに既存アップロード鍵で生成し、署名・bundletool検証、minSdk 24／targetSdk 36・ARM64・16KB LOAD整列を確認しました。サイズは8,569,954 bytes、SHA-256は`1b432013ea3adf87e9851708b262f3ad1820c2aabc7c4005d48de2701fe2d75c`です。隣接する`.aab.sha256`と`_mapping.txt`も保存しています。先の`0.9.0`／versionCode `3`と`0.8.10`／versionCode `4`は過去の生成記録です。GitHub公開とPlay提出は区別し、このAABの実機確認・Playアップロードは未実施です。次回ビルドは未使用のversionCodeとし、既存AABを上書きしません。
+1. 現在の再提出用AABは`release/sureneco_v0.9.0_android_versionCode90.aab`（versionName `0.9.0`／versionCode `90`）です。指定の`090`は整数として`90`になります。Play ConsoleでversionCode `5`が使用済みとの報告を受けて生成し、実manifestの版・既存アップロード鍵の署名・bundletool検証を確認しました。公開済みの`release/sureneco_v0.9.0_android.aab`（versionCode `5`）とは別ファイルで、上書きしていません。チェックサムと詳細は[Android手順](android.md#署名付きaabの準備)を参照してください。Playでの受付・実機動作は未確認で、GitHub公開済みファイルも変更していません。
 2. Play Consoleで対象アプリの内部テストトラックを選び、新しいリリースへAABと変更説明を登録します。同名版・既存versionCodeは再利用しません。
 3. テスター一覧と参加リンクを設定し、配布された版を端末へインストールします。公開操作は依頼と権限の確認後に行います。
 4. ntfy導入・通知許可・設定同期、別アプリ利用・画面消灯、停止・削除・圏外復帰・更新を端末ごとに記録します。

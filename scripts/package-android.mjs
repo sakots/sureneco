@@ -11,10 +11,12 @@ try {
     throw new Error(
       "Android用keystore.propertiesをGit管理外で設定してください。",
     );
-  const version = JSON.parse(
+  const androidConfig = JSON.parse(
     readFileSync("src-tauri/tauri.android.conf.json", "utf8"),
-  ).version;
-  const destination = `release/sureneco_v${version}_android.aab`;
+  );
+  const { version } = androidConfig;
+  const { versionCode } = androidConfig.bundle.android;
+  const destination = `release/sureneco_v${version}_android_versionCode${versionCode}.aab`;
   if (existsSync(destination))
     throw new Error("同名AABが既にあるため、上書きしません。");
   const cli = fileURLToPath(

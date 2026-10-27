@@ -2,6 +2,11 @@
 
 ## すべての更新履歴
 
+### [2026/10/27] v0.9.0（Android再提出用）
+
+- Play ConsoleでversionCode 5が使用済みとの報告を受け、AndroidのversionCodeを90へ変更。090の先頭ゼロは整数では保持できないため、表示バージョン0.9.0とは別に90として管理。
+- AABの出力名へversionCodeを追加し、同じ表示バージョンの再提出で公開済みAABを上書きせず区別できるよう修正。
+
 ### [2026/10/27] v0.9.0
 
 - Windows・Linux・Androidのバージョンを0.9.0へ統一し、AndroidのversionCodeを5へ更新。

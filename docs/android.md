@@ -102,7 +102,17 @@ Git管理外の`src-tauri/gen/android/keystore.properties`へ`storeFile`（絶�
 
 初回Play提出向けビルドでは、Android版を`0.9.0`／versionCode `3`にし、PC版の版番号は変更しませんでした。利用者の承認に基づいて、新しいAndroidアップロード鍵をGit管理外の`.secrets/android-upload.p12`へ作成し、署名設定は`src-tauri/gen/android/keystore.properties`へ保存しました。署名設定にはパスワードが含まれます。鍵と署名設定を別の安全な保管先へバックアップし、チャット・Git・公開配布物へ含めないでください。公開証明書は`release/sureneco_android_upload_certificate.pem`です。デバッグ鍵とは異なるため、既存ベータAPKへのデータ保持付き上書きはできません。
 
-`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionを使って`release/sureneco_vVERSION_android.aab`へ配置します。署名設定不足・公開接続先不足・同名出力では失敗し、PlayやGitHubへ公開しません。公開AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。
+`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。現在の再提出設定は表示バージョン`0.9.0`／versionCode `90`です。指定の`090`は整数としては`90`で、先頭ゼロは保持されません。署名設定不足・公開接続先不足・同名出力では失敗し、PlayやGitHubへ公開しません。公開AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。公開済みのversionCode `5`のAABは上書きしません。
+
+### versionCode 90の再提出用AAB（2026/10/27）
+
+`pnpm package:android`で`release/sureneco_v0.9.0_android_versionCode90.aab`を生成しました。サイズは8,569,975 bytes、SHA-256は`d4dbe4a57347cb52b4fd5180ab2b06f48115f813b5d07e3a568be8c603e71097`です。隣接する`.aab.sha256`と`_mapping.txt`を保存しました。
+
+- 実AABのmanifestから`sureneco.sakots`、versionName `0.9.0`／versionCode `90`、minSdk 24／targetSdk 36、デバッグ不可を確認。
+- JAR署名・公式bundletool 1.18.3の検証に成功。署名証明書は公開済み版と同じアップロード証明書。
+- ARM64のみで、4つのネイティブLOADセグメントはすべて`0x4000`整列。AAB設定は`PAGE_ALIGNMENT_16K`、R8対応表はAAB内のものと一致。
+- `pnpm check`はTypeScript 194件成功・1件スキップ、Rust 38件成功。既存のversionCode `5`のAABはSHA-256が変わっておらず、上書きしていないことを確認。
+- 自己署名・証明書チェーン・タイムスタンプなし・POSIX属性・JarFile／JarInputStream間のManifest読み取り差異の警告は継続。Play Console受付・実機・16KB端末動作は未確認。GitHubの公開済み成果物は変更していません。
 
 ### 全OS共通v0.9.0の生成記録（2026/10/27）
 
