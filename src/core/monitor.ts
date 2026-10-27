@@ -16,7 +16,7 @@ export class Monitor {
   private threads: Thread[] = [];
   private items: Recruitment[] = [];
   private errors: string[] = [];
-  private notices = new Map<string, string>();
+  private notices = new Map<string, { message: string; expiresAt: number }>();
   private updatedAt: number | null = null;
   private refreshing = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -39,6 +39,10 @@ export class Monitor {
     this.startupChecks = new Set(state.watched);
   }
   snapshot(): Snapshot {
+    const now = this.now();
+    for (const [id, notice] of this.notices) {
+      if (notice.expiresAt <= now) this.notices.delete(id);
+    }
     return structuredClone({
       settings: this.state.settings,
       watched: this.state.watched,
@@ -48,7 +52,7 @@ export class Monitor {
         .slice()
         .reverse(),
       errors: this.errors,
-      notices: [...this.notices.values()],
+      notices: Array.from(this.notices.values(), (notice) => notice.message),
       updatedAt: this.updatedAt,
       refreshing: this.refreshing,
       notificationAvailable: this.notificationAvailable,
@@ -196,10 +200,10 @@ export class Monitor {
   }
   private async stopCompletedThread(id: string, title = id): Promise<void> {
     await this.setWatching(id, false);
-    this.notices.set(
-      id,
-      `${title}: レス数が1000を超えたため、監視を自動停止しました。`,
-    );
+    this.notices.set(id, {
+      message: `${title}: レス数が1000を超えたため、監視を自動停止しました。`,
+      expiresAt: this.now() + 30_000,
+    });
   }
   watch(id: string, enabled: boolean): Promise<void> {
     if (!validThreadId(id) || typeof enabled !== "boolean")
