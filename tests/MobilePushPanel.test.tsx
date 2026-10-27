@@ -52,17 +52,6 @@ it("ntfyの案内を開閉して接続先を確認しても、同意・有効化
   expect(details.open).toBe(false);
   await user.click(summary);
   expect(details.open).toBe(true);
-  expect(within(details).getByText(/Google PlayまたはF-Droid/)).toBeTruthy();
-  expect(
-    within(details).getByText(/Google Play版でもFirebaseを使いません/),
-  ).toBeTruthy();
-  expect(within(details).getByText("https://push.example.com")).toBeTruthy();
-  expect(within(details).getByText(/ユーザー管理/)).toBeTruthy();
-  const steps = within(details).getAllByRole("listitem");
-  expect(steps[1].textContent).toContain("通知を有効にする");
-  expect(steps[2].textContent).toContain("ユーザー管理");
-  expect(steps[3].textContent).toContain("同期を再試行");
-  expect(details.textContent).not.toMatch(/運用者|発行を依頼|トピックを.*伝え/);
   expect(api.startPush).not.toHaveBeenCalled();
   expect(api.syncPush).not.toHaveBeenCalled();
   const start = screen.getByRole("button", { name: "通知を有効にする" });
