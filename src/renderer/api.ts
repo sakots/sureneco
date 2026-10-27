@@ -49,7 +49,13 @@ export const api: Api = {
             request<void>("mobile_copy_login", { field }),
         },
       }
-    : {}),
+    : {
+        desktop: {
+          getAutostart: () => invoke<boolean>("autostart_status"),
+          setAutostart: (enabled: boolean) =>
+            invoke<boolean>("autostart_set", { enabled }),
+        },
+      }),
   getSnapshot: () => request<Snapshot>("snapshot"),
   refresh: () => request("refresh"),
   watch: (id, enabled) => request("watch", { id, enabled }),

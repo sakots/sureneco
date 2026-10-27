@@ -500,3 +500,14 @@ progress {
   gap: 6px;
   font-size: 12px;
 }
+
+.autostart-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.autostart-toggle input {
+  flex: none;
+  width: auto;
+  margin: 0;
+}

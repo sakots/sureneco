@@ -4,6 +4,7 @@ import { isRecent } from "../core/detection";
 import { extractRoomIds, postReferences, splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot, UpdateState } from "../core/types";
 import { MobilePushPanel } from "./MobilePushPanel";
+import { AutostartPanel } from "./AutostartPanel";
 import { UpdatePanel } from "./UpdatePanel";
 import { ThemeToggle } from "./ThemeToggle";
 const labels: Record<keyof Settings, string> = {
@@ -449,6 +450,9 @@ export function App({ api }: { api: Api }) {
               {api.mobile && <MobilePushPanel api={api.mobile} />}
               {!api.mobile && update && (
                 <UpdatePanel api={api} state={update} />
+              )}
+              {!api.mobile && api.desktop && (
+                <AutostartPanel api={api.desktop} />
               )}
               {!api.mobile && (
                 <section className="settings-card">

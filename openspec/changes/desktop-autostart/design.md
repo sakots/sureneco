@@ -14,7 +14,7 @@
 
 ### 1. 小さなdesktop専用RustモジュールにOS登録を閉じ込める
 
-`src-tauri/src/desktop/autostart.rs`を追加し、OS別処理をcfgで分ける。WindowsはHKCUの`Software\\Microsoft\\Windows\\CurrentVersion\\Run`に専用値`sureneco`を登録する。Linuxは`$XDG_CONFIG_HOME/autostart/sureneco.desktop`（未指定なら`~/.config/autostart/`）へ専用Desktop Entryを作る。現在のユーザーのみを対象とし、全ユーザー登録は扱わない。Windowsのコマンド行とDesktop Entry Execは別形式なので個別にエスケープする。Linuxでは引用符・バックスラッシュ・予約文字・リテラルの%を仕様に従って扱い、改行やNULを実行先に許可しない。
+`src-tauri/src/desktop/autostart.rs`を追加し、OS別処理をcfgで分ける。WindowsはHKCUの`Software\\Microsoft\\Windows\\CurrentVersion\\Run`に専用値`sureneco-autostart`を登録する。Tauri NSISが通常アンインストール時に`${PRODUCTNAME}`（`sureneco`）のRun値を無条件削除するため、その名前と分離し、別配置の登録を削除しない所有確認を保つ。Linuxは`$XDG_CONFIG_HOME/autostart/sureneco.desktop`（未指定なら`~/.config/autostart/`）へ専用Desktop Entryを作る。現在のユーザーのみを対象とし、全ユーザー登録は扱わない。Windowsのコマンド行とDesktop Entry Execは別形式なので個別にエスケープする。Linuxでは引用符・バックスラッシュ・予約文字・リテラルの%を仕様に従って扱い、改行やNULを実行先に許可しない。
 
 Tauri autostartプラグインの追加も可能だが、既存winregを再利用すると依存を増やさずに対象ファイルと所有確認を制御できる。汎用OS設定フレームワークは導入しない。
 
@@ -25,6 +25,8 @@ Tauri autostartプラグインの追加も可能だが、既存winregを再利�
 ### 3. 実行先を配布形式ごとに決める
 
 WindowsとLinux DEBは現在の実行ファイルの絶対パスを使う。Linux AppImageは`APPIMAGE`が示す元の実行可能ファイルを使い、一時的なAppDir内のcurrent_exeを登録しない。実行先が存在しない、絶対パスでない、実行不能などの場合は登録を拒否する。監視用の引数やshellを介さず通常起動するため、既存のウィンドウ表示・トレイ・通知クリックの振る舞いを変えない。開発ビルドからのOS登録は許可せず、未対応の理由を設定画面に表示する。実起動試験は配布相当のreleaseビルドで行う。
+
+Linuxの`Exec`は`/usr/bin/env -- "実行先の絶対パス"`とする。GLibのDesktopAppInfoは`%%`を展開する前に先頭の実行ファイルを検索し、`%`を含むパスを直接指定すると起動を拒否するため、アプリのパスを引数として渡す。シェルや追加スクリプトを挟まず、アプリへ引数を渡さない。実際のGIOランチャーで空白・日本語・引用符・`%`・バックスラッシュ等を含むファイル名の起動を回帰確認する。
 
 ### 4. 型付きのdesktop APIとPC専用カード
 

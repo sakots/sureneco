@@ -72,6 +72,7 @@ export interface UpdateState {
 }
 export interface Api {
   mobile?: PushApi;
+  desktop?: DesktopApi;
   getUpdateState(): Promise<UpdateState>;
   checkUpdate(): Promise<void>;
   downloadUpdate(): Promise<void>;
@@ -89,6 +90,11 @@ export interface Api {
   copyRoomId(id: string): Promise<void>;
   launchMahjongSoul(id: string): Promise<void>;
   subscribe(callback: (snapshot: Snapshot) => void): () => void;
+}
+
+export interface DesktopApi {
+  getAutostart(): Promise<boolean>;
+  setAutostart(enabled: boolean): Promise<boolean>;
 }
 
 export interface PushState {

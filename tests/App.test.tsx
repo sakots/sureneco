@@ -30,6 +30,7 @@ function setup(
   },
   settings: Snapshot["settings"] = defaults,
   mobile?: Api["mobile"],
+  desktop?: Api["desktop"],
 ) {
   const snapshot: Snapshot = {
     settings,
@@ -51,6 +52,7 @@ function setup(
   };
   const api: Api = {
     mobile,
+    desktop,
     getUpdateState: vi.fn(async () => update),
     checkUpdate: vi.fn(async () => {}),
     downloadUpdate: vi.fn(async () => {}),
@@ -233,6 +235,50 @@ it("選択したフォルダは明示的に変更するまで保存先にせず�
   await user.click(screen.getByRole("button", { name: "保存先を変更" }));
   expect(screen.getByText("/config/resolved")).toBeTruthy();
   expect((path as HTMLInputElement).value).toBe("/config/resolved");
+});
+
+it("自動起動は監視設定の保存や設定フォルダ変更から独立している", async () => {
+  let enabled = false;
+  const desktop = {
+    getAutostart: vi.fn(async () => enabled),
+    setAutostart: vi.fn(async (value: boolean) => {
+      enabled = value;
+      return enabled;
+    }),
+  };
+  const api = setup([], undefined, defaults, undefined, desktop);
+  const user = userEvent.setup();
+  expect(desktop.getAutostart).not.toHaveBeenCalled();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  const toggle = (await screen.findByRole("checkbox", {
+    name: "ログイン時に自動起動する",
+  })) as HTMLInputElement;
+  await waitFor(() => expect(toggle.disabled).toBe(false));
+  await user.click(toggle);
+  expect(toggle.checked).toBe(true);
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  expect(api.changeConfigDirectory).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenCalledExactlyOnceWith(defaults);
+  const path = screen.getByLabelText("設定フォルダのパス");
+  await user.clear(path);
+  await user.type(path, "/config/moved");
+  await user.click(screen.getByRole("button", { name: "保存先を変更" }));
+  expect(api.changeConfigDirectory).toHaveBeenCalledWith("/config/moved");
+  expect(toggle.checked).toBe(true);
+  expect(desktop.setAutostart).toHaveBeenCalledExactlyOnceWith(true);
+  await user.click(screen.getByRole("button", { name: /^スレッド/ }));
+  await user.click(screen.getByRole("button", { name: "設定" }));
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("checkbox", {
+          name: "ログイン時に自動起動する",
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true),
+  );
+  expect(desktop.getAutostart).toHaveBeenCalledTimes(2);
 });
 
 const recruitment = {
@@ -506,7 +552,17 @@ it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表�
     requestPushPermission: vi.fn(async () => {}),
     copyPushLogin: vi.fn(async () => {}),
   };
-  const api = setup([], undefined, { ...defaults, update_sec: 60 }, mobile);
+  const desktop = {
+    getAutostart: vi.fn(async () => true),
+    setAutostart: vi.fn(async (enabled: boolean) => enabled),
+  };
+  const api = setup(
+    [],
+    undefined,
+    { ...defaults, update_sec: 60 },
+    mobile,
+    desktop,
+  );
   expect(
     screen.getByRole("heading", { name: "スレネコチェッカー", level: 1 }),
   ).toBeTruthy();
@@ -517,6 +573,14 @@ it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表�
   expect(screen.getByRole("button", { name: /テーマ：システム/ })).toBeTruthy();
   expect(screen.queryByText("設定フォルダ")).toBeNull();
   expect(screen.queryByText("雀魂の起動")).toBeNull();
+  expect(
+    screen.queryByRole("checkbox", { name: "ログイン時に自動起動する" }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("heading", { name: "ログイン時の起動" }),
+  ).toBeNull();
+  expect(desktop.getAutostart).not.toHaveBeenCalled();
+  expect(desktop.setAutostart).not.toHaveBeenCalled();
   expect(api.getUpdateState).not.toHaveBeenCalled();
   expect(api.getConfigDirectory).not.toHaveBeenCalled();
   const interval = screen.getByLabelText("友人戦募集の更新間隔（秒）");

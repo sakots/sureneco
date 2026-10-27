@@ -18,6 +18,7 @@ use tauri::{
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
+mod autostart;
 mod updates;
 
 struct Message {
@@ -427,6 +428,16 @@ fn show_main_window(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn autostart_status() -> Result<bool, String> {
+    autostart::status()
+}
+
+#[tauri::command]
+fn autostart_set(enabled: bool) -> Result<bool, String> {
+    autostart::set(enabled)
+}
+
+#[tauri::command]
 async fn choose_config_directory(app: AppHandle) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
@@ -509,6 +520,8 @@ pub fn run() {
             request,
             show_main_window,
             choose_config_directory,
+            autostart_status,
+            autostart_set,
             updates::update_state,
             updates::check_update,
             updates::download_update,

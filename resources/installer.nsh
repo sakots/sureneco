@@ -1,5 +1,6 @@
 !define SURENECO_DISPLAY_NAME "スレネコチェッカー"
 !define SURENECO_PREVIOUS_DISPLAY_NAME "スレネコアラート"
+!define SURENECO_AUTOSTART_VALUE "sureneco-autostart"
 
 !macro SURENECO_RENAME_SHORTCUT DIRECTORY
   !insertmacro IsShortcutTarget "${DIRECTORY}\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
@@ -38,6 +39,10 @@
 !macro NSIS_HOOK_PREUNINSTALL
   Push $0
   ${If} $UpdateMode <> 1
+    ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${SURENECO_AUTOSTART_VALUE}"
+    ${If} $0 == '$\"$INSTDIR\${MAINBINARYNAME}.exe$\"'
+      DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${SURENECO_AUTOSTART_VALUE}"
+    ${EndIf}
     !insertmacro SURENECO_REMOVE_SHORTCUT "$SMPROGRAMS"
     !insertmacro SURENECO_REMOVE_SHORTCUT "$DESKTOP"
   ${EndIf}
