@@ -15,6 +15,7 @@
 
 - Windows：インストーラー（`Setup.exe`）またはポータブル版（`win.zip`）
 - Ubuntu：DEB（`amd64.deb`）またはAppImage
+- Android：ARM64向け署名付きAPK（手動導入用）とAAB（Google Play提出用）。[導入・署名の注意](docs/android.md)を確認してください。GitHub公開とGoogle Play公開は別です。
 
 WindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
@@ -52,6 +53,13 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 テスターの方は[0.9.0test テスターガイド](docs/android-beta-tester.md)を参照してください。インストール、ntfy設定、試す条件、報告テンプレート、参加終了の手順をまとめています。
 
 ## 更新履歴
+
+### [2026/10/27] v0.9.0
+
+- Windows・Linux・Androidのバージョンを0.9.0へ統一。AndroidのversionCodeを5へ更新。
+- Windows／Linuxにログイン時の自動起動設定を追加（既定オフ・現在のユーザーのみ）。
+- Node.js版に監視停止・取得／配送エラーの状態確認を追加。
+- Windows実環境とOS再ログインの確認、Androidの16KB端末での動作確認とGoogle Play提出は未実施。
 
 ### [2026/10/27] v0.8.10（開発中）
 

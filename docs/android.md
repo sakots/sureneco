@@ -16,7 +16,7 @@ Androidは別アプリの利用中・画面消灯中もプッシュを受け取�
 
 Androidのサーバー監視は`update_sec`が既定60秒、`thread_update_sec`が既定300秒で、どちらも60秒以上の整数を受け付ける設計です。常駐スケジューラーが期限を迎えた購読を処理し、毎分cronの実行回には丸めません。負荷・通信・ntfy・端末による遅延はあり、PC版の20秒更新は変更しません。
 
-PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、GitHub経由の更新はAndroidに持ち込みません。Androidのアプリ更新はGoogle Playから行います。
+PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、GitHub経由の自動更新はAndroidに持ち込みません。Google Playから導入したAndroid版はGoogle Playで更新します。GitHubの署名付きAPKは手動で導入・更新します。同じパッケージでも署名が異なるデバッグ版やPlay配布版へは上書きできず、アプリを削除すると設定が失われます。
 
 Androidには別途中継アプリのntfyを導入し、自前サーバーを設定してもらいます。Google Play版・F-Droid版の両方を利用できます。自前サーバーへの接続ではGoogle Play版もFirebaseを使いません。F-Droid版はFirebaseの機能自体を含まない配布版です。[ntfy公式説明](https://docs.ntfy.sh/subscribe/phone/#instant-delivery)を参照してください。スレネコチェッカーにUnifiedPush connectorを追加し、中継選択・未導入・通知先更新・解除を扱います。接続維持はntfyが担当するため、そちらの常駐通知・電池設定が必要になる場合があります。
 
@@ -98,9 +98,26 @@ ntfyアプリを導入して自前サーバーを設定し、スレネコチェ�
 
 Git管理外の`src-tauri/gen/android/keystore.properties`へ`storeFile`（絶対パス）・`storePassword`・`keyAlias`・`keyPassword`を設定します。Android用アップロード鍵を使い、PC更新用鍵は使いません。`SURENECO_ANDROID_SIGNING_FILE`で設定ファイルの絶対パスも指定できます。
 
-初回Play提出向けビルドでは、Android版を`0.9.0`／versionCode `3`にし、PC版の版番号は変更しません。利用者の承認に基づいて、新しいAndroidアップロード鍵をGit管理外の`.secrets/android-upload.p12`へ作成し、署名設定は`src-tauri/gen/android/keystore.properties`へ保存します。署名設定にはパスワードが含まれます。鍵と署名設定を別の安全な保管先へバックアップし、チャット・Git・公開配布物へ含めないでください。公開証明書は`release/sureneco_android_upload_certificate.pem`へ書き出します。デバッグ鍵とは異なるため、既存ベータAPKへのデータ保持付き上書きはできません。
+全プラットフォーム共通のv0.9.0リリースでは、AndroidもversionNameを`0.9.0`、versionCodeを既存の`4`より大きい`5`に更新しました。以下の初回提出記録（versionCode `3`）とは別ビルドで、既存のアップロード鍵を継続使用しています。GitHubでの成果物公開とGoogle Playへの提出・審査・公開は区別します。
+
+初回Play提出向けビルドでは、Android版を`0.9.0`／versionCode `3`にし、PC版の版番号は変更しませんでした。利用者の承認に基づいて、新しいAndroidアップロード鍵をGit管理外の`.secrets/android-upload.p12`へ作成し、署名設定は`src-tauri/gen/android/keystore.properties`へ保存しました。署名設定にはパスワードが含まれます。鍵と署名設定を別の安全な保管先へバックアップし、チャット・Git・公開配布物へ含めないでください。公開証明書は`release/sureneco_android_upload_certificate.pem`です。デバッグ鍵とは異なるため、既存ベータAPKへのデータ保持付き上書きはできません。
 
 `pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionを使って`release/sureneco_vVERSION_android.aab`へ配置します。署名設定不足・公開接続先不足・同名出力では失敗し、PlayやGitHubへ公開しません。公開AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。
+
+### 全OS共通v0.9.0の生成記録（2026/10/27）
+
+Java 21・NDK 28.2.13676358を使い、Tauriの`android build --aab --apk --target aarch64 --ci --features mobile -- --no-default-features`でAABとAPKを同時生成しました。チェック済みrendererを再利用し、既存の署名鍵を使用しています。
+
+| 配布物 | bytes | SHA-256 |
+| --- | ---: | --- |
+| `sureneco_v0.9.0_android.aab` | 8,569,954 | `1b432013ea3adf87e9851708b262f3ad1820c2aabc7c4005d48de2701fe2d75c` |
+| `sureneco_v0.9.0_android.apk` | 20,902,093 | `247233779d61c2c851ed6c42d001f16d5be9692508c770385876d444965d6ad3` |
+
+- AAB／APKとも`sureneco.sakots`、versionName `0.9.0`／versionCode `5`、minSdk 24／targetSdk 36、ARM64のみ、デバッグ不可を確認。
+- AABのJAR署名・公式bundletool 1.18.3の検証、APKの署名v2・`zipalign -c -P 16 4`に成功。アップロード証明書は上記の既存証明書と一致。
+- AAB／APK内のネイティブライブラリーは一致し、4つのLOADセグメントが`0x4000`整列。AABは`PAGE_ALIGNMENT_16K`。R8対応表は`release/sureneco_v0.9.0_android_mapping.txt`に保存し、AAB内の対応表と一致。
+- JAR検証は成功しましたが、自己署名・証明書チェーン・タイムスタンプなし・POSIX属性・JarFile／JarInputStream間のManifest読み取り差異の警告は残っています。実機インストール・起動・通知・16KB端末・Play Console受付は未確認。
+- 次の初回生成記録はversionCode `3`の過去の値であり、今回のversionCode `5`の配布物とは区別してください。同名の過去ファイルが作業環境にないことを確認して生成し、既存成果物は上書きしていません。
 
 ### 初回提出用AABの生成記録（2026/10/27）
 

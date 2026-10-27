@@ -1,6 +1,6 @@
 [package]
 name = "sureneco"
-version = "0.8.10"
+version = "0.9.0"
 edition = "2021"
 description = "5ch雀魂スレッドの友人戦募集通知"
 license = "MIT"
