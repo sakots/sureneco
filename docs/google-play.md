@@ -70,7 +70,7 @@ Play Consoleの「メインのストアの掲載情報」→「グラフィッ�
 
 ## 内部テストの手順案
 
-1. 現在の再提出用AABは`release/sureneco_v0.9.0_android_versionCode90.aab`（versionName `0.9.0`／versionCode `90`）です。指定の`090`は整数として`90`になります。Play ConsoleでversionCode `5`が使用済みとの報告を受けて生成し、実manifestの版・既存アップロード鍵の署名・bundletool検証を確認しました。公開済みの`release/sureneco_v0.9.0_android.aab`（versionCode `5`）とは別ファイルで、上書きしていません。チェックサムと詳細は[Android手順](android.md#署名付きaabの準備)を参照してください。Playでの受付・実機動作は未確認で、GitHub公開済みファイルも変更していません。
+1. v0.9.1はversionName `0.9.1`／versionCode `91`でビルドします。ビルド出力は`release/sureneco_v0.9.1_android_versionCode91.aab`、GitHub公開名は`sureneco_v0.9.1_android.aab`です。既存アップロード鍵を継続使用し、実manifestの版・署名・bundletool検証を確認してから提出します。チェックサムと詳細は[Android手順](android.md#署名付きaabの準備)を参照してください。GitHubでの正式公開とPlayでの提出・審査・公開は別で、Playでの受付・実機動作は未確認です。過去の成果物は上書きしません。
 2. Play Consoleで対象アプリの内部テストトラックを選び、新しいリリースへAABと変更説明を登録します。同名版・既存versionCodeは再利用しません。
 3. テスター一覧と参加リンクを設定し、配布された版を端末へインストールします。公開操作は依頼と権限の確認後に行います。
 4. ntfy導入・通知許可・設定同期、別アプリ利用・画面消灯、停止・削除・圏外復帰・更新を端末ごとに記録します。
