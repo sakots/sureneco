@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { PushApi, PushState } from "../core/types";
+import { DismissibleMessage } from "./DismissibleMessage";
+
+const stateReadError = "通知状態を確認できません。";
+
 export function MobilePushPanel({ api }: { api: PushApi }) {
   const [state, setState] = useState<PushState | null>(null);
   const [consent, setConsent] = useState(false);
@@ -46,11 +50,16 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
       void api
         .getPushState()
         .then((s) => {
-          if (alive && requestVersion === version.current) setState(s);
+          if (alive && requestVersion === version.current) {
+            setState(s);
+            setError((previous) =>
+              previous === stateReadError ? "" : previous,
+            );
+          }
         })
         .catch(() => {
           if (alive && requestVersion === version.current)
-            setError("通知状態を確認できません。");
+            setError(stateReadError);
         });
     };
     read();
@@ -145,9 +154,11 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
         </p>
       ) : null}
       {registration?.error && (
-        <p role="alert">
-          登録処理を完了できません。接続を確認し、「同期を再試行」を押してください。
-        </p>
+        <DismissibleMessage
+          key={registration.error}
+          message="登録処理を完了できません。接続を確認し、「同期を再試行」を押してください。"
+          tone="error"
+        />
       )}
       {registration &&
         registration.state !== "stopped" &&
@@ -228,9 +239,12 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
             >
               パスワードをコピー
             </button>
-            <p role="status" className="help">
-              {copyMessage}
-            </p>
+            {copyMessage && (
+              <DismissibleMessage
+                message={copyMessage}
+                onDismiss={() => setCopyMessage("")}
+              />
+            )}
             <p className="help">
               コピーした項目をntfyの同じ名前の欄へ貼り付けてください。パスワードは隠したままコピーできます。
               この端末専用の情報です。他の人へ共有しないでください。貼り付け後は必要に応じてクリップボードの履歴を削除してください。
@@ -325,7 +339,7 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
         />
         保存内容と通知方式に同意する
       </label>
-      {error && <p role="alert">{error}</p>}
+      {error && <DismissibleMessage message={error} tone="error" />}
       {state?.server && (
         <p className="metadata">
           直近に確認したサーバー状態：
@@ -341,6 +355,7 @@ export function MobilePushPanel({ api }: { api: PushApi }) {
           <button
             disabled={busy}
             onClick={() => {
+              setError("");
               void api
                 .requestPushPermission()
                 .catch(() => setError("通知権限を確認してください。"));

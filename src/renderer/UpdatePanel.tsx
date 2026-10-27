@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { Api, UpdateState } from "../core/types";
+import { DismissibleMessage } from "./DismissibleMessage";
 export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
   const [error, setError] = useState("");
+  const [errorGeneration, setErrorGeneration] = useState(0);
   const [busy, setBusy] = useState(false);
   async function act(task: () => Promise<void>) {
     setBusy(true);
@@ -10,6 +12,7 @@ export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
       await task();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      setErrorGeneration((generation) => generation + 1);
     } finally {
       setBusy(false);
     }
@@ -27,6 +30,7 @@ export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
   };
   const working =
     busy || ["checking", "downloading", "installing"].includes(state.status);
+  const displayError = error || state.error;
   return (
     <section className="settings-card">
       <h3>アプリの更新</h3>
@@ -37,10 +41,13 @@ export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
           この配布形式はリリース画面から手動で更新してください。
         </p>
       )}
-      {(error || state.error) && (
-        <p className="message error" role="alert">
-          {error || state.error}
-        </p>
+      {displayError && (
+        <DismissibleMessage
+          key={errorGeneration}
+          message={displayError}
+          tone="error"
+          onDismiss={() => setError("")}
+        />
       )}
       {state.status === "downloading" && (
         <progress

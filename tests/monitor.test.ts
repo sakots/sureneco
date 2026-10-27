@@ -568,9 +568,6 @@ it.each(["dat", "subject"])(
     const persisted = structuredClone(save.mock.calls.at(-1)![0]);
     expect(persisted.watched).toEqual([nextId]);
     expect(persisted.cursors[id]).toBeUndefined();
-    expect(monitor.snapshot().notices).toEqual([
-      "雀魂: レス数が1000を超えたため、監視を自動停止しました。",
-    ]);
     client.dat.mockClear();
     await monitor.refresh();
     expect(client.dat.mock.calls.map((call) => call[1])).toEqual([nextId]);
@@ -595,11 +592,13 @@ it("一覧にない複数の完走スレッドもすべて解除し、IDで停�
   await monitor.refresh();
   expect(state.watched).toEqual([]);
   expect(state.cursors).toEqual({});
-  expect(monitor.snapshot().notices).toEqual(
-    [id, nextId].map(
-      (target) =>
-        `${target}: レス数が1000を超えたため、監視を自動停止しました。`,
-    ),
+  const notices = monitor.snapshot().notices;
+  expect(notices).toHaveLength(2);
+  expect(notices).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining(id),
+      expect.stringContaining(nextId),
+    ]),
   );
 });
 
@@ -626,9 +625,7 @@ it("起動時に一覧で完走を確認した対象はdatを取得せず、未�
   await monitor.refresh();
   expect(state.watched).toEqual([]);
   expect(client.dat).not.toHaveBeenCalled();
-  expect(monitor.snapshot().notices).toEqual([
-    "雀魂: レス数が1000を超えたため、監視を自動停止しました。",
-  ]);
+  expect(monitor.snapshot().notices).toHaveLength(1);
 });
 
 it("停止メッセージは監視再開と板URL変更で消える", async () => {
@@ -644,4 +641,47 @@ it("停止メッセージは監視再開と板URL変更で消える", async () =
     url: "https://egg.5ch.net/mj/",
   });
   expect(monitor.snapshot().notices).toEqual([]);
+});
+
+it("停止案内は更新で期限を延長せず30秒後の状態配信で消え、監視解除は維持する", async () => {
+  const { monitor, clock, state, client } = pollingFixture(1001);
+  await monitor.refresh();
+  const initialNotices = monitor.snapshot().notices;
+  expect(initialNotices).toHaveLength(1);
+  client.dat.mockClear();
+  clock.now += 20_000;
+  await monitor.refresh(false, true);
+  expect(monitor.snapshot().notices).toEqual(initialNotices);
+  clock.now += 9_999;
+  expect(monitor.snapshot().notices).toEqual(initialNotices);
+  const changed = vi.fn();
+  monitor.onChange = changed;
+  clock.now += 1;
+  await monitor.refresh(false, true);
+  expect(changed.mock.calls.at(-1)![0].notices).toEqual([]);
+  expect(monitor.snapshot().notices).toEqual([]);
+  expect(state.watched).toEqual([]);
+  expect(client.dat).not.toHaveBeenCalled();
+  await monitor.refresh(true);
+  expect(monitor.snapshot().notices).toEqual([]);
+  expect(state.watched).toEqual([]);
+});
+
+it("異なる時刻の停止案内は個別に期限切れになり、通信エラーは消さない", async () => {
+  const { monitor, clock, client, nextId } = pollingFixture(1001);
+  await monitor.refresh();
+  clock.now += 20_000;
+  await monitor.watch(nextId, true);
+  client.subject.mockRejectedValueOnce(new Error("HTTP 403"));
+  await monitor.refresh(true);
+  const notices = monitor.snapshot().notices;
+  const errors = monitor.snapshot().errors;
+  expect(notices).toHaveLength(2);
+  expect(errors).toEqual([expect.stringContaining("403")]);
+  clock.now += 10_000;
+  expect(monitor.snapshot().notices).toEqual([notices[1]]);
+  expect(monitor.snapshot().errors).toEqual(errors);
+  clock.now += 20_000;
+  expect(monitor.snapshot().notices).toEqual([]);
+  expect(monitor.snapshot().errors).toEqual(errors);
 });

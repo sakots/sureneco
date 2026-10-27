@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DesktopApi } from "../core/types";
+import { DismissibleMessage } from "./DismissibleMessage";
 
 type Session = { active: boolean; busy: boolean };
 
@@ -105,9 +106,11 @@ export function AutostartPanel({ api }: { api: DesktopApi }) {
               : "自動起動はオフです。"}
       </p>
       {error && (
-        <p className="message error" role="alert">
-          {error}
-        </p>
+        <DismissibleMessage
+          message={error}
+          tone="error"
+          onDismiss={() => setError("")}
+        />
       )}
       <button className="secondary" disabled={pending} onClick={refresh}>
         状態を再確認

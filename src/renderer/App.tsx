@@ -7,6 +7,10 @@ import { MobilePushPanel } from "./MobilePushPanel";
 import { AutostartPanel } from "./AutostartPanel";
 import { UpdatePanel } from "./UpdatePanel";
 import { ThemeToggle } from "./ThemeToggle";
+import {
+  DismissibleMessage,
+  DismissibleMessageList,
+} from "./DismissibleMessage";
 const labels: Record<keyof Settings, string> = {
   update_sec: "友人戦募集の更新間隔（秒）",
   thread_update_sec: "スレッド一覧の更新間隔（秒）",
@@ -206,42 +210,36 @@ export function App({ api }: { api: Api }) {
           設定
         </button>
       </nav>
-      {update &&
-        ["available", "downloaded"].includes(update.status) &&
-        page !== "settings" && (
-          <div className="message update-banner">
-            <span>
-              スレネコチェッカー v{update.latestVersion}に更新できます。
-            </span>
-            <button className="secondary" onClick={() => setPage("settings")}>
-              更新画面を開く
-            </button>
-          </div>
-        )}
-      {error && (
-        <div role="alert" className="message error">
-          {error}
+      {update && ["available", "downloaded"].includes(update.status) && (
+        <div hidden={page === "settings"}>
+          <DismissibleMessage
+            message={`スレネコチェッカー v${update.latestVersion}に更新できます。`}
+            action={
+              <button className="secondary" onClick={() => setPage("settings")}>
+                更新画面を開く
+              </button>
+            }
+          />
         </div>
+      )}
+      {error && (
+        <DismissibleMessage
+          message={error}
+          tone="error"
+          onDismiss={() => setError("")}
+        />
       )}
       {notice && (
-        <div role="status" className="message success">
-          {notice}
-        </div>
+        <DismissibleMessage
+          message={notice}
+          tone="success"
+          onDismiss={() => setNotice("")}
+        />
       )}
-      {snapshot?.notices.map((message) => (
-        <div className="message" role="status" key={message}>
-          {message}
-        </div>
-      ))}
-      {snapshot?.errors.map((e, i) => (
-        <div className="message error" role="alert" key={i}>
-          {e}
-        </div>
-      ))}
+      <DismissibleMessageList messages={snapshot?.notices ?? []} />
+      <DismissibleMessageList messages={snapshot?.errors ?? []} tone="error" />
       {snapshot && !api.mobile && !snapshot.notificationAvailable && (
-        <div className="message">
-          この環境ではデスクトップ通知を利用できません。
-        </div>
+        <DismissibleMessage message="この環境ではデスクトップ通知を利用できません。" />
       )}
       {!snapshot ? (
         <p className="empty">読み込み中…</p>
@@ -638,9 +636,11 @@ function SettingsForm({
         </div>
       </div>
       {error && (
-        <div className="message error" role="alert">
-          {error}
-        </div>
+        <DismissibleMessage
+          message={error}
+          tone="error"
+          onDismiss={() => setError("")}
+        />
       )}
       <section className="settings-card">
         <h3>取得と通知</h3>

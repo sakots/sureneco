@@ -251,6 +251,24 @@ h3 {
   background: var(--error-bg);
   color: var(--error-text);
 }
+.dismissible-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.dismissible-message-content {
+  flex: 1;
+  min-width: 0;
+}
+.dismissible-message-close {
+  flex: none;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
 .empty {
   padding: 32px 16px;
   text-align: center;
@@ -468,16 +486,12 @@ footer {
 }
 
 .recruitment-actions,
-.update-actions,
-.update-banner {
+.update-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
-}
-.update-banner {
-  justify-content: space-between;
 }
 progress {
   width: 100%;

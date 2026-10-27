@@ -163,6 +163,17 @@ it("コピー処理中の連打を防ぎ、失敗時に秘密を含む例外を�
   ).toBeTruthy();
   expect(document.body.textContent).not.toContain(registration.password);
   expect((copy as HTMLButtonElement).disabled).toBe(false);
+  await user.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  expect(
+    screen.queryByText("コピーできませんでした。もう一度お試しください。"),
+  ).toBeNull();
+  expect(
+    (screen.getByLabelText("ntfyパスワード") as HTMLInputElement).type,
+  ).toBe("password");
+  await user.click(copy);
+  expect(
+    screen.getByText("コピーできませんでした。もう一度お試しください。"),
+  ).toBeTruthy();
 });
 
 it.each([
@@ -241,6 +252,19 @@ it.each(["stop", "delete"] as const)(
     );
     expect(document.body.textContent).not.toContain(registration.password);
     expect(screen.getByText(/サーバーには未反映/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "通知を閉じる" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText(/サーバーには未反映/)).toBeTruthy();
+    expect(
+      screen.queryByRole("group", { name: "ntfyログイン情報" }),
+    ).toBeNull();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "同期を再試行",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
   },
 );
 
@@ -370,4 +394,151 @@ it("自動登録APIが失敗したときは秘密を表示せず、手動登録�
     /運用者|発行を依頼|トピックを.*伝え/,
   );
   expect(screen.queryByRole("group", { name: "ntfyログイン情報" })).toBeNull();
+});
+
+it("登録失敗とコピー結果を個別に閉じても同意・資格情報・再試行操作を維持する", async () => {
+  const api = setup("https://push.example.com", {
+    enabled: true,
+    status: "確認待ち",
+    registration: { ...registration, error: "registration failed" },
+  });
+  const user = userEvent.setup();
+  const failure = await screen.findByRole("alert");
+  const credentials = screen.getByRole("group", { name: "ntfyログイン情報" });
+  const warning = within(credentials).getByText(/重要：ntfyに保存済み/);
+  await user.click(screen.getByRole("button", { name: "ユーザー名をコピー" }));
+  const feedback = screen
+    .getByText("ユーザー名をコピーしました。")
+    .closest('[role="status"]') as HTMLElement;
+  await user.click(
+    within(feedback).getByRole("button", { name: "通知を閉じる" }),
+  );
+  expect(screen.queryByText("ユーザー名をコピーしました。")).toBeNull();
+  expect(screen.getByRole("alert")).toBe(failure);
+  await user.click(
+    within(failure).getByRole("button", { name: "通知を閉じる" }),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByText("確認待ち")).toBeTruthy();
+  expect(warning.isConnected).toBe(true);
+  expect(screen.getByRole("group", { name: "ntfyログイン情報" })).toBe(
+    credentials,
+  );
+  expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
+    false,
+  );
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "通知を有効にする",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(api.syncPush).not.toHaveBeenCalled();
+  expect(api.stopPush).not.toHaveBeenCalled();
+  expect(api.deletePush).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "ユーザー名をコピー" }));
+  expect(screen.getByText("ユーザー名をコピーしました。")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "同期を再試行" }));
+  expect(api.syncPush).toHaveBeenCalledTimes(1);
+});
+
+it("同じ登録失敗はポーリングで再表示せず、異なる失敗と解消後の再発を表示する", async () => {
+  vi.useFakeTimers();
+  const state: PushState = {
+    enabled: true,
+    permission: true,
+    status: "確認待ち",
+    registration: { ...registration, error: "first failure" },
+  };
+  const api = setup("https://push.example.com", state);
+  await act(async () => {});
+  fireEvent.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  const poll = async (next: PushState) => {
+    vi.mocked(api.getPushState).mockResolvedValue(next);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+  };
+  await poll({ ...state, registration: { ...state.registration! } });
+  expect(screen.queryByRole("alert")).toBeNull();
+  await poll({
+    ...state,
+    registration: { ...registration, error: "different failure" },
+  });
+  expect(screen.getByRole("alert")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  await poll({ ...state, registration });
+  expect(screen.queryByRole("alert")).toBeNull();
+  await poll(state);
+  expect(screen.getByRole("alert")).toBeTruthy();
+  expect(screen.getByText("確認待ち")).toBeTruthy();
+});
+
+it("権限エラーを閉じても許可済みにせず、次の許可要求の失敗を表示する", async () => {
+  const api = setup(
+    undefined,
+    { permission: false },
+    {
+      requestPushPermission: vi.fn(async () => {
+        throw new Error("permission denied");
+      }),
+    },
+  );
+  const user = userEvent.setup();
+  await screen.findByText("未登録");
+  await user.click(screen.getByRole("checkbox"));
+  await user.click(screen.getByRole("button", { name: "通知を許可" }));
+  await screen.findByRole("alert");
+  await user.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "通知を有効にする",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(api.startPush).not.toHaveBeenCalled();
+  expect(api.requestPushPermission).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole("button", { name: "通知を許可" }));
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(api.requestPushPermission).toHaveBeenCalledTimes(2);
+});
+
+it("閉じた状態確認エラーは同じ失敗で再表示せず、回復後の再発を表示する", async () => {
+  vi.useFakeTimers();
+  const read = vi
+    .fn<PushApi["getPushState"]>()
+    .mockRejectedValue(new Error("offline"));
+  setup(undefined, {}, { getPushState: read });
+  await act(async () => {});
+  expect(screen.getByRole("alert")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(screen.queryByRole("alert")).toBeNull();
+  read.mockResolvedValue({
+    enabled: false,
+    permission: false,
+    status: "未登録",
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(screen.queryByRole("alert")).toBeNull();
+  read.mockRejectedValue(new Error("offline"));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(screen.getByRole("alert")).toBeTruthy();
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "通知を有効にする",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
 });

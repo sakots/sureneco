@@ -20,7 +20,7 @@
     "createUpdaterArtifacts": false,
     "android": {
       "minSdkVersion": 24,
-      "versionCode": 5
+      "versionCode": 90
     }
   }
 }
