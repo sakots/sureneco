@@ -15,7 +15,7 @@
 
 - Windows：インストーラー（`Setup.exe`）またはポータブル版（`win.zip`）
 - Ubuntu：DEB（`amd64.deb`）またはAppImage
-- Android：ARM64向け署名付きAPK（手動導入用）とAAB（Google Play提出用）。[導入・署名の注意](docs/android.md)を確認してください。GitHub公開とGoogle Play公開は別です。
+- Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。v0.9.2のAABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
 
 WindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
@@ -56,8 +56,9 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/10/29] v0.9.1（開発中）
+### [2026/10/29] v0.9.2
 
+- Windows・Linux・Androidをv0.9.2へ更新。AndroidのversionCodeを92へ更新。
 - 消失した設定フォルダと同じパスを保存先に指定すると、空フォルダを再作成して成功扱いになる問題を修正。
 - 参照元が期限切れ・締め済みになっても取得済みの返信募集が「募集中」のまま残る問題を修正。
 - 自動登録で予約済みの通知先を別端末が購読APIから占有し、予約者の登録を妨害できる問題を修正。
