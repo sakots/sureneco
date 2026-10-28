@@ -162,6 +162,115 @@ it("authenticates and isolates registration credentials, validates input and pre
   expect(admin.removeAccount.mock.calls.length).toBe(before + 1);
   expect((await request(path, "GET", first.token)).status).toBe(401);
 });
+
+it.each(["pending", "ready"])(
+  "rejects subscription takeover of another device's %s topic reservation",
+  async (state) => {
+    const { request, issue, registration, messages } = await setup();
+    const owner = await issue();
+    const other = await issue();
+    expect(
+      (
+        await request("/v1/ntfy-registration", "PUT", owner.token, {
+          topic: "upOwned",
+        })
+      ).status,
+    ).toBe(200);
+    if (state === "ready") await registration.tick();
+
+    for (const topic of ["upOwned", "upOwned?up=1"]) {
+      expect(
+        await request(
+          "/v1/subscription",
+          "PUT",
+          other.token,
+          subscription(topic),
+        ),
+      ).toEqual({
+        status: 409,
+        body: { error: "endpoint_in_use" },
+      });
+    }
+    expect(await request("/v1/subscription", "GET", other.token)).toEqual({
+      status: 200,
+      body: { subscription: null },
+    });
+    expect(messages).toEqual([]);
+
+    expect(
+      (
+        await request(
+          "/v1/subscription",
+          "PUT",
+          owner.token,
+          subscription("upOwned?up=1"),
+        )
+      ).status,
+    ).toBe(200);
+    if (state === "ready") {
+      const confirmed = await request(
+        "/v1/subscription/confirm",
+        "POST",
+        owner.token,
+        {
+          challenge: messages[0].challenge,
+          generation: messages[0].generation,
+        },
+      );
+      expect(confirmed.status).toBe(200);
+      expect(confirmed.body.subscription.active).toBe(true);
+    }
+  },
+);
+
+it("preserves an existing subscription until a different device's topic reservation is released", async () => {
+  const { request, issue, registration, db, messages } = await setup();
+  const owner = await issue();
+  const other = await issue();
+  expect(
+    (
+      await request(
+        "/v1/subscription",
+        "PUT",
+        other.token,
+        subscription("upOther"),
+      )
+    ).status,
+  ).toBe(200);
+  const original = db.get(
+    "SELECT * FROM subscriptions WHERE uid=?",
+    other.deviceId,
+  );
+  expect(
+    (
+      await request("/v1/ntfy-registration", "PUT", owner.token, {
+        topic: "upOwned",
+      })
+    ).status,
+  ).toBe(200);
+  await registration.tick();
+  expect(
+    (await request("/v1/ntfy-registration", "DELETE", owner.token)).status,
+  ).toBe(200);
+  const sent = messages.length;
+
+  const replacement = subscription("upOwned");
+  expect(
+    await request("/v1/subscription", "PUT", other.token, replacement),
+  ).toEqual({
+    status: 409,
+    body: { error: "endpoint_in_use" },
+  });
+  expect(
+    db.get("SELECT * FROM subscriptions WHERE uid=?", other.deviceId),
+  ).toEqual(original);
+  expect(messages).toHaveLength(sent);
+
+  await registration.tick();
+  expect(
+    (await request("/v1/subscription", "PUT", other.token, replacement)).status,
+  ).toBe(200);
+});
 it("sends challenges and recruitment only for the ready matching reservation and stops ACLs with subscriptions", async () => {
   const { request, issue, registration, messages, db, push, admin } =
     await setup();
