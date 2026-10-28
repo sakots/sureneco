@@ -66,6 +66,10 @@ impl ConfigStorage {
         if !directory.is_absolute() {
             return Err("設定保存先は絶対パスで指定してください。".into());
         }
+        if directory == self.directory {
+            fs::read_dir(directory).map_err(|error| format!("{}: {error}", directory.display()))?;
+            return Ok(());
+        }
         fs::create_dir_all(directory).map_err(|error| error.to_string())?;
         let directory = fs::canonicalize(directory).map_err(|error| error.to_string())?;
         if directory == self.directory
@@ -324,6 +328,40 @@ mod tests {
         assert!(storage.save("replacement").is_err());
         assert!(ConfigStorage::load(base).is_err());
         assert!(!target.exists());
+    }
+
+    #[test]
+    fn missing_custom_directory_is_not_recreated_by_same_directory_change() {
+        let root = tempfile::tempdir().unwrap();
+        let base = root.path().join("default");
+        let target = root.path().join("target");
+        let backup = root.path().join("backup");
+        let mut storage = ConfigStorage::load(base.clone()).unwrap();
+        storage
+            .change(&target, "current settings and cursors")
+            .unwrap();
+        let active = storage.directory().to_path_buf();
+        let pointer = read(&base.join("config-location.json")).unwrap();
+        fs::rename(&target, &backup).unwrap();
+
+        for path in [&active, &active.join(".")] {
+            assert!(storage.change(path, "replacement").is_err());
+            assert!(!target.exists());
+            assert_eq!(storage.directory(), active);
+            assert_eq!(read(&base.join("config-location.json")).unwrap(), pointer);
+            assert!(ConfigStorage::load(base.clone()).is_err());
+        }
+        assert_eq!(
+            read(&backup.join("state.json")).unwrap().as_deref(),
+            Some("current settings and cursors")
+        );
+
+        fs::rename(&backup, &target).unwrap();
+        storage.change(&target, "replacement").unwrap();
+        assert_eq!(
+            storage.read().unwrap().as_deref(),
+            Some("current settings and cursors")
+        );
     }
 
     #[cfg(unix)]
