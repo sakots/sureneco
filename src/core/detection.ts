@@ -7,11 +7,18 @@ export function isBlocked(post: Post, settings: Settings): boolean {
     (!!post.watchoi && settings.ng_watchois.includes(post.watchoi))
   );
 }
-export function isRecent(post: Post, settings: Settings, now: number): boolean {
+export function isRecent(
+  post: Post | Recruitment,
+  settings: Settings,
+  now: number,
+): boolean {
+  const postedAt =
+    "effectivePostedAt" in post ? post.effectivePostedAt : post.postedAt;
   return (
-    post.postedAt > 0 &&
+    postedAt > 0 &&
     now >= post.postedAt &&
-    now - post.postedAt <= settings.emphasis_sec * 1000
+    now >= postedAt &&
+    now - postedAt <= settings.emphasis_sec * 1000
   );
 }
 export function scanPosts(
@@ -46,10 +53,13 @@ export function scanPosts(
       const refs = postReferences(post.body);
       for (const item of items) {
         if (item.threadId !== threadId) continue;
-        if (closesPost(post, item, refs)) item.closed = true;
+        if (closesPost(post, item, refs)) {
+          item.closed = true;
+          closed.add(item.number);
+        }
       }
     } else if (!isBlocked(post, settings)) {
-      const { roomIds, matches } = resolveRecruitment(
+      const { roomIds, matches, effectivePostedAt } = resolveRecruitment(
         post,
         source,
         settings,
@@ -61,12 +71,28 @@ export function scanPosts(
       const item = {
         ...post,
         roomIds,
+        effectivePostedAt,
         threadId,
         closed: closed.has(post.number),
       };
       items.push(item);
       added.push(item);
     }
+  }
+  // 保存済みの返信も再評価するが、既存募集を新規通知には追加しない。
+  for (let index = 0; index < previous.length; index++) {
+    const item = items[index];
+    if (item.threadId !== threadId) continue;
+    const resolved = resolveRecruitment(
+      item,
+      source,
+      settings,
+      recruit,
+      closed,
+      now,
+    );
+    item.effectivePostedAt = resolved.effectivePostedAt;
+    item.closed ||= closed.has(item.number) || resolved.referenceClosed;
   }
   return {
     items: items.slice(-200),
@@ -88,7 +114,7 @@ function closesPost(closing: Post, target: Post, refs: number[]): boolean {
 }
 
 function resolveRecruitment(
-  post: Post,
+  post: Post | Recruitment,
   source: Map<number, Post>,
   settings: Settings,
   pattern: RegExp,
@@ -97,6 +123,10 @@ function resolveRecruitment(
 ) {
   const direct = extractRoomIds(post.body);
   let matches = pattern.test(post.body);
+  let effectivePostedAt =
+    "effectivePostedAt" in post ? post.effectivePostedAt : post.postedAt;
+  let referenceClosed = false;
+  let referencesRecent = true;
   const roomIds = new Set<string>();
   const visited = new Set<string>();
   const pending: { post: Post; collect: boolean }[] = [];
@@ -113,9 +143,10 @@ function resolveRecruitment(
     const key = `${referenced.number}:${collect}`;
     if (visited.has(key)) continue;
     visited.add(key);
-    if (closed.has(referenced.number) || !isRecent(referenced, settings, now))
-      return { roomIds: [], matches: false };
+    referenceClosed ||= closed.has(referenced.number);
+    referencesRecent &&= isRecent(referenced, settings, now);
     if (isBlocked(referenced, settings)) continue;
+    effectivePostedAt = Math.min(effectivePostedAt, referenced.postedAt);
     const ids = extractRoomIds(referenced.body);
     if (collect) {
       matches ||= pattern.test(referenced.body);
@@ -123,5 +154,10 @@ function resolveRecruitment(
     }
     enqueue(referenced, collect && !ids.length);
   }
-  return { roomIds: direct.length ? direct : [...roomIds], matches };
+  return {
+    roomIds: direct.length ? direct : [...roomIds],
+    matches: matches && referencesRecent && !referenceClosed,
+    effectivePostedAt,
+    referenceClosed,
+  };
 }

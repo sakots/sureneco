@@ -125,7 +125,7 @@ export function run(json: string): string {
           input.previous.slice(offset, offset + 200),
           input.settings,
           input.now,
-          [],
+          input.sourcePosts,
         );
         for (const item of pending.items) {
           if (item.closed) closedPrevious.push(item.number);

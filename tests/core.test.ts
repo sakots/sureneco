@@ -6,7 +6,7 @@ import {
   threadUrl,
 } from "../src/core/settings";
 import { parseSubject, parseDat, candidates } from "../src/core/parser";
-import { scanPosts, isBlocked } from "../src/core/detection";
+import { scanPosts, isBlocked, isRecent } from "../src/core/detection";
 
 const now = Date.parse("2026-10-04T12:00:00+09:00");
 const id = String(Math.floor(now / 1000) - 3600);
@@ -414,6 +414,110 @@ describe("終了した募集への返信", () => {
         .notifications,
     ).toHaveLength(0);
   });
+});
+
+describe("取得済み返信の状態", () => {
+  const source = parseDat(
+    [
+      line(
+        "友人戦 12345",
+        "host",
+        "名無し (ﾜｯﾁｮｲ host)",
+        "2026/10/04(日) 11:51:00",
+      ),
+      line("友人戦 23456", "other", "名無し", "2026/10/04(日) 11:55:00"),
+      line("&gt;&gt;1 あと1人", "reply", "名無し"),
+      line("&gt;&gt;3 あと1人", "chain", "名無し"),
+      line("友人戦 34567 &gt;&gt;1", "direct", "名無し"),
+      line("&gt;&gt;2 &gt;&gt;1 あと1人", "multiple", "名無し"),
+    ].join("\n"),
+  );
+
+  it("返信・連鎖・複数参照・ID再掲も最も古い参照先の期限で失効し、投稿時刻は保持する", () => {
+    const initial = scanPosts(id, source, [], defaults, now);
+    const boundary = source[0].postedAt + defaults.emphasis_sec * 1000;
+    expect(
+      initial.items.every((item) => isRecent(item, defaults, boundary)),
+    ).toBe(true);
+    expect(
+      initial.items
+        .filter((item) => isRecent(item, defaults, boundary + 1))
+        .map((item) => item.number),
+    ).toEqual([2]);
+    const updated = scanPosts(
+      id,
+      [],
+      initial.items,
+      defaults,
+      boundary + 1,
+      source,
+    );
+    expect(updated.items.map((item) => item.number)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
+    expect(updated.items[3].postedAt).toBe(source[3].postedAt);
+    expect(
+      updated.items
+        .filter((item) => isRecent(item, defaults, boundary + 1))
+        .map((item) => item.number),
+    ).toEqual([2]);
+    expect(updated.notifications).toEqual([]);
+  });
+
+  it("参照元が有効でも未来時刻の返信は通知しない", () => {
+    const future = parseDat(
+      line("&gt;&gt;1 あと1人", "future", "名無し", "2026/10/04(日) 12:01:00"),
+    )[0];
+    future.number = source.length + 1;
+    const result = scanPosts(id, [future], [], defaults, now, [
+      ...source,
+      future,
+    ]);
+    expect(result.notifications).toEqual([]);
+    expect(isRecent(result.items[0], defaults, now)).toBe(false);
+  });
+
+  it.each(["&gt;&gt;1 〆", "〆"])(
+    "後から取得した締めを既存の返信・連鎖・複数参照・ID再掲へ反映する: %s",
+    (body) => {
+      const initial = scanPosts(id, source, [], defaults, now);
+      const otherThread = scanPosts(
+        "1791034503",
+        source,
+        [],
+        defaults,
+        now,
+      ).items;
+      const closing = parseDat(line(body, "host", "名無し (ﾜｯﾁｮｲ host)"))[0];
+      closing.number = source.length + 1;
+      const updated = scanPosts(
+        id,
+        [closing],
+        [...initial.items, ...otherThread],
+        defaults,
+        now,
+        [...source, closing],
+      );
+      expect(
+        updated.items
+          .filter((item) => item.threadId === id)
+          .map((item) => [item.number, item.closed]),
+      ).toEqual([
+        [1, true],
+        [2, false],
+        [3, true],
+        [4, true],
+        [5, true],
+        [6, true],
+      ]);
+      expect(
+        updated.items
+          .filter((item) => item.threadId !== id)
+          .some((item) => item.closed),
+      ).toBe(false);
+      expect(updated.notifications).toEqual([]);
+    },
+  );
 });
 
 describe("通知を許可するワッチョイ", () => {

@@ -198,7 +198,8 @@ export async function monitor(
                 eventId(subscription.uid, board, thread, number),
               );
             for (const item of detected.notifications) {
-              const expires = item.postedAt + settings.emphasis_sec * 1000;
+              const expires =
+                item.effectivePostedAt + settings.emphasis_sec * 1000;
               if (expires <= now) continue;
               const id = eventId(subscription.uid, board, thread, item.number);
               const event = db.run(

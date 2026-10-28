@@ -471,6 +471,45 @@ it("cancels every known closing event beyond the 200-item UI history limit", asy
   await monitor(db, { now: now + 120000, fetcher });
   expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(204);
 });
+
+it.each(["closed", "expired"])(
+  "cancels referenced pending replies beyond the history limit when the source is %s",
+  async (ended) => {
+    const db = store();
+    await register(db);
+    const line = (body: string, time: string) =>
+      `名無し<>sage<>2026/10/22(木) ${time} ID:author<>${body}<>雀魂`;
+    let content = line("友人戦 12345", "12:00:00");
+    const fetcher = async (url: string) =>
+      url.endsWith("subject.txt") ? `${thread}.dat<>雀魂 (208)` : content;
+    await monitor(db, { now, fetcher });
+    content +=
+      "\n" +
+      [
+        ...Array.from({ length: 205 }, () =>
+          line("&gt;&gt;1 あと1人", "12:01:00"),
+        ),
+        line("友人戦 56789", "12:01:00"),
+      ].join("\n");
+    await monitor(db, { now: now + 60000, fetcher });
+    expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(206);
+
+    if (ended === "closed") {
+      content += "\n" + line("&gt;&gt;1 〆", "12:02:00");
+      await monitor(db, { now: now + 120000, fetcher });
+    }
+    const sent: string[][] = [];
+    await deliver(
+      db,
+      async (_token, payload) => {
+        sent.push(payload.recruitment.roomIds);
+      },
+      { now: ended === "closed" ? now + 120000 : now + 600001 },
+    );
+    expect(sent).toEqual([["56789"]]);
+    expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(0);
+  },
+);
 it("shares fetch failures and leaves cursors unchanged until a successful retry", async () => {
   const db = store();
   await register(db, "one", registration("one"));
