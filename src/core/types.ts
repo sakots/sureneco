@@ -36,6 +36,8 @@ export interface Recruitment extends Post {
   roomIds: string[];
   threadId: string;
   closed: boolean;
+  /** 投稿自身と参照連鎖で最も古い投稿時刻。表示用のpostedAtは変更しない。 */
+  effectivePostedAt: number;
 }
 export interface SavedState {
   settings: Settings;

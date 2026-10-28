@@ -377,6 +377,7 @@ const recruitment = {
   watchoi: "",
   body: "友人戦 01234 と ５６７８９\n6桁は123456",
   postedAt: Date.now(),
+  effectivePostedAt: Date.now(),
   threadId: "1791034502",
   closed: false,
   roomIds: ["01234", "56789"],
@@ -627,6 +628,7 @@ it("満員（〆）と期限切れを区別し、募集中のIDだけで雀魂�
       body: ">>1 あと1人",
       roomIds: ["01234"],
       postedAt: Date.now(),
+      effectivePostedAt: Date.now(),
     },
     {
       ...recruitment,
@@ -634,12 +636,14 @@ it("満員（〆）と期限切れを区別し、募集中のIDだけで雀魂�
       closed: true,
       roomIds: ["23456"],
       postedAt: Date.now() - 3600000,
+      effectivePostedAt: Date.now() - 3600000,
     },
     {
       ...recruitment,
       number: 14,
       roomIds: ["34567"],
       postedAt: Date.now() - 3600000,
+      effectivePostedAt: Date.now() - 3600000,
     },
   ]);
   const user = userEvent.setup();
