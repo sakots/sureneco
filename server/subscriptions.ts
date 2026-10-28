@@ -257,6 +257,14 @@ export async function subscriptions(
           uid,
         );
     } else if (method === "PUT" && settings) {
+      if (
+        db.get(
+          "SELECT uid FROM ntfy_topics WHERE topic=? AND uid<>?",
+          new URL(endpoint).pathname.slice(1),
+          uid,
+        )
+      )
+        return bad(409, "endpoint_in_use");
       const encoded = JSON.stringify(settings);
       const targets = JSON.stringify(watched);
       if (
