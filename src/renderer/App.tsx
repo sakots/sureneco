@@ -266,11 +266,13 @@ export function App({ api }: { api: Api }) {
                   <p>通知を受け取りたいスレッドを選んでください。</p>
                 </div>
                 <button
-                  className="secondary"
+                  className="secondary thread-refresh"
                   disabled={busy || snapshot.refreshing}
+                  aria-busy={snapshot.refreshing}
                   onClick={() => void act(() => api.refresh())}
                 >
-                  {snapshot.refreshing ? "更新中…" : "今すぐ更新"}
+                  <span aria-hidden={snapshot.refreshing}>今すぐ更新</span>
+                  <span aria-hidden={!snapshot.refreshing}>更新中…</span>
                 </button>
               </div>
               <div className="thread-list">

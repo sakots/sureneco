@@ -173,6 +173,16 @@ h3 {
   background: var(--panel);
   white-space: nowrap;
 }
+.thread-refresh {
+  display: inline-grid;
+  flex: none;
+}
+.thread-refresh > span {
+  grid-area: 1 / 1;
+}
+.thread-refresh > span[aria-hidden="true"] {
+  visibility: hidden;
+}
 .primary {
   background: var(--accent);
   color: var(--accent-text);
