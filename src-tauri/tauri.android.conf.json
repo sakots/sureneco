@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "スレネコチェッカー",
   "identifier": "sureneco.sakots",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "build": {
     "features": ["mobile"]
   },
@@ -20,7 +20,7 @@
     "createUpdaterArtifacts": false,
     "android": {
       "minSdkVersion": 24,
-      "versionCode": 92
+      "versionCode": 93
     }
   }
 }

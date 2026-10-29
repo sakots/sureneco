@@ -15,7 +15,7 @@
 
 - Windows：インストーラー（`Setup.exe`）またはポータブル版（`win.zip`）
 - Ubuntu：DEB（`amd64.deb`）またはAppImage
-- Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。v0.9.2のAABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
+- Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。v0.9.3のAABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
 
 WindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
@@ -56,8 +56,9 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/10/29] v0.9.2（開発中）
+### [2026/10/29] v0.9.3
 
+- Windows・Linux・Androidをv0.9.3へ更新。AndroidのversionCodeを93へ更新。
 - スレッド取得中の「更新中…」を「今すぐ更新」と同じ領域に固定し、文言の切り替えで一覧が上下にずれる問題を修正。
 
 ### [2026/10/29] v0.9.2
