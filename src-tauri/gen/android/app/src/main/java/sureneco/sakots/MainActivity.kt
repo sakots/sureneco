@@ -33,7 +33,6 @@ class MainActivity : TauriActivity() {
     rememberTarget(intent)
   }
   private fun rememberTarget(intent: Intent?) {
-    if (intent?.getBooleanExtra("showRecruitments", false) == true)
-      PushState.prefs(this).edit().putBoolean("showRecruitments", true).commit()
+    PushState.rememberNotificationTarget(this, intent)
   }
 }

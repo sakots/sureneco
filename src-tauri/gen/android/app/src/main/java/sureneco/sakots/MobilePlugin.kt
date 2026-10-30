@@ -27,7 +27,7 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
         fun resolve(value: Any? = null) { invoke.resolve(JSObject().apply { put("value", value ?: JSONObject.NULL) }) }
         try {
             when (args.operation) {
-                "notification_target" -> { val p = PushState.prefs(activity); val target = p.getBoolean("showRecruitments", false); p.edit().remove("showRecruitments").commit(); resolve(target) }
+                "notification_target" -> resolve(PushState.consumeNotificationTarget(activity))
                 "changing" -> { PushState.changing(activity); resolve() }
                 "foreground" -> resolve((activity as androidx.lifecycle.LifecycleOwner).lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
                 "status" -> {

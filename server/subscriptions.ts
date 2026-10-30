@@ -302,6 +302,11 @@ export async function subscriptions(
           now,
         );
         db.run("DELETE FROM outbox WHERE uid=?", uid);
+        if (
+          current &&
+          (JSON.parse(current.settings) as MobileSettings).url !== settings.url
+        )
+          db.run("DELETE FROM candidate_state WHERE uid=?", uid);
         for (const cursor of db.all<{ board: string; thread: string }>(
           "SELECT board,thread FROM cursors WHERE uid=?",
           uid,

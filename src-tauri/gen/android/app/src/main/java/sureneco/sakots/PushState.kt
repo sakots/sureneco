@@ -3,6 +3,7 @@ package sureneco.sakots
 import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
 import org.json.JSONObject
 import org.unifiedpush.android.connector.data.PushEndpoint
@@ -21,6 +22,19 @@ object PushState {
     @Synchronized fun desired(context: Context) = prefs(context).getBoolean("enabled", false)
     @Synchronized fun active(context: Context, expected: Long) =
         epoch(context) == expected && desired(context) && prefs(context).getString("pending", null) == null
+
+    @Synchronized fun rememberNotificationTarget(context: Context, intent: Intent?) {
+        val target = intent?.getStringExtra("notificationTarget") ?: return
+        if (target == "threads" || target == "recruitments") {
+            put(context) { putString("notificationTarget", target) }
+            intent.removeExtra("notificationTarget")
+        }
+    }
+    @Synchronized fun consumeNotificationTarget(context: Context): String? {
+        val target = prefs(context).getString("notificationTarget", null) ?: return null
+        put(context) { remove("notificationTarget") }
+        return target.takeIf { it == "threads" || it == "recruitments" }
+    }
 
     @Synchronized fun status(context: Context): JSONObject {
         val p = prefs(context)

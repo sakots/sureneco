@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { Store } from "./store";
-import { PushTransport, pushConfig, type PushData } from "./web-push";
+import { PushTransport, pushConfig, notificationData } from "./web-push";
 import { createApi } from "./api";
 import { monitor } from "./monitor";
 import { deliver } from "./delivery";
@@ -42,19 +42,7 @@ async function main() {
   );
   const sender = transport
     ? (token: string, payload: import("./monitor").Payload, timeout: number) =>
-        transport.send(
-          JSON.parse(token),
-          {
-            ...payload,
-            type: "recruitment",
-            threadTitle: Array.from(payload.threadTitle).slice(0, 80).join(""),
-            recruitment: {
-              ...payload.recruitment,
-              body: Array.from(payload.recruitment.body).slice(0, 220).join(""),
-            },
-          } as PushData,
-          timeout,
-        )
+        transport.send(JSON.parse(token), notificationData(payload), timeout)
     : null;
   const scheduler = new Scheduler(async () => {
     const started = performance.now();

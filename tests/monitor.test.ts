@@ -36,7 +36,9 @@ it("起動時に既存募集を確認し、通常更新では重複せず、取�
   notify.mockClear();
   const restarted = new Monitor(state, client, save, notify, () => now);
   await restarted.refresh();
-  expect(notify.mock.calls.map((call) => call[0].number)).toEqual([1, 2, 3]);
+  expect(notify.mock.calls.map((call) => call[0].recruitment.number)).toEqual([
+    1, 2, 3,
+  ]);
   await restarted.refresh();
   expect(notify).toHaveBeenCalledTimes(3);
   expect(restarted.snapshot().errors).toEqual([]);
@@ -137,7 +139,9 @@ it("初回取得したレスを参照して新規募集を検出し、再起動�
   const monitor = new Monitor(state, client, save, notify, () => now);
   await monitor.refresh();
   await monitor.refresh();
-  expect(notify.mock.calls.map((call) => call[0].number)).toEqual([1, 2]);
+  expect(notify.mock.calls.map((call) => call[0].recruitment.number)).toEqual([
+    1, 2,
+  ]);
   expect(monitor.snapshot().recruitments[0]).toMatchObject({
     number: 2,
     roomIds: ["01234"],
@@ -195,7 +199,7 @@ it("ワッチョイの許可設定を通知に反映し、解除後も既存レ�
   );
   await monitor.refresh();
   expect(notify).toHaveBeenCalledTimes(1);
-  expect(notify.mock.calls[0][0].watchoi).toBe("ﾜｯﾁｮｲ allowed");
+  expect(notify.mock.calls[0][0].recruitment.watchoi).toBe("ﾜｯﾁｮｲ allowed");
   expect(monitor.snapshot().recruitments).toHaveLength(2);
   await monitor.saveSettings({ ...state.settings, allowed_watchois: [] });
   await monitor.refresh();
@@ -247,7 +251,9 @@ it.each(["toggle", "startup"])(
     );
     if (mode === "toggle") await monitor.watch(id, true);
     await monitor.refresh();
-    expect(notify.mock.calls.map((call) => call[0].number)).toEqual([6, 7]);
+    expect(notify.mock.calls.map((call) => call[0].recruitment.number)).toEqual(
+      [6, 7],
+    );
     expect(state.cursors[id]).toBe(9);
     await monitor.refresh();
     expect(notify).toHaveBeenCalledTimes(2);
@@ -329,7 +335,9 @@ it("保存済みのレス番号があっても、起動時の取得失敗後に�
   expect(notify).not.toHaveBeenCalled();
   expect(state.cursors[id]).toBe(2);
   await monitor.refresh();
-  expect(notify.mock.calls.map((call) => call[0].number)).toEqual([2]);
+  expect(notify.mock.calls.map((call) => call[0].recruitment.number)).toEqual([
+    2,
+  ]);
   expect(monitor.snapshot().recruitments.map((item) => item.number)).toEqual([
     2,
   ]);
@@ -684,4 +692,153 @@ it("異なる時刻の停止案内は個別に期限切れになり、通信エ�
   clock.now += 20_000;
   expect(monitor.snapshot().notices).toEqual([]);
   expect(monitor.snapshot().errors).toEqual(errors);
+});
+
+it.each([false, true])(
+  "新着スレッドを%sの強制更新指定で監視トグルに関係なく一度だけ通知する",
+  async (manual) => {
+    const now = Date.parse("2026-10-04T12:00:00+09:00");
+    let clock = now;
+    const id = String(now / 1000 - 3600);
+    const nextId = String(now / 1000 - 60);
+    let subject = `${id}.dat<>雀魂 既存 (10)`;
+    const state: SavedState = {
+      settings: { ...defaults },
+      watched: [],
+      cursors: {},
+    };
+    const notify = vi.fn();
+    const monitor = new Monitor(
+      state,
+      { subject: async () => subject, dat: async () => "" },
+      async () => {},
+      notify,
+      () => clock,
+    );
+    await monitor.refresh(true);
+    expect(notify).not.toHaveBeenCalled();
+    subject += `\n${nextId}.dat<>雀魂 新スレ (1)`;
+    clock += defaults.thread_update_sec * 1000;
+    await monitor.refresh(manual, true);
+    expect(notify.mock.calls.map(([event]) => event)).toEqual([
+      {
+        type: "new_thread",
+        thread: {
+          id: nextId,
+          title: "雀魂 新スレ",
+          count: 1,
+          createdAt: Number(nextId) * 1000,
+        },
+      },
+    ]);
+    expect(monitor.snapshot().watched).toEqual([]);
+    expect(monitor.snapshot().threads.map((thread) => thread.id)).toContain(
+      nextId,
+    );
+    subject = "";
+    await monitor.refresh(true);
+    subject = `${nextId}.dat<>雀魂 改題 (20)`;
+    await monitor.refresh(true);
+    expect(notify).toHaveBeenCalledTimes(1);
+    await monitor.saveSettings({
+      ...state.settings,
+      url: "https://egg.5ch.net/mj/",
+    });
+    await monitor.refresh(true);
+    expect(notify).toHaveBeenCalledTimes(1);
+    subject += `\n${id}.dat<>雀魂 別板の新着 (1)`;
+    await monitor.refresh(true);
+    expect(notify.mock.calls[1][0]).toMatchObject({
+      type: "new_thread",
+      thread: { id, title: "雀魂 別板の新着" },
+    });
+  },
+);
+
+it("新着スレッドは候補条件を満たす場合だけ通知し、通知失敗は他の候補を妨げない", async () => {
+  const now = Date.parse("2026-10-04T12:00:00+09:00");
+  const id = String(now / 1000 - 60);
+  const second = String(Number(id) - 1);
+  const excluded = String(Number(id) - 2);
+  const other = String(Number(id) - 3);
+  const old = String(now / 1000 - 15 * 86400);
+  let subject = "";
+  const state: SavedState = {
+    settings: { ...defaults, ng_thread_title_regex: "除外" },
+    watched: [excluded, old],
+    cursors: {},
+  };
+  const notify = vi.fn().mockImplementationOnce(() => {
+    throw new Error("notification unavailable");
+  });
+  const monitor = new Monitor(
+    state,
+    { subject: async () => subject, dat: async () => "" },
+    async () => {},
+    notify,
+    () => now,
+  );
+  await monitor.refresh();
+  subject = [
+    `${id}.dat<>雀魂 新スレ (1)`,
+    `${second}.dat<>じゃんたま 新スレ (1)`,
+    `${excluded}.dat<>雀魂 除外 (1)`,
+    `${other}.dat<>別ゲーム (1)`,
+    `${old}.dat<>雀魂 古いスレ (1)`,
+  ].join("\n");
+  await monitor.refresh(true);
+  expect(notify.mock.calls.map(([event]) => event.thread.id)).toEqual([
+    id,
+    second,
+  ]);
+  expect(monitor.snapshot().errors).toEqual(["通知: notification unavailable"]);
+  expect(monitor.snapshot().threads.map((thread) => thread.id)).toEqual([
+    id,
+    second,
+    excluded,
+    old,
+  ]);
+  await monitor.refresh(true);
+  expect(notify).toHaveBeenCalledTimes(2);
+  expect(monitor.snapshot().errors).toEqual([]);
+  await monitor.saveSettings({ ...state.settings, ng_thread_title_regex: "" });
+  await monitor.refresh(true);
+  expect(notify.mock.calls.map(([event]) => event.thread.id)).toEqual([
+    id,
+    second,
+    excluded,
+  ]);
+});
+
+it("一覧取得に初回失敗しても最初の成功を新着通知の基準にする", async () => {
+  const now = Date.parse("2026-10-04T12:00:00+09:00");
+  const id = String(now / 1000 - 60);
+  const nextId = String(Number(id) + 1);
+  const client = {
+    subject: vi
+      .fn()
+      .mockRejectedValueOnce(new Error("HTTP 403"))
+      .mockResolvedValueOnce(`${id}.dat<>雀魂 既存 (1)`)
+      .mockRejectedValueOnce(new Error("HTTP 503"))
+      .mockResolvedValue(
+        `${id}.dat<>雀魂 既存 (1)\n${nextId}.dat<>雀魂 新着 (1)`,
+      ),
+    dat: async () => "",
+  };
+  const notify = vi.fn();
+  const monitor = new Monitor(
+    { settings: defaults, watched: [], cursors: {} },
+    client,
+    async () => {},
+    notify,
+    () => now,
+  );
+  await monitor.refresh();
+  expect(monitor.snapshot().errors.join("")).toContain("403");
+  await monitor.refresh();
+  expect(notify).not.toHaveBeenCalled();
+  await monitor.refresh(true);
+  expect(monitor.snapshot().errors.join("")).toContain("503");
+  await monitor.refresh();
+  expect(notify.mock.calls.map(([event]) => event.thread.id)).toEqual([nextId]);
 });

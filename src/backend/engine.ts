@@ -45,13 +45,19 @@ export function init(
       },
     },
     async (next) => nativeSave(JSON.stringify(next)),
-    (item, thread) =>
-      nativeNotify(
-        JSON.stringify({
-          title: `友人戦募集 · ${thread?.title ?? item.threadId}`,
-          body: Array.from(item.body).slice(0, 220).join(""),
-        }),
-      ),
+    (event) => {
+      const notification =
+        event.type === "new_thread"
+          ? {
+              title: `新しいスレッド · ${event.thread.title}`,
+              body: "スレッド候補に追加されました。友人戦募集の通知はスレッド一覧で設定できます。",
+            }
+          : {
+              title: `友人戦募集 · ${event.thread?.title ?? event.recruitment.threadId}`,
+              body: Array.from(event.recruitment.body).slice(0, 220).join(""),
+            };
+      nativeNotify(JSON.stringify(notification));
+    },
     () => Date.now(),
   );
   monitor.notificationAvailable = notificationAvailable;

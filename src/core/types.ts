@@ -118,8 +118,9 @@ export interface PushState {
     delivery?: { error?: string } | null;
   } | null;
 }
+export type NotificationTarget = "threads" | "recruitments";
 export interface PushApi {
-  consumeNotificationTarget?(): Promise<boolean>;
+  consumeNotificationTarget?(): Promise<NotificationTarget | null>;
   getPushState(): Promise<PushState>;
   startPush(consent: boolean): Promise<PushState>;
   stopPush(): Promise<PushState>;

@@ -4,16 +4,17 @@ import { Store } from "./store";
 import type { MobileSettings, Subscription } from "./subscriptions";
 import { runDetection } from "./detection";
 import { fetchBoard } from "./http";
-export interface Payload {
+interface EventPayload {
   eventId: string;
   generation?: string;
   revision: number;
   boardUrl: string;
   threadId: string;
   threadTitle: string;
-  recruitment: Recruitment;
   expiresAt: number;
 }
+export type Payload = EventPayload &
+  ({ type: "recruitment"; recruitment: Recruitment } | { type: "new_thread" });
 interface FetchState {
   resource: string;
   attempted: number;
@@ -23,11 +24,35 @@ export const eventId = (
   uid: string,
   board: string,
   thread: string,
-  number: number,
+  number: number | "new_thread",
 ) =>
   createHash("sha256")
     .update(JSON.stringify([uid, board, thread, number]))
     .digest("hex");
+function enqueue(
+  db: Store,
+  uid: string,
+  payload: Payload,
+  expires: number,
+  now: number,
+) {
+  const event = db.run(
+    "INSERT OR IGNORE INTO events(id,uid,expires) VALUES(?,?,?)",
+    payload.eventId,
+    uid,
+    expires,
+  );
+  if (!Number(event.changes)) return;
+  db.run(
+    "INSERT INTO outbox(id,uid,revision,expires,payload,created) VALUES(?,?,?,?,?,?)",
+    payload.eventId,
+    uid,
+    payload.revision,
+    expires,
+    JSON.stringify(payload),
+    now,
+  );
+}
 export async function monitor(
   db: Store,
   options: { now?: number; budget?: number; fetcher?: typeof fetchBoard } = {},
@@ -81,6 +106,7 @@ export async function monitor(
       }
       const url = board + resource;
       let nextThreads: Thread[] | null = null;
+      let nextCandidates: Thread[] | null = null;
       let lastPost: number | null = null;
       let detected: {
         notifications: Recruitment[];
@@ -101,13 +127,18 @@ export async function monitor(
         const cached = cache.get(url)!;
         if (cached.error) throw cached.error;
         if (!thread) {
-          nextThreads = await runDetection<Thread[]>({
+          const subject = await runDetection<{
+            threads: Thread[];
+            candidates: Thread[];
+          }>({
             operation: "subject",
             subject: cached.text,
             settings,
             watched,
             now,
           });
+          nextThreads = subject.threads;
+          nextCandidates = subject.candidates;
         } else {
           if (!cached.posts) {
             try {
@@ -141,7 +172,12 @@ export async function monitor(
                 subscription.revision,
               )
               .map((row) => JSON.parse(row.payload) as Payload)
-              .filter((x) => x.threadId === thread && x.boardUrl === board)
+              .filter(
+                (x): x is Payload & { type: "recruitment" } =>
+                  x.type === "recruitment" &&
+                  x.threadId === thread &&
+                  x.boardUrl === board,
+              )
               .map((x) => x.recruitment);
             detected = await runDetection({
               operation: "scan",
@@ -163,6 +199,7 @@ export async function monitor(
             ? error.code
             : "fetch_failed";
         nextThreads = null;
+        nextCandidates = null;
         lastPost = null;
         detected = null;
       }
@@ -183,6 +220,43 @@ export async function monitor(
           nextThreads ? JSON.stringify(nextThreads) : null,
           code,
         );
+        if (nextCandidates !== null) {
+          const baseline = db.run(
+            "INSERT OR IGNORE INTO candidate_state(uid,board) VALUES(?,?)",
+            subscription.uid,
+            board,
+          );
+          for (const candidate of nextCandidates) {
+            const seen = db.run(
+              "INSERT OR IGNORE INTO candidate_seen(uid,board,thread) VALUES(?,?,?)",
+              subscription.uid,
+              board,
+              candidate.id,
+            );
+            if (Number(baseline.changes) || !Number(seen.changes)) continue;
+            const expires = now + 86400000;
+            enqueue(
+              db,
+              subscription.uid,
+              {
+                type: "new_thread",
+                eventId: eventId(
+                  subscription.uid,
+                  board,
+                  candidate.id,
+                  "new_thread",
+                ),
+                revision: subscription.revision,
+                boardUrl: board,
+                threadId: candidate.id,
+                threadTitle: candidate.title,
+                expiresAt: Math.floor(expires / 1000),
+              },
+              expires,
+              now,
+            );
+          }
+        }
         if (thread && lastPost !== null) {
           db.run(
             "INSERT INTO cursors(uid,board,thread,last_post,baseline) VALUES(?,?,?,?,0) ON CONFLICT(uid,board,thread) DO UPDATE SET last_post=MAX(last_post,excluded.last_post),baseline=0",
@@ -202,14 +276,8 @@ export async function monitor(
                 item.effectivePostedAt + settings.emphasis_sec * 1000;
               if (expires <= now) continue;
               const id = eventId(subscription.uid, board, thread, item.number);
-              const event = db.run(
-                "INSERT OR IGNORE INTO events(id,uid,expires) VALUES(?,?,?)",
-                id,
-                subscription.uid,
-                expires,
-              );
-              if (!Number(event.changes)) continue;
               const payload: Payload = {
+                type: "recruitment",
                 eventId: id,
                 revision: subscription.revision,
                 boardUrl: board,
@@ -219,15 +287,7 @@ export async function monitor(
                 recruitment: item,
                 expiresAt: Math.floor(expires / 1000),
               };
-              db.run(
-                "INSERT INTO outbox(id,uid,revision,expires,payload,created) VALUES(?,?,?,?,?,?)",
-                id,
-                subscription.uid,
-                subscription.revision,
-                expires,
-                JSON.stringify(payload),
-                now,
-              );
+              enqueue(db, subscription.uid, payload, expires, now);
             }
           }
         }

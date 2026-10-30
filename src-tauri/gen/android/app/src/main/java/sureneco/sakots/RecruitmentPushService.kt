@@ -45,32 +45,49 @@ class RecruitmentPushService : PushService() {
                 PushState.executor.execute { try { PushState.confirm(this, data, expected) } catch (_: Exception) { PushState.failed(this, expected) } }
                 return
             }
-            if (data.optString("type") != "recruitment") return
-            val p = PushState.prefs(this)
-            val event = data.getString("eventId")
-            if (!Regex("[a-f0-9]{64}").matches(event)) return
-            val now = System.currentTimeMillis() / 1000
-            val seen = JSONObject(p.getString("seen", "{}")!!)
-            seen.keys().asSequence().toList().filter { seen.optLong(it) <= now }.forEach { seen.remove(it) }
-            if (!NotificationPolicy.accepts(PushState.desired(this), NotificationManagerCompat.from(this).areNotificationsEnabled(), message.decrypted,
-                    data.getLong("revision"), p.getLong("revision", 0), data.getString("generation"), p.getString("generation", "")!!,
-                    data.getLong("expiresAt"), now, seen.has(event))) return
-            val item = data.getJSONObject("recruitment")
-            if (item.optBoolean("closed")) return
-            seen.put(event, data.getLong("expiresAt"))
-            if (!p.edit().putString("seen", seen.toString()).commit()) return
-            val manager = getSystemService(NotificationManager::class.java)
-            if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("recruitments", "友人戦募集", NotificationManager.IMPORTANCE_HIGH))
-            val intent = Intent(this, MainActivity::class.java).putExtra("showRecruitments", true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            val pending = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val notification = NotificationCompat.Builder(this, "recruitments").setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("友人戦募集 · ${data.getString("threadTitle").take(80)}")
-                .setContentText("レス ${item.getInt("number")}：${item.getString("body").take(220)}")
-                .setContentIntent(pending).setAutoCancel(true).setTimeoutAfter((data.getLong("expiresAt") - now) * 1000).build()
+            val type = data.optString("type")
+            if (type != "recruitment" && type != "new_thread") return
             synchronized(PushState) {
-                if (!NotificationPolicy.accepts(PushState.desired(this), NotificationManagerCompat.from(this).areNotificationsEnabled(), message.decrypted,
+                val p = PushState.prefs(this)
+                val event = data.getString("eventId")
+                if (!Regex("[a-f0-9]{64}").matches(event)) return
+                val now = System.currentTimeMillis() / 1000
+                val seen = JSONObject(p.getString("seen", "{}")!!)
+                seen.keys().asSequence().toList().filter { seen.optLong(it) <= now }.forEach { seen.remove(it) }
+                if (!NotificationPolicy.accepts(PushState.active(this, PushState.epoch(this)), NotificationManagerCompat.from(this).areNotificationsEnabled(), message.decrypted,
+                        data.getLong("revision"), p.getLong("revision", 0), data.getString("generation"), p.getString("generation", "")!!,
+                        data.getLong("expiresAt"), now, seen.has(event))) return
+                val target: String
+                val channelName: String
+                val title: String
+                val body: String
+                val threadTitle = data.getString("threadTitle").take(80)
+                if (type == "new_thread") {
+                    target = "threads"
+                    channelName = "新しいスレッド"
+                    title = "新しいスレッド · $threadTitle"
+                    body = "候補のスレッドが追加されました。スレッド一覧で監視を有効にできます。"
+                } else {
+                    val item = data.getJSONObject("recruitment")
+                    if (item.optBoolean("closed")) return
+                    target = "recruitments"
+                    channelName = "友人戦募集"
+                    title = "友人戦募集 · $threadTitle"
+                    body = "レス ${item.getInt("number")}：${item.getString("body").take(220)}"
+                }
+                val manager = getSystemService(NotificationManager::class.java)
+                if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(target, channelName, NotificationManager.IMPORTANCE_HIGH))
+                val intent = Intent(this, MainActivity::class.java).setAction("$packageName.notification.$target")
+                    .putExtra("notificationTarget", target).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                val pending = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                val notification = NotificationCompat.Builder(this, target).setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle(title).setContentText(body).setContentIntent(pending)
+                    .setAutoCancel(true).setTimeoutAfter((data.getLong("expiresAt") - now) * 1000).build()
+                if (!NotificationPolicy.accepts(PushState.active(this, PushState.epoch(this)), NotificationManagerCompat.from(this).areNotificationsEnabled(), message.decrypted,
                         data.getLong("revision"), p.getLong("revision", 0), data.getString("generation"), p.getString("generation", "")!!,
                         data.getLong("expiresAt"), System.currentTimeMillis() / 1000, false)) return
+                seen.put(event, data.getLong("expiresAt"))
+                if (!p.edit().putString("seen", seen.toString()).commit()) return
                 NotificationManagerCompat.from(this).notify(event.hashCode(), notification)
             }
         } catch (_: Exception) { /* malformed or stale messages are never displayed */ }

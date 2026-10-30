@@ -109,13 +109,13 @@ export function App({ api }: { api: Api }) {
     const refresh = () => {
       if (!document.hidden) void api.refresh().catch(() => {});
     };
-    const tapped = () => setPage("recruitments");
     const consume = () => {
       if (!document.hidden)
         void api.mobile
           ?.consumeNotificationTarget?.()
           .then((target) => {
-            if (target) tapped();
+            if (target === "threads" || target === "recruitments")
+              setPage(target);
           })
           .catch(() => {});
     };
@@ -123,13 +123,11 @@ export function App({ api }: { api: Api }) {
     consume();
     const timer = setInterval(refresh, 60000);
     document.addEventListener("visibilitychange", refresh);
-    window.addEventListener("show-recruitments", tapped);
     refresh();
     return () => {
       clearInterval(targets);
       clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
-      window.removeEventListener("show-recruitments", tapped);
     };
   }, [api]);
   async function act(task: () => Promise<void>) {

@@ -94,12 +94,16 @@ export function run(json: string): string {
     if (input.operation === "subject") {
       const threads = parseSubject(input.subject as string);
       const watched = new Set(input.watched as string[]);
-      const eligible = new Set(candidates(threads, input.settings, input.now));
+      const eligible = candidates(threads, input.settings, input.now);
+      const eligibleSet = new Set(eligible);
       return JSON.stringify({
         ok: true,
-        result: threads.filter(
-          (thread) => watched.has(thread.id) || eligible.has(thread),
-        ),
+        result: {
+          threads: threads.filter(
+            (thread) => watched.has(thread.id) || eligibleSet.has(thread),
+          ),
+          candidates: eligible,
+        },
       });
     }
     const result =

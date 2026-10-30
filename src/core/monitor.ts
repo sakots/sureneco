@@ -12,8 +12,12 @@ export interface Client {
   subject(url: string): Promise<string>;
   dat(url: string, id: string): Promise<string>;
 }
+export type MonitorNotification =
+  | { type: "recruitment"; recruitment: Recruitment; thread?: Thread }
+  | { type: "new_thread"; thread: Thread };
 export class Monitor {
   private threads: Thread[] = [];
+  private seenCandidates: Set<string> | null = null;
   private items: Recruitment[] = [];
   private errors: string[] = [];
   private notices = new Map<string, { message: string; expiresAt: number }>();
@@ -33,7 +37,7 @@ export class Monitor {
     private state: SavedState,
     private client: Client,
     private save: (state: SavedState) => Promise<void>,
-    private notify: (item: Recruitment, thread?: Thread) => void,
+    private notify: (event: MonitorNotification) => void,
     private now: () => number = Date.now,
   ) {
     this.startupChecks = new Set(state.watched);
@@ -134,14 +138,11 @@ export class Monitor {
             this.items = detected.items;
             this.startupChecks.delete(id);
             for (const item of detected.notifications) {
-              try {
-                this.notify(
-                  item,
-                  this.threads.find((t) => t.id === id),
-                );
-              } catch (error) {
-                this.errors.push(`通知: ${errorMessage(error)}`);
-              }
+              this.sendNotification({
+                type: "recruitment",
+                recruitment: item,
+                thread: this.threads.find((t) => t.id === id),
+              });
             }
           } catch (error) {
             this.errors.push(
@@ -159,16 +160,23 @@ export class Monitor {
       this.emit();
     }
   }
+  private sendNotification(event: MonitorNotification) {
+    try {
+      this.notify(event);
+    } catch (error) {
+      this.errors.push(`通知: ${errorMessage(error)}`);
+    }
+  }
   private async refreshThreads(
     settings: Settings,
     datCounts: Map<string, number>,
   ): Promise<void> {
     try {
       const all = parseSubject(await this.client.subject(settings.url));
+      const eligible = candidates(all, settings, this.now());
+      const candidateIds = new Set(eligible.map((thread) => thread.id));
       this.threads = all.filter(
-        (t) =>
-          this.state.watched.includes(t.id) ||
-          candidates([t], settings, this.now()).length,
+        (t) => this.state.watched.includes(t.id) || candidateIds.has(t.id),
       );
       for (const thread of this.threads) {
         if (thread.count > 1000 && this.state.watched.includes(thread.id))
@@ -178,6 +186,13 @@ export class Monitor {
       }
       this.lastThreadsAt = this.now();
       this.retryThreads = false;
+      const initialized = this.seenCandidates !== null;
+      this.seenCandidates ??= new Set();
+      for (const thread of eligible) {
+        if (this.seenCandidates.has(thread.id)) continue;
+        this.seenCandidates.add(thread.id);
+        if (initialized) this.sendNotification({ type: "new_thread", thread });
+      }
     } catch (error) {
       this.retryThreads = true;
       this.errors.push(`スレッド一覧: ${errorMessage(error)}`);
@@ -229,6 +244,7 @@ export class Monitor {
       if (changedBoard) {
         this.startupChecks.clear();
         this.threads = [];
+        this.seenCandidates = null;
         this.items = [];
         this.notices.clear();
         this.lastThreadsAt = null;

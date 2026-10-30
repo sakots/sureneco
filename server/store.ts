@@ -45,6 +45,15 @@ export class Store {
           board TEXT NOT NULL, resource TEXT NOT NULL, attempted INTEGER NOT NULL,
           succeeded INTEGER, threads TEXT, error TEXT, PRIMARY KEY(uid,board,resource)
         );
+        CREATE TABLE IF NOT EXISTS candidate_state (
+          uid TEXT NOT NULL REFERENCES subscriptions(uid) ON DELETE CASCADE,
+          board TEXT NOT NULL, PRIMARY KEY(uid,board)
+        );
+        CREATE TABLE IF NOT EXISTS candidate_seen (
+          uid TEXT NOT NULL, board TEXT NOT NULL, thread TEXT NOT NULL,
+          PRIMARY KEY(uid,board,thread),
+          FOREIGN KEY(uid,board) REFERENCES candidate_state(uid,board) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS events (
           id TEXT PRIMARY KEY, uid TEXT NOT NULL REFERENCES subscriptions(uid) ON DELETE CASCADE,
           expires INTEGER NOT NULL
@@ -84,6 +93,8 @@ export class Store {
         CREATE TABLE IF NOT EXISTS rates (identity TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS service_state (id INTEGER PRIMARY KEY, started INTEGER NOT NULL DEFAULT 0, finished INTEGER NOT NULL DEFAULT 0, error TEXT);
         INSERT OR IGNORE INTO service_state(id) VALUES(1);
+        UPDATE outbox SET payload=json_set(payload,'$.type','recruitment')
+          WHERE json_type(payload,'$.type') IS NULL;
       `);
       if (
         !this.all<{ name: string }>("PRAGMA table_info(subscriptions)").some(

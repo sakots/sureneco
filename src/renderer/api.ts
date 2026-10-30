@@ -1,7 +1,12 @@
 import { version } from "../../package.json";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Api, Snapshot, UpdateState } from "../core/types";
+import type {
+  Api,
+  NotificationTarget,
+  Snapshot,
+  UpdateState,
+} from "../core/types";
 
 function subscribe<T>(event: string, callback: (value: T) => void) {
   let disposed = false;
@@ -31,7 +36,7 @@ export const api: Api = {
     ? {
         mobile: {
           consumeNotificationTarget: () =>
-            request<boolean>("mobile_notification_target"),
+            request<NotificationTarget | null>("mobile_notification_target"),
           getPushState: () =>
             request<import("../core/types").PushState>("mobile_status"),
           startPush: (consent: boolean) =>

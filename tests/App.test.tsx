@@ -2,6 +2,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -17,6 +18,7 @@ afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
   delete document.documentElement.dataset.theme;
+  vi.useRealTimers();
 });
 function setup(
   recruitments: Snapshot["recruitments"] = [],
@@ -74,6 +76,52 @@ function setup(
   render(<App api={api} />);
   return api;
 }
+
+it("Android通知のタップ先を募集から候補一覧へ切り替え、監視は自動で有効にしない", async () => {
+  vi.useFakeTimers();
+  const consumeNotificationTarget = vi.fn(
+    async (): Promise<"threads" | "recruitments" | null> => "recruitments",
+  );
+  const api = setup([], undefined, defaults, {
+    consumeNotificationTarget,
+    getPushState: vi.fn(async () => ({
+      enabled: true,
+      status: "監視中",
+      permission: true,
+    })),
+    startPush: vi.fn(),
+    stopPush: vi.fn(),
+    deletePush: vi.fn(),
+    syncPush: vi.fn(),
+    requestPushPermission: vi.fn(),
+    copyPushLogin: vi.fn(),
+  });
+  await act(async () => {});
+  const recruitmentTab = screen.getByRole("button", { name: /友人戦募集 0/ });
+  expect(recruitmentTab.getAttribute("aria-current")).toBe("page");
+  consumeNotificationTarget.mockResolvedValue("threads");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(
+    screen.getByRole("switch", { name: "【雀魂】じゃんたまスレを監視" }),
+  ).toBeTruthy();
+  expect(recruitmentTab.getAttribute("aria-current")).toBeNull();
+  expect(api.watch).not.toHaveBeenCalled();
+  consumeNotificationTarget.mockResolvedValue(null);
+  fireEvent.click(recruitmentTab);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(consumeNotificationTarget).toHaveBeenCalledTimes(3);
+  expect(recruitmentTab.getAttribute("aria-current")).toBe("page");
+  consumeNotificationTarget.mockResolvedValue("recruitments");
+  fireEvent.click(screen.getByRole("button", { name: "設定" }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(recruitmentTab.getAttribute("aria-current")).toBe("page");
+});
 
 it("監視通知を個別に閉じ、更新では保持し、解消後の再発や変更を表示する", async () => {
   const api = setup();
