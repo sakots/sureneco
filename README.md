@@ -15,7 +15,7 @@
 
 - Windows：インストーラー（`Setup.exe`）またはポータブル版（`win.zip`）
 - Ubuntu：DEB（`amd64.deb`）またはAppImage
-- Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。v0.9.3のAABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
+- Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。v0.10.0のAABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
 
 WindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
@@ -57,10 +57,12 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/10/30] v0.9.3（開発中）
+### [2026/10/30] v0.10.0
 
+- 新着スレッド通知の追加に伴い、Windows・Linux・Androidをv0.10.0へ更新。AndroidのversionCodeを100へ更新。
 - 新しいスレッドが候補一覧に現れたとき、監視トグルにかかわらず通知する機能を追加。
 - 初回一覧の一斉通知と確認済みスレッドの重複通知を抑止し、Androidのバックグラウンド通知にも対応。
+- Androidの新着スレッド通知には対応する通知サーバーの更新が必要。今回のアプリ公開では本番サーバーを自動更新しない。
 
 ### [2026/10/29] v0.9.3
 

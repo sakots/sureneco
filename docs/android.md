@@ -102,7 +102,15 @@ Git管理外の`src-tauri/gen/android/keystore.properties`へ`storeFile`（絶�
 
 初回Play提出向けビルドでは、Android版を`0.9.0`／versionCode `3`にし、PC版の版番号は変更しませんでした。利用者の承認に基づいて、新しいAndroidアップロード鍵をGit管理外の`.secrets/android-upload.p12`へ作成し、署名設定は`src-tauri/gen/android/keystore.properties`へ保存しました。署名設定にはパスワードが含まれます。鍵と署名設定を別の安全な保管先へバックアップし、チャット・Git・公開配布物へ含めないでください。公開証明書は`release/sureneco_android_upload_certificate.pem`です。デバッグ鍵とは異なるため、既存ベータAPKへのデータ保持付き上書きはできません。
 
-`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。v0.9.3の設定は表示バージョン`0.9.3`／versionCode `93`で、既存の`92`より大きい値を使います。GitHubには署名付きAPKの`sureneco_v0.9.3_android.apk`を公開し、AABは`release/sureneco_v0.9.3_android_versionCode93.aab`としてローカル保管のみとします。署名設定不足・公開接続先不足・同名出力では失敗し、ビルドコマンド自体はPlayやGitHubへ公開しません。AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。過去の公開済み成果物は上書きしません。
+`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。v0.10.0の設定は表示バージョン`0.10.0`／versionCode `100`で、既存の`93`より大きい値を使います。GitHubには署名付きAPKの`sureneco_v0.10.0_android.apk`を公開し、AABは`release/sureneco_v0.10.0_android_versionCode100.aab`としてローカル保管のみとします。新着スレッドのバックグラウンド通知には対応する通知サーバーの更新が必要で、アプリの公開だけでは本番サーバーを更新しません。署名設定不足・公開接続先不足・同名出力では失敗し、ビルドコマンド自体はPlayやGitHubへ公開しません。AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。過去の公開済み成果物は上書きしません。
+
+### v0.10.0の配布物（2026/10/30）
+
+- 署名付きAPK `release/sureneco_v0.10.0_android.apk`と、ローカル保管用AAB `release/sureneco_v0.10.0_android_versionCode100.aab`を生成。どちらも`sureneco.sakots`、versionName `0.10.0`／versionCode `100`、minSdk 24／targetSdk 36、ARM64のみ、デバッグ不可を確認。
+- APKの署名v2・16KB zip整列、AABのJAR署名・公式bundletool 1.18.3の検証に成功。署名証明書は公開済みv0.9.3と同じ。APK／AAB内のネイティブライブラリーは一致し、4つのLOADセグメントはすべて`0x4000`整列、AABは`PAGE_ALIGNMENT_16K`を確認。
+- APK／AABに既知の署名秘密情報・秘密鍵マーカー・署名設定ファイルが含まれないことを確認。R8対応表はローカル保管し、GitHubにはAPKだけを公開する。
+- 自己署名・証明書チェーン・タイムスタンプなし・POSIX属性・JarFile／JarInputStream間のManifest読み取り差異の警告は継続。今回の実機インストール・起動・通知・16KB端末での動作とGoogle Play提出は未確認。本番通知サーバーの更新は今回のアプリ公開に含めない。
+
 
 ### versionCode 90の再提出用AAB（2026/10/27）
 
