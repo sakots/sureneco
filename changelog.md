@@ -7,6 +7,8 @@
 - 募集一覧の絞り込み後に行っていた重複した配列コピーを削除し、元の一覧を変更せず新しい順に表示する動作を維持。
 - 直接利用していないreqwestの`json`機能指定と、実装のないAndroid端末内テスト向けJUnit拡張・Espressoの依存宣言を削除。JVMテスト用JUnit・Robolectricは維持。
 - 全体チェックとAndroid JVMテストに成功。監視コアを実行し、NGの除外、新しい順の維持、状態取得の繰り返しと外部変更からの独立性を確認。
+- 敵対的検証で、Android端末内テスト用APKのManifestが指定する`AndroidJUnitRunner`がDEXに含まれない問題を検出。JUnit拡張・Espressoは戻さず、端末内テスト用の`androidx.test:runner`依存を明示して修正。アプリ本体の依存には追加しない。
+- 修正後の端末内テスト用APKのDEXにランナークラスの定義が1件あることと、Android JVMテストの成功を確認。配列境界・NG切り替え・外部変更の10条件、QuickJS実行5テスト、Android向けRustのmobile単独構成も検証。端末上でのInstrumentation実行は未確認。
 
 ### [2026/10/30] v0.10.0
 
