@@ -102,7 +102,15 @@ Git管理外の`src-tauri/gen/android/keystore.properties`へ`storeFile`（絶�
 
 初回Play提出向けビルドでは、Android版を`0.9.0`／versionCode `3`にし、PC版の版番号は変更しませんでした。利用者の承認に基づいて、新しいAndroidアップロード鍵をGit管理外の`.secrets/android-upload.p12`へ作成し、署名設定は`src-tauri/gen/android/keystore.properties`へ保存しました。署名設定にはパスワードが含まれます。鍵と署名設定を別の安全な保管先へバックアップし、チャット・Git・公開配布物へ含めないでください。公開証明書は`release/sureneco_android_upload_certificate.pem`です。デバッグ鍵とは異なるため、既存ベータAPKへのデータ保持付き上書きはできません。
 
-`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。v0.10.0の設定は表示バージョン`0.10.0`／versionCode `100`で、既存の`93`より大きい値を使います。GitHubには署名付きAPKの`sureneco_v0.10.0_android.apk`を公開し、AABは`release/sureneco_v0.10.0_android_versionCode100.aab`としてローカル保管のみとします。新着スレッドのバックグラウンド通知には対応する通知サーバーの更新が必要で、アプリの公開だけでは本番サーバーを更新しません。署名設定不足・公開接続先不足・同名出力では失敗し、ビルドコマンド自体はPlayやGitHubへ公開しません。AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。過去の公開済み成果物は上書きしません。
+`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。v0.10.1の設定は表示バージョン`0.10.1`／versionCode `101`で、既存の`100`より大きい値を使います。GitHubには署名付きAPKの`sureneco_v0.10.1_android.apk`を公開し、AABは`release/sureneco_v0.10.1_android_versionCode101.aab`としてローカル保管のみとします。新着スレッドのバックグラウンド通知には対応する通知サーバーの更新が必要で、アプリの公開だけでは本番サーバーを更新しません。署名設定不足・公開接続先不足・同名出力では失敗し、ビルドコマンド自体はPlayやGitHubへ公開しません。AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。過去の公開済み成果物は上書きしません。
+
+### v0.10.1の配布物（2026/11/01）
+
+- 既存のアップロード鍵で`pnpm tauri android build --apk --aab --target aarch64 --ci --features mobile -- --no-default-features`を1回実行し、署名付きAPK `release/sureneco_v0.10.1_android.apk`（20,905,465 bytes）とローカル保管用AAB `release/sureneco_v0.10.1_android_versionCode101.aab`（8,571,767 bytes）を排他的に新規配置。どちらも`sureneco.sakots`、versionName `0.10.1`／versionCode `101`、minSdk 24／target・compileSdk 36、ARM64のみ、デバッグ不可を確認。
+- APKの署名v2と`zipalign -c -P 16 4`、AABのJAR署名と公式bundletool 1.18.3の検証に成功。APK／AABの署名証明書はv0.10.0と同じ。両者のネイティブライブラリーは一致し、4つのLOADセグメントはすべて`0x4000`整列、AABは`PAGE_ALIGNMENT_16K`を確認。
+- APKのSHA-256は`d1f6b70eb10ef3aaeb79fcebeabf20e8582d057bb15cc3e94bfb8ad68d053c70`、AABは`95fea8490a6577a54bd24155f2cc67eab5026fa0f053d614305bc245eda8e567`。
+- ビルド後に`:app:testUniversalDebugUnitTest :app:assembleUniversalDebugAndroidTest -x :app:rustBuildUniversalDebug`を1回実行し、JVMテスト26件成功・失敗／スキップ0件、テストAPK生成成功。実際のテストAPKの`classes4.dex`のクラス定義に`androidx.test.runner.AndroidJUnitRunner`が存在することを確認。
+- JAR検証の自己署名・証明書チェーン・タイムスタンプなし・POSIX属性・JarFile／JarInputStream間のManifest読み取り差異と、Gradle／Javaの非推奨警告は継続。実機インストール・起動・通知・端末上のinstrumentation実行・16KB端末動作は未確認。Google Play提出・本番サーバー更新・成果物公開はこの生成作業では行っていない。
 
 ### v0.10.0の配布物（2026/10/30）
 

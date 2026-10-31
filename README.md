@@ -15,7 +15,7 @@
 
 - Windows：インストーラー（`Setup.exe`）またはポータブル版（`win.zip`）
 - Ubuntu：DEB（`amd64.deb`）またはAppImage
-- Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。v0.10.0のAABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
+- Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。AABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
 
 WindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
@@ -57,8 +57,9 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/11/01] v0.10.0（開発中）
+### [2026/11/01] v0.10.1
 
+- Windows・Linux・Androidをv0.10.1へ更新。AndroidのversionCodeを101へ更新。
 - 募集一覧の不要な配列コピーと、使っていないHTTP・Androidテスト用の依存指定を削除。通知・表示・通信の仕様は変更しない。
 - 敵対的検証でAndroid端末内テスト用APKのランナークラス欠落を検出し、必要なランナー依存だけを明示して修正。
 
