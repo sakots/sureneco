@@ -53,7 +53,6 @@ export class Monitor {
       threads: this.threads,
       recruitments: this.items
         .filter((x) => !isBlocked(x, this.state.settings))
-        .slice()
         .reverse(),
       errors: this.errors,
       notices: Array.from(this.notices.values(), (notice) => notice.message),
