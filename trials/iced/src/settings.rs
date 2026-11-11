@@ -1,8 +1,10 @@
 use iced::{
-    widget::{column, horizontal_rule, scrollable, text_editor, text_input},
+    widget::{column, container, row, text_editor, text_input},
     Element, Length,
 };
 use serde_json::Value;
+
+use crate::appearance;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
@@ -129,6 +131,36 @@ impl Draft {
         }
         self.dirty = false;
     }
+
+    fn view(&self, enabled: bool) -> Element<'_, Message> {
+        let control: Element<'_, Message> = if let Some(content) = &self.list {
+            let mut editor = text_editor(content)
+                .height(88)
+                .size(14)
+                .padding(8)
+                .style(appearance::editor);
+            if enabled {
+                let field = self.field;
+                editor = editor.on_action(move |action| Message::List(field, action));
+            }
+            editor.into()
+        } else {
+            let mut input = text_input("", &self.text)
+                .size(14)
+                .padding(8)
+                .style(appearance::input);
+            if enabled {
+                let field = self.field;
+                input = input.on_input(move |value| Message::Input(field, value));
+            }
+            input.into()
+        };
+
+        column![crate::label(self.field.label()).size(13), control]
+            .spacing(6)
+            .width(Length::Fill)
+            .into()
+    }
 }
 
 pub struct Form {
@@ -225,38 +257,97 @@ impl Form {
     }
 
     pub fn view(&self, enabled: bool) -> Element<'_, Message> {
-        let mut fields = column![
-            crate::label("値・正規表現・URLの最終検証は既存の共通コアが行います。").size(13),
-            crate::label("更新間隔は20秒以上、日数・有効期間は1以上（上限2147483）。").size(12),
-            crate::label("NG／許可リスト: 空行は無視。入力中の前後の空白は保持し、保存時に共通コアが空白除去・重複整理を行います。").size(12),
-            crate::label("launcher_* の設定は保持します。この試作にはランチャー操作・自動起動・自動更新はありません。").size(12),
-        ].spacing(10);
-        for draft in &self.fields {
-            if matches!(
-                draft.field,
-                Field::UpdateSec | Field::ThreadTitleRegex | Field::Url | Field::NgWords
-            ) {
-                fields = fields.push(horizontal_rule(1));
-            }
-            fields = fields.push(crate::label(draft.field.label()).size(14));
-            if let Some(content) = &draft.list {
-                let mut editor = text_editor(content).height(100).size(15);
-                if enabled {
-                    let field = draft.field;
-                    editor = editor.on_action(move |action| Message::List(field, action));
-                }
-                fields = fields.push(editor);
-            } else {
-                let mut input = text_input("", &draft.text).size(15).padding(8);
-                if enabled {
-                    let field = draft.field;
-                    input = input.on_input(move |value| Message::Input(field, value));
-                }
-                fields = fields.push(input);
-            }
-        }
-        scrollable(fields.padding(4)).height(Length::Fill).into()
+        let [update, thread_update, elapsed, emphasis, thread_title, ng_thread_title, recruitment, closed, url, ng_words, ng_ids, ng_watchois, allowed_watchois] =
+            &self.fields;
+
+        column![
+            settings_card(
+                "更新と表示",
+                column![
+                    numeric_row(update, thread_update, enabled),
+                    numeric_row(elapsed, emphasis, enabled),
+                    crate::label("更新間隔は20秒以上、日数・有効期間は1以上（上限2147483）。")
+                        .size(13)
+                        .style(appearance::muted),
+                ]
+                .spacing(12),
+            ),
+            settings_card(
+                "検出パターン",
+                column![
+                    crate::label("大文字・小文字は区別しません。除外するスレッド名は空欄にできます。")
+                        .size(13)
+                        .style(appearance::muted),
+                    thread_title.view(enabled),
+                    ng_thread_title.view(enabled),
+                    recruitment.view(enabled),
+                    closed.view(enabled),
+                ]
+                .spacing(12),
+            ),
+            settings_card(
+                "接続先",
+                column![
+                    url.view(enabled),
+                    crate::label("板URLの変更時は監視対象と取得済みレス番号をリセットします。")
+                        .size(13)
+                        .style(appearance::muted),
+                    crate::label("ランチャー設定は保持しますが、この試作では起動操作・自動起動・自動更新は利用できません。")
+                        .size(13)
+                        .style(appearance::muted),
+                ]
+                .spacing(12),
+            ),
+            settings_card(
+                "NG・通知対象",
+                column![
+                    crate::label("1行1項目。本文は部分一致、ID・ワッチョイは完全一致で除外します。")
+                        .size(13)
+                        .style(appearance::muted),
+                    ng_words.view(enabled),
+                    ng_ids.view(enabled),
+                    ng_watchois.view(enabled),
+                    allowed_watchois.view(enabled),
+                    crate::label("通知対象はワッチョイ全体で指定（空欄なら全員）。NGが優先され、通知対象外の募集も一覧に表示します。")
+                        .size(13)
+                        .style(appearance::muted),
+                    crate::label("空行は無視します。入力中の前後の空白は保持し、保存時に空白除去・重複整理を行います。")
+                        .size(13)
+                        .style(appearance::muted),
+                ]
+                .spacing(12),
+            ),
+        ]
+        .spacing(12)
+        .width(Length::Fill)
+        .into()
     }
+}
+
+fn numeric_row<'a>(first: &'a Draft, second: &'a Draft, enabled: bool) -> Element<'a, Message> {
+    row![
+        container(first.view(enabled)).width(280),
+        container(second.view(enabled)).width(280),
+    ]
+    .spacing(12)
+    .width(Length::Fill)
+    .wrap()
+    .into()
+}
+
+fn settings_card<'a>(
+    title: &'static str,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    container(
+        column![crate::label(title).size(16), content.into()]
+            .spacing(12)
+            .width(Length::Fill),
+    )
+    .padding(16)
+    .width(Length::Fill)
+    .style(appearance::panel)
+    .into()
 }
 
 fn parse_integer(input: &str) -> Result<i64, ()> {
