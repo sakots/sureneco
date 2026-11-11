@@ -84,11 +84,28 @@ fn escape_xml(text: &str) -> String {
 
 #[cfg(target_os = "windows")]
 mod windows_native {
+    use std::{
+        ffi::OsString,
+        os::windows::ffi::OsStringExt,
+        path::{Path, PathBuf},
+    };
     use windows::{
-        core::{HSTRING, PCWSTR},
+        core::{w, Interface, HSTRING, PCWSTR},
         Win32::{
-            System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED},
-            UI::Shell::SetCurrentProcessExplicitAppUserModelID,
+            Storage::EnhancedStorage::PKEY_AppUserModel_ID,
+            System::{
+                Com::{
+                    CoCreateInstance, CoTaskMemFree, IPersistFile, StructuredStorage::PROPVARIANT,
+                    CLSCTX_INPROC_SERVER,
+                },
+                Variant::VT_LPWSTR,
+                WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED},
+            },
+            UI::Shell::{
+                FOLDERID_Programs, IShellLinkW, PropertiesSystem::IPropertyStore,
+                SHGetKnownFolderPath, SHStrDupW, SetCurrentProcessExplicitAppUserModelID,
+                ShellLink, KF_FLAG_DEFAULT,
+            },
         },
         UI::Notifications::{NotificationSetting, ToastNotificationManager, ToastNotifier},
     };
@@ -96,16 +113,66 @@ mod windows_native {
 
     // Never share the production or development Tauri app's registration.
     const APP_ID: &str = "io.github.sakots.sureneco.iced";
-    static REGISTRATION: std::sync::LazyLock<Result<(), String>> = std::sync::LazyLock::new(|| {
-        let (key, _) = RegKey::predef(HKEY_CURRENT_USER)
-            .create_subkey(format!("Software\\Classes\\AppUserModelId\\{APP_ID}"))
-            .map_err(|error| format!("通知アプリIDを登録できません: {error}"))?;
-        key.set_value("DisplayName", &"すれねこ · Iced")
-            .map_err(|error| format!("通知アプリ名を登録できません: {error}"))?;
-        let wide: Vec<u16> = APP_ID.encode_utf16().chain(Some(0)).collect();
-        unsafe { SetCurrentProcessExplicitAppUserModelID(PCWSTR(wide.as_ptr())) }
-            .map_err(|error| format!("通知プロセスIDを設定できません: {error}"))
-    });
+    static REGISTRATION: std::sync::LazyLock<Result<HSTRING, String>> =
+        std::sync::LazyLock::new(|| {
+            let app_id = HSTRING::from(APP_ID);
+            let executable = std::env::current_exe()
+                .map_err(|error| format!("通知用EXEの場所を取得できません: {error}"))?;
+            // Shell folders may be redirected; use the current user's known folder.
+            let folder = unsafe { SHGetKnownFolderPath(&FOLDERID_Programs, KF_FLAG_DEFAULT, None) }
+                .map_err(|error| format!("スタートメニューの場所を取得できません: {error}"))?;
+            let directory = PathBuf::from(OsString::from_wide(unsafe { folder.as_wide() }));
+            unsafe { CoTaskMemFree(Some(folder.0.cast())) };
+            std::fs::create_dir_all(&directory)
+                .map_err(|error| format!("通知用スタートメニューを準備できません: {error}"))?;
+            let (key, _) = RegKey::predef(HKEY_CURRENT_USER)
+                .create_subkey(format!("Software\\Classes\\AppUserModelId\\{APP_ID}"))
+                .map_err(|error| format!("通知アプリIDを登録できません: {error}"))?;
+            key.set_value("DisplayName", &"すれねこ · Iced")
+                .map_err(|error| format!("通知アプリ名を登録できません: {error}"))?;
+            unsafe { SetCurrentProcessExplicitAppUserModelID(PCWSTR(app_id.as_ptr())) }
+                .map_err(|error| format!("通知プロセスIDを設定できません: {error}"))?;
+            // Repair our own link on every launch, including after moving a ZIP build.
+            install_shortcut(&executable, &directory.join("sureneco-iced.lnk"), &app_id)?;
+            Ok(app_id)
+        });
+
+    fn install_shortcut(
+        executable: &Path,
+        shortcut: &Path,
+        app_id: &HSTRING,
+    ) -> Result<(), String> {
+        let target = HSTRING::from(executable);
+        let destination = HSTRING::from(shortcut);
+        let working_directory = HSTRING::from(
+            executable
+                .parent()
+                .ok_or("通知用EXEの親フォルダーがありません。")?,
+        );
+        // COM has been initialized by the caller. All PCWSTR inputs stay alive;
+        // the LPWSTR PROPVARIANT owns its CoTaskMem string and frees it on Drop.
+        let result: windows::core::Result<()> = (|| unsafe {
+            let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+            link.SetPath(&target)?;
+            link.SetWorkingDirectory(&working_directory)?;
+            link.SetDescription(w!("すれねこ · Iced"))?;
+            let properties: IPropertyStore = link.cast()?;
+            let value = SHStrDupW(PCWSTR(app_id.as_ptr()))?;
+            let mut identity = PROPVARIANT::default();
+            let fields = &mut *identity.Anonymous.Anonymous;
+            fields.vt = VT_LPWSTR;
+            fields.Anonymous.pwszVal = value;
+            properties.SetValue(&PKEY_AppUserModel_ID, &identity)?;
+            properties.Commit()?;
+            link.cast::<IPersistFile>()?.Save(&destination, true)
+        })();
+        result.map_err(|error| {
+            format!(
+                "通知用ショートカットを保存できません（{}）: {error}",
+                shortcut.display()
+            )
+        })
+    }
 
     struct Apartment;
 
@@ -126,16 +193,74 @@ mod windows_native {
     pub(super) fn with_notifier<T>(
         send: impl FnOnce(&ToastNotifier) -> Result<T, String>,
     ) -> Result<T, String> {
-        REGISTRATION.as_ref().map_err(Clone::clone)?;
-        // The backend owns notification calls; balance WinRT on that same thread.
+        // Initialize COM before creating a ShellLink or touching the WinRT notifier.
         let _apartment = Apartment::new()?;
-        let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_ID))
+        let app_id = REGISTRATION.as_ref().map_err(Clone::clone)?;
+        let notifier = ToastNotificationManager::CreateToastNotifierWithId(app_id)
             .map_err(|error| format!("Windows通知に接続できません: {error}"))?;
-        let setting = notifier.Setting().map_err(|error| error.to_string())?;
+        let setting = notifier
+            .Setting()
+            .map_err(|error| format!("Windows通知設定を取得できません: {error}"))?;
         if setting != NotificationSetting::Enabled {
             return Err(format!("Windowsの通知設定により無効です: {setting:?}"));
         }
         send(&notifier)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::{ffi::OsString, os::windows::ffi::OsStringExt};
+        use windows::Win32::{System::Com::STGM_READ, UI::Shell::SLGP_RAWPATH};
+
+        #[test]
+        fn shortcut_persists_notification_identity_and_updates_a_moved_unicode_executable() {
+            let _apartment = Apartment::new().unwrap();
+            let directory = tempfile::tempdir().unwrap();
+            let shortcut = directory.path().join("通知 試験.lnk");
+            let app_id = HSTRING::from(APP_ID);
+            for folder in ["最初の場所", "移動後の場所"] {
+                let executable = directory.path().join(folder).join("すれねこ iced.exe");
+                std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
+                std::fs::write(&executable, []).unwrap();
+                install_shortcut(&executable, &shortcut, &app_id).unwrap();
+                let loaded: IShellLinkW =
+                    unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).unwrap() };
+                let persisted: IPersistFile = loaded.cast().unwrap();
+                unsafe {
+                    persisted
+                        .Load(&HSTRING::from(shortcut.as_path()), STGM_READ)
+                        .unwrap()
+                };
+                let mut target = [0u16; 32768];
+                unsafe {
+                    loaded
+                        .GetPath(&mut target, std::ptr::null_mut(), SLGP_RAWPATH.0 as u32)
+                        .unwrap();
+                }
+                let length = target.iter().position(|&unit| unit == 0).unwrap();
+                let target = std::path::PathBuf::from(OsString::from_wide(&target[..length]));
+                assert_eq!(
+                    std::fs::canonicalize(target).unwrap(),
+                    std::fs::canonicalize(&executable).unwrap()
+                );
+                let properties: IPropertyStore = loaded.cast().unwrap();
+                let identity = unsafe { properties.GetValue(&PKEY_AppUserModel_ID).unwrap() };
+                unsafe {
+                    assert_eq!(identity.Anonymous.Anonymous.vt, VT_LPWSTR);
+                    assert_eq!(
+                        identity
+                            .Anonymous
+                            .Anonymous
+                            .Anonymous
+                            .pwszVal
+                            .to_string()
+                            .unwrap(),
+                        APP_ID
+                    );
+                }
+            }
+        }
     }
 }
 
