@@ -34,8 +34,8 @@ Linuxでは通常のデスクトップセッションと日本語フォント（
 - ホストと自分のアイコンの登録を確認してから「閉じると常駐」に切り替える。確認中・利用不可では閉じると終了する。常駐中にホストを失った場合は画面を再表示する。ウィンドウ内の「終了」とトレイの「終了」は通信・保存を待ってプロセスを終了する。
 - Windows通知は`io.github.sakots.sureneco.iced`を現在ユーザーの`Software\Classes\AppUserModelId`へ登録し、ユーザーのスタートメニューに同じAppUserModelIDを持つ`sureneco-iced.lnk`を作成する。ZIP版を別フォルダーへ移した場合も起動時にリンク先を現在のEXEへ更新する。本番Tauri版のアプリID・ショートカットは使わない。Windows側で通知が無効の場合も利用不可を表示する。
 - 自動起動・自動更新・ランチャー操作はまだ提供しない。Windowsの実通知・トレイの実機確認は別途必要。
-- Windowsで`要素が見つかりません（0x80070490）`となる報告に対し、レジストリー登録だけでスタートメニューの通知ID付きショートカットがなかった点を修正。[Microsoftのデスクトップ通知要件](https://learn.microsoft.com/en-us/windows/win32/shell/enable-desktop-toast-with-appusermodelid)に従い、COM初期化後にショートカットを保存してから通知設定を取得する。登録・取得の失敗は引き続き表示する。
-- 修正後は通知XMLの2テストが成功し、Windows用回帰テスト（日本語・空白を含むEXEパス、保存したAppUserModelIDの再読込、EXE移動後のリンク更新）のクロスコンパイルとWindows x64 releaseビルドに成功した。Windows用回帰テストの実行・実通知の解消確認はこのLinux環境では未実施。
+- `0x80070490`は通知ID付きショートカットの追加だけでは解消しなかった。未パッケージアプリで初回送信前に`ToastNotifier.Setting`を取得すると失敗するため、[Microsoft.Toolkitの実装](https://github.com/CommunityToolkit/WindowsCommunityToolkit/blob/main/Microsoft.Toolkit.Uwp.Notifications/Toasts/Compat/ToastNotifierCompat.cs)に合わせ、ポップアップ・音を抑えた有効期限15秒の初期登録通知を送信して自分の履歴だけ削除し、その後に通知設定を取得する。登録・送信・履歴削除・設定取得の失敗と、ユーザーが通知を無効にした状態は引き続きエラーとして扱う。
+- ショートカット追加時は通知XMLの2テストが成功した。初回送信順序の修正後も、Windows用回帰テストのクロスコンパイルとWindows x64 releaseビルドに成功。Windows用テストの実行・今回の実通知の解消確認はこのLinux環境では未実施。
 
 ### 実用化の確認（2026/11/11）
 

@@ -190,6 +190,50 @@ mod windows_native {
         }
     }
 
+    fn initialize_sender(notifier: &ToastNotifier, app_id: &HSTRING) -> Result<(), String> {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        use windows::{
+            Data::Xml::Dom::XmlDocument,
+            Foundation::{DateTime, IReference, PropertyValue},
+            UI::Notifications::ToastNotification,
+        };
+
+        // 未パッケージアプリは最初の送信より前にSettingを取得すると失敗する。
+        // Microsoft.Toolkitと同様、非表示の実送信でOS側を初期化してから照会する。
+        let tag = HSTRING::from("iced-register");
+        let group = HSTRING::from("iced-setup");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| format!("通知の有効期限を取得できません: {error}"))?;
+        // Windows時刻は1601年基準の100ns単位。初期登録通知は15秒で失効する。
+        let expires = now.as_nanos() / 100 + (11_644_473_600u128 + 15) * 10_000_000;
+        let expires = DateTime {
+            UniversalTime: i64::try_from(expires)
+                .map_err(|error| format!("通知の有効期限を変換できません: {error}"))?,
+        };
+        let bootstrap = (|| -> windows::core::Result<ToastNotification> {
+            let xml = XmlDocument::new()?;
+            xml.LoadXml(&HSTRING::from(
+                "<toast><visual><binding template=\"ToastGeneric\"><text>通知の初期登録</text></binding></visual><audio silent=\"true\"/></toast>",
+            ))?;
+            let toast = ToastNotification::CreateToastNotification(&xml)?;
+            toast.SetSuppressPopup(true)?;
+            toast.SetTag(&tag)?;
+            toast.SetGroup(&group)?;
+            let expiration: IReference<DateTime> = PropertyValue::CreateDateTime(expires)?.cast()?;
+            toast.SetExpirationTime(&expiration)?;
+            Ok(toast)
+        })().map_err(|error| format!("初回登録通知を準備できません: {error}"))?;
+        notifier
+            .Show(&bootstrap)
+            .map_err(|error| format!("初回登録通知をOSへ送信できません: {error}"))?;
+        // 他の募集通知を消さず、初期登録用のタグ・グループだけを削除する。
+        ToastNotificationManager::History()
+            .and_then(|history| history.RemoveGroupedTagWithId(&tag, &group, app_id))
+            .map_err(|error| format!("初回登録通知の履歴を削除できません: {error}"))?;
+        Ok(())
+    }
+
     pub(super) fn with_notifier<T>(
         send: impl FnOnce(&ToastNotifier) -> Result<T, String>,
     ) -> Result<T, String> {
@@ -198,6 +242,11 @@ mod windows_native {
         let app_id = REGISTRATION.as_ref().map_err(Clone::clone)?;
         let notifier = ToastNotificationManager::CreateToastNotifierWithId(app_id)
             .map_err(|error| format!("Windows通知に接続できません: {error}"))?;
+        static SENDER_READY: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
+        SENDER_READY
+            .get_or_init(|| initialize_sender(&notifier, app_id))
+            .as_ref()
+            .map_err(Clone::clone)?;
         let setting = notifier
             .Setting()
             .map_err(|error| format!("Windows通知設定を取得できません: {error}"))?;
