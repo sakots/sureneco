@@ -52,6 +52,15 @@ pub fn allowed_url(input: &str) -> Result<Url, String> {
 
 pub fn fetch(input: &str) -> Result<String, String> {
     let url = allowed_url(input)?;
+    #[cfg(feature = "comparison-fixture")]
+    if let Some(directory) = std::env::var_os("SURENECO_COMPARISON_FIXTURE") {
+        let text = fixture_response(std::path::Path::new(&directory), &url)?;
+        static REPORTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !REPORTED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("sureneco-comparison-fixture: active");
+        }
+        return Ok(text);
+    }
     let client = Client::builder()
         .redirect(Policy::none())
         .timeout(Duration::from_secs(15))
@@ -91,6 +100,38 @@ pub fn decode(bytes: &[u8], utf8: bool) -> Result<String, String> {
         .into_owned())
 }
 
+#[cfg(feature = "comparison-fixture")]
+fn fixture_response(directory: &std::path::Path, url: &Url) -> Result<String, String> {
+    if !directory.is_absolute() || !directory.is_dir() {
+        return Err("比較用データの絶対ディレクトリーを指定してください。".into());
+    }
+    let root = directory
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    let (_, resource) = url
+        .path()
+        .trim_start_matches('/')
+        .split_once('/')
+        .ok_or("比較用データのパスが不正です。")?;
+    let file = root
+        .join(resource)
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    if !file.starts_with(&root) {
+        return Err("比較用データのディレクトリー外は読み込めません。".into());
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(file)
+        .map_err(|error| error.to_string())?
+        .take(MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 > MAX_BYTES {
+        return Err("比較用データが5MiBを超えています。".into());
+    }
+    String::from_utf8(bytes).map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,5 +155,42 @@ mod tests {
         assert_eq!(decode(&encoded, false).unwrap(), "雀魂");
         assert_eq!(decode("雀魂".as_bytes(), true).unwrap(), "雀魂");
         assert!(decode(&vec![0; MAX_BYTES as usize + 1], false).is_err());
+    }
+
+    #[cfg(feature = "comparison-fixture")]
+    #[test]
+    fn comparison_reads_utf8_subject_and_dat_but_rejects_missing_or_oversize_files() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::create_dir(directory.path().join("dat")).unwrap();
+        std::fs::write(directory.path().join("subject.txt"), "雀魂 (1)").unwrap();
+        std::fs::write(directory.path().join("dat/1786524360.dat"), "友人戦 12345").unwrap();
+        let subject = allowed_url("https://egg.5ch.io/mj/subject.txt").unwrap();
+        let dat = allowed_url("https://egg.5ch.io/mj/dat/1786524360.dat").unwrap();
+        assert_eq!(
+            fixture_response(directory.path(), &subject).unwrap(),
+            "雀魂 (1)"
+        );
+        assert_eq!(
+            fixture_response(directory.path(), &dat).unwrap(),
+            "友人戦 12345"
+        );
+        std::fs::remove_file(directory.path().join("subject.txt")).unwrap();
+        assert!(fixture_response(directory.path(), &subject).is_err());
+        std::fs::write(
+            directory.path().join("subject.txt"),
+            vec![b'x'; MAX_BYTES as usize + 1],
+        )
+        .unwrap();
+        assert!(fixture_response(directory.path(), &subject).is_err());
+    }
+
+    #[cfg(all(feature = "comparison-fixture", unix))]
+    #[test]
+    fn comparison_rejects_symlinks_outside_its_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let external = tempfile::NamedTempFile::new().unwrap();
+        std::os::unix::fs::symlink(external.path(), directory.path().join("subject.txt")).unwrap();
+        let subject = allowed_url("https://egg.5ch.io/mj/subject.txt").unwrap();
+        assert!(fixture_response(directory.path(), &subject).is_err());
     }
 }
