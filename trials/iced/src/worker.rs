@@ -1,4 +1,4 @@
-use crate::model::Snapshot;
+use crate::{model::Snapshot, notifications};
 use serde_json::{json, Value};
 use std::{
     cell::RefCell,
@@ -116,7 +116,7 @@ fn run(
     let latest: Rc<RefCell<Option<Arc<Snapshot>>>> = Rc::new(RefCell::new(None));
     let callback_latest = Rc::clone(&latest);
     let callback_events = events.clone();
-    let (notification_available, notification_status) = notification_status();
+    let (notification_available, notification_status) = notifications::status();
     let _ = events.send(Event::NotificationStatus(notification_status));
     let engine = Engine::new(
         saved,
@@ -134,7 +134,7 @@ fn run(
                 )));
             }
         },
-        show_notification,
+        notifications::show,
     )?;
     let value = engine.request(
         "notification_status",
@@ -247,42 +247,4 @@ fn execute(
         }
         Command::Stop => Err("バックエンドは終了処理中です。".into()),
     }
-}
-
-#[cfg(target_os = "linux")]
-fn notification_status() -> (bool, String) {
-    match notify_rust::get_server_information() {
-        Ok(server) => (true, format!("OS通知: {} (D-Bus接続確認済み)", server.name)),
-        Err(error) => (false, format!("OS通知を利用できません: {error}")),
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn notification_status() -> (bool, String) {
-    (
-        false,
-        "この試作のOS通知はLinuxのD-Busのみ対応しています。".into(),
-    )
-}
-
-#[cfg(target_os = "linux")]
-fn show_notification(text: String) -> Result<(), String> {
-    #[derive(serde::Deserialize)]
-    struct Notification {
-        title: String,
-        body: String,
-    }
-    let event: Notification = serde_json::from_str(&text).map_err(|error| error.to_string())?;
-    notify_rust::Notification::new()
-        .appname("sureneco-iced")
-        .summary(&event.title)
-        .body(&event.body)
-        .show()
-        .map(|_| ())
-        .map_err(|error| format!("OS通知の送信に失敗しました: {error}"))
-}
-
-#[cfg(not(target_os = "linux"))]
-fn show_notification(_text: String) -> Result<(), String> {
-    Err("この試作ではOS通知を利用できません。".into())
 }
