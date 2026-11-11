@@ -8,6 +8,7 @@ mod desktop;
 mod model;
 mod notifications;
 mod settings;
+mod window_state;
 mod worker;
 
 use iced::{
@@ -30,17 +31,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
     eprintln!("sureneco-iced data directory: {}", directory.display());
+    let (geometry, geometry_error) = match window_state::load(&directory) {
+        Ok(state) => (state.unwrap_or_default(), None),
+        Err(error) => (window_state::Geometry::default(), Some(error)),
+    };
     iced::application("スレネコチェッカー", App::update, App::view)
         .subscription(App::subscription)
         .theme(|_| appearance::theme())
         .default_font(japanese_font())
-        .window(iced::window::Settings {
-            size: iced::Size::new(1120.0, 820.0),
-            min_size: Some(iced::Size::new(400.0, 600.0)),
-            exit_on_close_request: false,
-            ..Default::default()
-        })
-        .run_with(move || (App::new(directory), Task::none()))?;
+        .window(geometry.settings())
+        .run_with(move || (App::new(directory, geometry, geometry_error), Task::none()))?;
     Ok(())
 }
 
@@ -105,6 +105,23 @@ enum Message {
     Close,
     Quit,
     Joined(Result<(), String>),
+    Window(iced::window::Id, iced::window::Event),
+    WindowSample(u64, WindowSample),
+}
+
+#[derive(Debug, Clone)]
+struct WindowSample {
+    maximized: bool,
+    minimized: Option<bool>,
+    mode: iced::window::Mode,
+    position: Result<Option<iced::Point>, String>,
+    size: iced::Size,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WindowAction {
+    Hide,
+    Quit,
 }
 
 struct App {
@@ -115,6 +132,15 @@ struct App {
     desktop: Option<desktop::Desktop>,
     desktop_status: String,
     hidden: bool,
+    geometry: window_state::Geometry,
+    geometry_dirty: bool,
+    geometry_changed_at: Option<Instant>,
+    geometry_generation: u64,
+    geometry_query: Option<u64>,
+    window_id: Option<iced::window::Id>,
+    geometry_last_query: Instant,
+    restoring_maximized: bool,
+    window_action: Option<WindowAction>,
     page: Page,
     show_details: bool,
     busy: bool,
@@ -129,9 +155,16 @@ struct App {
 }
 
 impl App {
-    fn new(directory: PathBuf) -> Self {
+    fn new(
+        directory: PathBuf,
+        geometry: window_state::Geometry,
+        geometry_error: Option<String>,
+    ) -> Self {
         let started = Worker::start(directory.clone());
         let mut errors = VecDeque::new();
+        if let Some(error) = geometry_error {
+            errors.push_back(error);
+        }
         let (worker, failed) = match started {
             Ok(worker) => (Some(worker), false),
             Err(error) => {
@@ -158,6 +191,15 @@ impl App {
             desktop,
             desktop_status,
             hidden: false,
+            geometry,
+            geometry_dirty: true,
+            geometry_changed_at: None,
+            geometry_generation: 0,
+            geometry_query: None,
+            window_id: None,
+            geometry_last_query: Instant::now(),
+            restoring_maximized: geometry.maximized,
+            window_action: None,
             page: Page::Threads,
             show_details: false,
             busy: !failed,
@@ -175,7 +217,14 @@ impl App {
     fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
             iced::time::every(Duration::from_millis(250)).map(|_| Message::Tick),
-            iced::event::listen_with(|event, _, _| match event {
+            iced::event::listen_with(|event, _, id| match event {
+                iced::Event::Window(
+                    event @ (iced::window::Event::Opened { .. }
+                    | iced::window::Event::Moved(_)
+                    | iced::window::Event::Resized(_)
+                    | iced::window::Event::Focused
+                    | iced::window::Event::Unfocused),
+                ) => Some(Message::Window(id, event)),
                 iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::Close),
                 _ => None,
             }),
@@ -289,19 +338,165 @@ impl App {
             .is_some_and(desktop::Desktop::available)
     }
 
-    fn show_window(&mut self) -> Task<Message> {
-        self.hidden = false;
-        iced::window::get_latest().and_then(|id| {
-            iced::window::change_mode(id, iced::window::Mode::Windowed)
-                .chain(iced::window::minimize(id, false))
-                .chain(iced::window::gain_focus(id))
+    fn geometry_changed(&mut self) {
+        self.geometry_generation = self.geometry_generation.wrapping_add(1);
+        self.geometry_changed_at = Some(Instant::now());
+    }
+
+    fn sample_window(&mut self) -> Task<Message> {
+        let Some(id) = self.window_id else {
+            return Task::none();
+        };
+        let generation = self.geometry_generation;
+        self.geometry_last_query = Instant::now();
+        self.geometry_query = Some(generation);
+        // Query native state, not event dimensions: a resize can belong to a
+        // maximize/minimize transition. The generation rejects interrupted samples.
+        iced::window::get_maximized(id).then(move |maximized| {
+            iced::window::get_minimized(id).then(move |minimized| {
+                iced::window::get_mode(id).then(move |mode| {
+                    iced::window::get_scale_factor(id).then(move |scale| {
+                        iced::window::get_size(id).then(move |size| {
+                            iced::window::run_with_handle(id, move |handle| {
+                                native_window_position(handle.as_raw()).map(|position| {
+                                    position.map(|(x, y)| iced::Point::new(x / scale, y / scale))
+                                })
+                            })
+                            .map(move |position| {
+                                Message::WindowSample(
+                                    generation,
+                                    WindowSample {
+                                        maximized,
+                                        minimized,
+                                        mode,
+                                        position,
+                                        size,
+                                    },
+                                )
+                            })
+                        })
+                    })
+                })
+            })
         })
     }
 
-    fn quit(&mut self) -> Task<Message> {
+    fn accept_window_sample(&mut self, sample: WindowSample) {
+        if self.hidden
+            || sample.minimized == Some(true)
+            || sample.mode != iced::window::Mode::Windowed
+        {
+            return;
+        }
+        // Do not replace the saved normal rectangle with startup maximize events.
+        // set_maximized is asynchronous at the OS level.
+        if self.restoring_maximized {
+            if !sample.maximized {
+                return;
+            }
+            self.restoring_maximized = false;
+        }
+        let mut geometry = self.geometry;
+        geometry.maximized = sample.maximized;
+        if !sample.maximized
+            && sample.size.width.is_finite()
+            && sample.size.height.is_finite()
+            && sample.size.width >= 400.0
+            && sample.size.height >= 600.0
+        {
+            geometry.width = sample.size.width;
+            geometry.height = sample.size.height;
+            // Wayland has no window position; size remains independently useful.
+            match sample.position {
+                Ok(Some(position)) if position.x.is_finite() && position.y.is_finite() => {
+                    geometry.x = Some(position.x);
+                    geometry.y = Some(position.y);
+                }
+                Ok(None) => {
+                    geometry.x = None;
+                    geometry.y = None;
+                }
+                Ok(Some(_)) => {}
+                Err(error) => self.error(error),
+            }
+        }
+        if geometry != self.geometry {
+            self.geometry = geometry;
+            self.geometry_dirty = true;
+            self.geometry_changed_at.get_or_insert_with(Instant::now);
+        }
+    }
+
+    fn flush_geometry(&mut self) {
+        if !self.geometry_dirty {
+            return;
+        }
+        // A failed save is reported once, not retried on every 250ms UI tick.
+        // Another change or an explicit close/quit provides a retry opportunity.
+        match window_state::save(&self.directory, &self.geometry) {
+            Ok(()) => self.geometry_dirty = false,
+            Err(error) => self.error(error),
+        }
+    }
+
+    fn show_window(&mut self) -> Task<Message> {
+        if self.window_action.is_some() {
+            return Task::none();
+        }
+        let was_hidden = self.hidden;
+        self.hidden = false;
+        self.geometry_changed();
+        if was_hidden {
+            self.restoring_maximized = self.geometry.maximized;
+        }
+        let maximized = self.geometry.maximized;
+        iced::window::get_latest().and_then(move |id| {
+            let show = iced::window::change_mode(id, iced::window::Mode::Windowed)
+                .chain(iced::window::minimize(id, false));
+            let show = if was_hidden {
+                show.chain(iced::window::maximize(id, maximized))
+            } else {
+                show
+            };
+            show.chain(iced::window::gain_focus(id))
+        })
+    }
+
+    fn request_window_action(&mut self, action: WindowAction) -> Task<Message> {
         if self.closing {
             return Task::none();
         }
+        // Quit supersedes an in-flight close-to-tray request.
+        if self.window_action == Some(WindowAction::Quit) {
+            return Task::none();
+        }
+        self.window_action = Some(action);
+        self.geometry_changed();
+        if !self.hidden && self.window_id.is_some() {
+            return self.sample_window();
+        }
+        self.finish_window_action()
+    }
+
+    fn finish_window_action(&mut self) -> Task<Message> {
+        self.geometry_changed_at = None;
+        self.flush_geometry();
+        match self.window_action.take() {
+            Some(WindowAction::Hide) if self.tray_available() => {
+                self.hidden = true;
+                iced::window::get_latest()
+                    .and_then(|id| iced::window::change_mode(id, iced::window::Mode::Hidden))
+            }
+            Some(_) => self.finish_quit(),
+            None => Task::none(),
+        }
+    }
+
+    fn quit(&mut self) -> Task<Message> {
+        self.request_window_action(WindowAction::Quit)
+    }
+
+    fn finish_quit(&mut self) -> Task<Message> {
         self.closing = true;
         if let Some(join) = self.worker.as_mut().and_then(Worker::shutdown) {
             return Task::perform(
@@ -347,7 +542,68 @@ impl App {
                 if self.hidden && !self.tray_available() && !self.closing {
                     task = task.chain(self.show_window());
                 }
+                if !self.hidden
+                    && !self.closing
+                    && self.window_action.is_none()
+                    && self.geometry_query.is_none()
+                    && self
+                        .geometry_changed_at
+                        .is_some_and(|changed| changed.elapsed() >= Duration::from_millis(500))
+                {
+                    if self.restoring_maximized {
+                        // Some window managers reject maximize requests. Once
+                        // startup/show events settle, accept a fresh native query
+                        // instead of suppressing normal geometry indefinitely.
+                        self.restoring_maximized = false;
+                        task = task.chain(self.sample_window());
+                    } else {
+                        self.geometry_changed_at = None;
+                        self.flush_geometry();
+                    }
+                }
+                // Winit can omit Moved (notably for X11 ConfigureNotify).
+                // Poll native geometry at low frequency without saving unchanged
+                // state or running any expensive UI/network work.
+                if !self.hidden
+                    && !self.closing
+                    && self.window_action.is_none()
+                    && self.geometry_query.is_none()
+                    && self.geometry_last_query.elapsed() >= Duration::from_secs(1)
+                {
+                    task = task.chain(self.sample_window());
+                }
                 return task;
+            }
+            Message::Window(id, event) => {
+                if self.hidden || self.closing {
+                    return Task::none();
+                }
+                self.geometry_changed();
+                if matches!(event, iced::window::Event::Opened { .. }) {
+                    self.window_id = Some(id);
+                    if self.restoring_maximized {
+                        return iced::window::maximize(id, true);
+                    }
+                }
+                if self.geometry_query.is_none() {
+                    return self.sample_window();
+                }
+            }
+            Message::WindowSample(generation, sample) => {
+                if self.geometry_query != Some(generation) {
+                    return Task::none();
+                }
+                self.geometry_query = None;
+                if generation != self.geometry_generation {
+                    if !self.hidden && !self.closing {
+                        return self.sample_window();
+                    }
+                    return Task::none();
+                }
+                self.accept_window_sample(sample);
+                if self.window_action.is_some() {
+                    return self.finish_window_action();
+                }
             }
             Message::Refresh => self.dispatch(Command::Refresh),
             Message::Watch(id, enabled) => self.dispatch(Command::Watch { id, enabled }),
@@ -375,12 +631,11 @@ impl App {
             Message::ResetSettings if self.available() => self.reset_settings(),
             Message::ClearErrors if !self.closing => self.errors.clear(),
             Message::Close if !self.closing => {
-                if self.tray_available() {
-                    self.hidden = true;
-                    return iced::window::get_latest()
-                        .and_then(|id| iced::window::change_mode(id, iced::window::Mode::Hidden));
-                }
-                return self.quit();
+                return if self.tray_available() {
+                    self.request_window_action(WindowAction::Hide)
+                } else {
+                    self.quit()
+                };
             }
             Message::Quit => return self.quit(),
             Message::Joined(result) => {
@@ -1012,4 +1267,196 @@ fn label<'a>(value: impl text::IntoFragment<'a>) -> text::Text<'a> {
     text(value)
         .shaping(text::Shaping::Advanced)
         .wrapping(text::Wrapping::WordOrGlyph)
+}
+
+// Iced 0.13 queries inner_position, while Settings::position is an outer
+// position. Use actual native frame coordinates rather than guessing decoration
+// offsets or trusting the delivery of Moved events.
+fn native_window_position(
+    handle: iced::window::raw_window_handle::RawWindowHandle,
+) -> Result<Option<(f32, f32)>, String> {
+    use iced::window::raw_window_handle::RawWindowHandle;
+    #[cfg(target_os = "linux")]
+    {
+        let window = match handle {
+            RawWindowHandle::Xlib(handle) => handle.window,
+            RawWindowHandle::Xcb(handle) => std::os::raw::c_ulong::from(handle.window.get()),
+            _ => return Ok(None),
+        };
+        return x11_position::position(window).map(Some);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        if let RawWindowHandle::Win32(handle) = handle {
+            use windows::Win32::{
+                Foundation::{HWND, RECT},
+                UI::WindowsAndMessaging::GetWindowRect,
+            };
+            let mut rect = RECT::default();
+            // The handle belongs to the live window supplied by Iced.
+            unsafe { GetWindowRect(HWND(handle.hwnd.get() as *mut std::ffi::c_void), &mut rect) }
+                .map_err(|error| format!("ウィンドウ位置を取得できません: {error}"))?;
+            return Ok(Some((rect.left as f32, rect.top as f32)));
+        }
+        Ok(None)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    {
+        let _ = handle;
+        Ok(None)
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod x11_position {
+    use std::{
+        cell::RefCell,
+        ffi::{c_int, c_uint, c_ulong, c_void},
+        ptr,
+    };
+
+    type Window = c_ulong;
+    type QueryTree = unsafe extern "C" fn(
+        *mut c_void,
+        Window,
+        *mut Window,
+        *mut Window,
+        *mut *mut Window,
+        *mut c_uint,
+    ) -> c_int;
+    type GetGeometry = unsafe extern "C" fn(
+        *mut c_void,
+        Window,
+        *mut Window,
+        *mut c_int,
+        *mut c_int,
+        *mut c_uint,
+        *mut c_uint,
+        *mut c_uint,
+        *mut c_uint,
+    ) -> c_int;
+    type Free = unsafe extern "C" fn(*mut c_void) -> c_int;
+    type CloseDisplay = unsafe extern "C" fn(*mut c_void) -> c_int;
+
+    struct Connection {
+        _library: libloading::Library,
+        display: *mut c_void,
+        query_tree: QueryTree,
+        get_geometry: GetGeometry,
+        free: Free,
+        close_display: CloseDisplay,
+    }
+
+    impl Connection {
+        fn open() -> Result<Self, String> {
+            // Resolve only the stable Xlib ABI. The library and connection are
+            // retained on Iced's UI thread, never shared with worker threads.
+            unsafe {
+                let library =
+                    libloading::Library::new("libX11.so.6").map_err(|error| error.to_string())?;
+                let open = *library
+                    .get::<unsafe extern "C" fn(*const i8) -> *mut c_void>(b"XOpenDisplay\0")
+                    .map_err(|error| error.to_string())?;
+                let query_tree = *library
+                    .get::<QueryTree>(b"XQueryTree\0")
+                    .map_err(|error| error.to_string())?;
+                let get_geometry = *library
+                    .get::<GetGeometry>(b"XGetGeometry\0")
+                    .map_err(|error| error.to_string())?;
+                let free = *library
+                    .get::<Free>(b"XFree\0")
+                    .map_err(|error| error.to_string())?;
+                let close_display = *library
+                    .get::<CloseDisplay>(b"XCloseDisplay\0")
+                    .map_err(|error| error.to_string())?;
+                let display = open(ptr::null());
+                if display.is_null() {
+                    return Err("X11 displayを開けません。".into());
+                }
+                Ok(Self {
+                    _library: library,
+                    display,
+                    query_tree,
+                    get_geometry,
+                    free,
+                    close_display,
+                })
+            }
+        }
+
+        fn position(&self, mut window: Window) -> Result<(f32, f32), String> {
+            // A reparenting WM places the client inside its decoration window.
+            // Walk to the frame directly below the root, then read that frame's
+            // actual root-relative outer coordinates, including negative values.
+            unsafe {
+                loop {
+                    let (mut root, mut parent, mut children, mut count) =
+                        (0, 0, ptr::null_mut(), 0);
+                    let result = (self.query_tree)(
+                        self.display,
+                        window,
+                        &mut root,
+                        &mut parent,
+                        &mut children,
+                        &mut count,
+                    );
+                    if !children.is_null() {
+                        (self.free)(children.cast());
+                    }
+                    if result == 0 {
+                        return Err("X11ウィンドウの親を取得できません。".into());
+                    }
+                    if parent == root {
+                        break;
+                    }
+                    if parent == 0 {
+                        return Err("X11ウィンドウの外枠を取得できません。".into());
+                    }
+                    window = parent;
+                }
+                let (mut root, mut x, mut y, mut width, mut height, mut border, mut depth) =
+                    (0, 0, 0, 0, 0, 0, 0);
+                if (self.get_geometry)(
+                    self.display,
+                    window,
+                    &mut root,
+                    &mut x,
+                    &mut y,
+                    &mut width,
+                    &mut height,
+                    &mut border,
+                    &mut depth,
+                ) == 0
+                {
+                    return Err("X11ウィンドウ位置を取得できません。".into());
+                }
+                Ok((x as f32, y as f32))
+            }
+        }
+    }
+
+    impl Drop for Connection {
+        fn drop(&mut self) {
+            unsafe {
+                (self.close_display)(self.display);
+            }
+        }
+    }
+
+    thread_local! {
+        static CONNECTION: RefCell<Option<Result<Connection, String>>> = const { RefCell::new(None) };
+    }
+
+    pub(super) fn position(window: Window) -> Result<(f32, f32), String> {
+        CONNECTION
+            .with(|connection| {
+                let mut connection = connection.borrow_mut();
+                let connection = connection.get_or_insert_with(Connection::open);
+                match connection {
+                    Ok(connection) => connection.position(window),
+                    Err(error) => Err(error.clone()),
+                }
+            })
+            .map_err(|error| format!("ウィンドウ位置を取得できません: {error}"))
+    }
 }
