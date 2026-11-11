@@ -48,7 +48,17 @@ Node.js・SQLite・ntfy・HTTPSプロキシを同じ小規模VPSにまとめま�
 - エックスサーバーのPHPから実際のサービスアカウントでOAuth認証に成功し、FCM HTTP v1の`validate-topic`も成功しました。検証要求だけで、端末へ通知は送っていません。試験用の送信コード・依存ファイル・クライアント設定はサーバーから撤去済みです。
 - PHPの90アサーション、Android受信ポリシーの6テスト、デバッグAPKのビルドに成功しました。APKのパッケージID・署名・16KB整列と、サービスアカウント秘密鍵を含まないことを確認しました。
 - ローカル配布物は`release/sureneco_php_fcm_trial_debug.apk`です。既存アプリと別にインストールできます。デバッグ署名の試験専用で、GitHub Releases・Google Playには公開していません。
-- 接続された実機がないため、実画面・トークン取得・OS通知・画面消灯中の到達は未確認です。次にAPKを実機へ入れてトークンを取得し、下記のファイルへ保存してから、実宛先への検証・送信と端末側の受信記録を照合します。本番構成の移行完了を示す試験ではありません。
+- 2026/11/11に利用者から、試験APKのインストール時に「有害なアプリをブロックしました。このアプリは有害な可能性があります。このアプリをインストールするとデバイスが不正に利用される可能性があります。Playプロテクトについて詳細をご覧ください」と表示されるとの報告を受けました。スクリーンショットはなくても、この報告を導入失敗として扱います。実機でのトークン取得・通知到達は未確認のままです。
+
+### Playプロテクトのブロック調査（2026/11/11）
+
+- 今回の文面を、単なる「不明なアプリ」「スキャン推奨」や古いtarget SDKの警告と同一視しません。Googleの判定理由は未特定で、誤検知とは断定していません。保護機能を止めたり、別のインストール経路・アプリID・署名へ変更して検査を回避したりしません。
+- 対象は`release/sureneco_php_fcm_trial_debug.apk`、アプリID`sureneco.sakots.phptrial`、versionName `1.0-trial`／versionCode `1`、minSdk 24／targetSdk 36です。デバッグ可能な試験ビルドで、署名は`Android Debug`。APK署名v2と16KB zip整列は有効で、配布用ファイルとローカルのビルド出力は同一SHA-256でした。署名が有効なことやデバッグ署名であることだけでは、警告の理由・安全性・解除を説明できません。
+- APK SHA-256：`d1179aa172fd2a9e38f6401d4a1087189f4cfbf845f11cb99d97a3b6cf221b2b`。署名証明書SHA-256：`38e9772a4226afb09e02303cbfa195e8f7a59083b1d86a6235b9237452769e62`。警告対象のファイルを識別するための値で、安全性の保証ではありません。
+- 実APKの要求権限はInternet、通知表示、ネットワーク状態、wake lock、FCM受信とアプリ専用の署名権限です。SMS・アクセシビリティ・他アプリの通知読み取り・他APKのインストール権限はありません。通知表示の`POST_NOTIFICATIONS`は、通知読み取りの権限とは別物です。
+- 試験の自作Android／PHPコード、Manifest、公開クライアント設定の生成経路をレビューし、根拠のある脆弱性は見つかりませんでした。独自の動的コードロードやインストール処理も見つかりませんでした。ただし第三者SDKのバイナリーを全面解析したものではなく、端末へ渡ったファイルの同一性・Google側の分類・端末での安全性を確認したという意味ではありません。接続された実機はありません。
+- 次は、手元の警告対象APKのハッシュを照合し、開発者が[Googleの警告別ガイダンス](https://developers.google.com/android/play-protect/warning-dev-guidance)に沿って対象APK・SDKを確認したうえで、必要なら[Play Protectの分類に対する審査申し立て](https://support.google.com/googleplay/android-developer/contact/protectappeals)を行います。APK・署名情報・上記の報告文面を対象の識別に使い、サービスアカウント秘密鍵・FCM受信トークン・OAuthトークンは提出資料に含めません。APKの外部提出・一般公開・Google Playへのアップロードは今回行っていません。
+- ブロックが解消し、安全に導入できる状態を確認するまでは、この端末へのインストール、トークン取得、実宛先への送信試験を保留します。正式署名・Play内部テストへの変更だけで警告が消えるとは保証しません。現行Node.js版の稼働・登録と試験前のPHP／FCM認証確認結果は変更しません。
 
 ### 試験の実行順序
 
@@ -68,7 +78,7 @@ ANDROID_HOME="$PWD/.android-sdk" src-tauri/gen/android/gradlew \
 
 `auth`はOAuth認証だけ、`validate-topic`は端末へ送らないFCM要求の検証です。どちらも端末への通知到達を示しません。鍵は公開領域へ置かず、送信CLIはPHP CLI専用でWebからの実行を拒否します。
 
-`release/sureneco_php_fcm_trial_debug.apk`をGoogle Play開発者サービス対応のAndroid端末へインストールします。「スレネコ PHP・FCM試験」を開き、同意欄をチェックして「同意して通知試験を開始」を押し、通知を許可してください。「登録トークンを機密クリップボードにコピー」からコピーし、開発端末の`.secrets/php-fcm/registration-token.txt`へ保存します。このファイルは`chmod 600 .secrets/php-fcm/registration-token.txt`で0600にしてください。トークンはチャット・Gitへ貼らず、保存できたことだけを伝えてください。現行版のUnifiedPush通知先やntfy資格情報を宛先に流用しません。
+以下は、上記のブロック調査・必要な修正またはGoogle側の再審査を経て、安全に導入できることを確認した後の手順です。現時点で利用者の端末では導入を再開しません。再開後は「スレネコ PHP・FCM試験」を開き、同意欄をチェックして「同意して通知試験を開始」を押し、通知を許可してください。「登録トークンを機密クリップボードにコピー」からコピーし、開発端末の`.secrets/php-fcm/registration-token.txt`へ保存します。このファイルは`chmod 600 .secrets/php-fcm/registration-token.txt`で0600にしてください。トークンはチャット・Gitへ貼らず、保存できたことだけを伝えてください。現行版のUnifiedPush通知先やntfy資格情報を宛先に流用しません。
 
 ```sh
 php trials/php-fcm/php/bin/fcm-trial.php validate \
