@@ -57,6 +57,11 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
+### [2026/11/11] v0.10.1（開発中）
+
+- 現行版と分離したPHP＋FCMの認証・通知配送試験を追加。別アプリIDの受信用APKを使用し、本番構成は変更しない。
+- エックスサーバーからの実際のOAuth認証・FCM検証要求と試験APKの生成を確認。端末への到達確認は未実施。[試験結果・実機での手順](docs/operation-cost.md#phpfcmの分離した疎通試験20261111)を参照。
+
 ### [2026/11/01] v0.10.1
 
 - Windows・Linux・Androidをv0.10.1へ更新。AndroidのversionCodeを101へ更新。

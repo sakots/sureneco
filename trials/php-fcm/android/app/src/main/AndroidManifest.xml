@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application
+        android:name=".TrialApplication"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="false"
+        android:label="スレネコ PHP・FCM試験"
+        android:icon="@drawable/ic_trial_notification"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+        <meta-data android:name="firebase_messaging_notification_delegation_enabled" android:value="false" />
+        <provider android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider" tools:node="remove" />
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service android:name=".TrialMessagingService" android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

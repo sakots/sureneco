@@ -1,8 +1,8 @@
 # 通知サーバーの運用方針と費用
 
-2026/10/22に、**Node.js＋VPSの監視、UnifiedPush＋自前ntfyの通知**を採用しました。Firebaseは使いません。利用者の依頼により実装を再開しています。[採用構成](unifiedpush-ntfy.md)と[進捗](server-progress.md)を参照してください。
+2026/10/22に、**Node.js＋VPSの監視、UnifiedPush＋自前ntfyの通知**を採用しました。現行の本番・公開アプリではFirebaseを使いません。[採用構成](unifiedpush-ntfy.md)と[進捗](server-progress.md)を参照してください。
 
-2026/10/27の利用者方針は、VPS不要のPHP案を将来候補として記録し、当面は既存のNode.js版を優先して進めることです。PHP版の実装・配備や、既存Node.js版からの切り替えは行いません。
+2026/10/27にはVPS不要のPHP案を将来候補として保留しました。2026/11/11から利用者の承認によりPHP＋FCMの疎通試験を別構成で進めます。現行Node.js版のDB・認証・通知先・アプリには変更を加えません。
 
 ## 費用を抑える構成
 
@@ -33,6 +33,56 @@ Node.js・SQLite・ntfy・HTTPSプロキシを同じ小規模VPSにまとめま�
 - **並行開発時の境界**：Node.js版のDB・認証・通知先・配備先に干渉させない。PHPから既存Node.js APIやntfy管理サービスへ処理を委譲する構成は「Node.js不要」とは呼ばない。
 
 根拠：[ntfyのUnifiedPush仕様](https://docs.ntfy.sh/publish/#unifiedpush)、[Android版のFirebase・常時接続の違い](https://docs.ntfy.sh/subscribe/phone/#instant-delivery)、[外部サービスの利用制限](https://docs.ntfy.sh/publish/#limitations)、[PHP Web Pushライブラリー](https://github.com/web-push-libs/web-push-php)、[エックスサーバーのcron](https://www.xserver.ne.jp/manual/man_program_cron.php)。確認日：2026/10/27。仕様・候補の記録であり、この組み合わせの動作確認記録ではありません。
+
+## PHP＋FCMの分離した疎通試験（2026/11/11）
+
+- エックスサーバーのPHP 8.4.27でcurl・OpenSSL・mbstring・PDO SQLite／MySQLを確認。`egg.5ch.io`のsubject.txtはHTTP 200で641スレッド、datはHTTP 200で925レスを解析しました。`.net`はHTTP 308のため試験では追従していません。一時cronのPHP実行と、試験行の削除・既存crontabの保持も確認済みです。これらは測定時点の結果で、継続取得の保証ではありません。
+- `trials/php-fcm/`に送信CLIと独立したAndroid試験アプリを置きます。これは募集判定・設定APIを備えたPHP版アプリではなく、認証と通知配送を確認するための実行可能な試験構成です。本番のTauri／Rust／UnifiedPushには組み込みません。
+- 試験アプリIDは`sureneco.sakots.phptrial`。利用者の同意・OS通知許可を確認してFCM登録トークンを取得し、明示操作でコピーできます。受信した`connectivity_test`のイベントID・期限を確認して通知と受信記録を表示します。Google Play開発者サービスを利用できる端末が必要です。
+- PHP CLIはGoogle AuthライブラリーでサービスアカウントのOAuth認証を行い、FCM HTTP v1 APIの認証確認・`validate_only`・試験通知送信を区別します。端末なしの`validate-topic`は一時トピックへの検証要求だけを送り、通知は配送しません。宛先トークン・認証トークン・秘密鍵をログや引数に出さず、認証成功・FCM受付成功・端末受信成功は別々に記録します。試験通知は有効期限5分、受信対象は別アプリIDに限定します。
+- `.secrets/php-fcm/service-account.json`はサーバー用秘密鍵（0600）、`google-services.json`は試験用クライアント設定です。プロジェクトIDとアプリIDを照合し、秘密鍵はAPKに含めません。エックスサーバーのPHP試験では鍵をSSH標準入力で渡し、公開領域やcronへ保存しません。試験用受信トークンは`.secrets/php-fcm/registration-token.txt`へ保存し、チャット・Gitへ貼りません。
+- ビルドは既存のGradle wrapperから独立プロジェクトを指定して実行します。FCM SDKは試験アプリだけの依存です。送信コード・依存ファイルは公開外の一時ディレクトリーへ配置し、試験後に撤去します。実機が接続されていない場合は、APK生成・FCM認証までと端末到達未確認を明示し、架空の宛先への送信を成功扱いにしません。
+
+### 確認結果
+
+- エックスサーバーのPHPから実際のサービスアカウントでOAuth認証に成功し、FCM HTTP v1の`validate-topic`も成功しました。検証要求だけで、端末へ通知は送っていません。試験用の送信コード・依存ファイル・クライアント設定はサーバーから撤去済みです。
+- PHPの90アサーション、Android受信ポリシーの6テスト、デバッグAPKのビルドに成功しました。APKのパッケージID・署名・16KB整列と、サービスアカウント秘密鍵を含まないことを確認しました。
+- ローカル配布物は`release/sureneco_php_fcm_trial_debug.apk`です。既存アプリと別にインストールできます。デバッグ署名の試験専用で、GitHub Releases・Google Playには公開していません。
+- 接続された実機がないため、実画面・トークン取得・OS通知・画面消灯中の到達は未確認です。次にAPKを実機へ入れてトークンを取得し、下記のファイルへ保存してから、実宛先への検証・送信と端末側の受信記録を照合します。本番構成の移行完了を示す試験ではありません。
+
+### 試験の実行順序
+
+プロジェクトのルートで実行します。ComposerとPHP 8.2以上、AndroidビルドにはJava 21・Android SDKが必要です。
+
+```sh
+composer install --working-dir=trials/php-fcm/php
+php trials/php-fcm/php/bin/fcm-trial.php auth \
+  --credentials=.secrets/php-fcm/service-account.json \
+  --client-config=.secrets/php-fcm/google-services.json
+php trials/php-fcm/php/bin/fcm-trial.php validate-topic \
+  --credentials=.secrets/php-fcm/service-account.json \
+  --client-config=.secrets/php-fcm/google-services.json
+ANDROID_HOME="$PWD/.android-sdk" src-tauri/gen/android/gradlew \
+  -p "$PWD/trials/php-fcm/android" :app:assembleDebug
+```
+
+`auth`はOAuth認証だけ、`validate-topic`は端末へ送らないFCM要求の検証です。どちらも端末への通知到達を示しません。鍵は公開領域へ置かず、送信CLIはPHP CLI専用でWebからの実行を拒否します。
+
+`release/sureneco_php_fcm_trial_debug.apk`をGoogle Play開発者サービス対応のAndroid端末へインストールします。「スレネコ PHP・FCM試験」を開き、同意欄をチェックして「同意して通知試験を開始」を押し、通知を許可してください。「登録トークンを機密クリップボードにコピー」からコピーし、開発端末の`.secrets/php-fcm/registration-token.txt`へ保存します。このファイルは`chmod 600 .secrets/php-fcm/registration-token.txt`で0600にしてください。トークンはチャット・Gitへ貼らず、保存できたことだけを伝えてください。現行版のUnifiedPush通知先やntfy資格情報を宛先に流用しません。
+
+```sh
+php trials/php-fcm/php/bin/fcm-trial.php validate \
+  --credentials=.secrets/php-fcm/service-account.json \
+  --client-config=.secrets/php-fcm/google-services.json \
+  --registration-token-file=.secrets/php-fcm/registration-token.txt
+php trials/php-fcm/php/bin/fcm-trial.php send \
+  --credentials=.secrets/php-fcm/service-account.json \
+  --client-config=.secrets/php-fcm/google-services.json \
+  --registration-token-file=.secrets/php-fcm/registration-token.txt
+```
+
+送信後はアプリの受信記録とOS通知を確認します。FCM側の受付成功だけで「端末に届いた」と判断しません。試験停止時はアプリ側も停止し、不要になった受信トークンのファイルを削除します。
+
 
 ## 1分程度の通知と負荷
 

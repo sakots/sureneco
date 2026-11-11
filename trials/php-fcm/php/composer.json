@@ -1,0 +1,29 @@
+{
+  "name": "sureneco/php-fcm-connectivity-trial",
+  "description": "Isolated CLI-only Google OAuth and FCM HTTP v1 connectivity trial",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.2",
+    "ext-curl": "*",
+    "ext-openssl": "*",
+    "ext-json": "*",
+    "google/auth": "^1.45",
+    "guzzlehttp/guzzle": "^7.9"
+  },
+  "autoload": {
+    "psr-4": {
+      "Sureneco\\FcmTrial\\": "src/"
+    }
+  },
+  "scripts": {
+    "test": "@php tests/run.php"
+  },
+  "config": {
+    "platform": {
+      "php": "8.4.0"
+    },
+    "sort-packages": true,
+    "allow-plugins": false
+  }
+}
