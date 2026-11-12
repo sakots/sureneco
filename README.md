@@ -14,14 +14,14 @@
 [GitHub Releases](https://github.com/sakots/sureneco/releases/latest)からダウンロードできます。
 
 - Windows：インストーラー（`Setup.exe`）またはポータブル版（`win.zip`）
-- Ubuntu：DEB（`amd64.deb`）またはAppImage
+- Ubuntu：DEB（`amd64.deb`）またはAppImage。今回のAppImageとIced Linux版はglibc 2.43以上が必要です。
 - Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。AABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
 
 Tauri版のWindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
-### Icedテスト版 v0.10.1
+### Icedテスト版 v0.11.0
 
-同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.10.1)に、WebViewを使わないRust／Iced版を追加配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。Tauri版の既存配布物・更新情報は変更しません。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
+同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.11.0)に、WebViewを使わないRust／Iced版も配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
 
 ## 使い方
 
@@ -61,11 +61,12 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/11/12] v0.10.1（開発中）
+### [2026/11/12] v0.11.0
 
 - 共通の既定募集フィルタを修正し、「3人半荘　13589」の数字表記も通知対象に追加。Tauri・Android・Icedと登録設定を使う通知サーバーに対応。保存済みの独自フィルタは保持。
 - Tauri版の設定フォルダ・取得と通知・正規表現に個別のデフォルト復元ボタンを追加。該当区分の入力だけを戻し、保存・保存先変更までは反映しない。
 - Iced版にも同じ3区分の復元を追加し、取得と通知には板URLも統合。他区分の未保存入力を維持し、全体復元と区別。
+- Tauri版（Windows・Linux・Android）とIcedテスト版を0.11.0へ統一して配布。AndroidはversionCode 110。既存の署名鍵と設定を維持し、本番サーバー・Google Playは変更しない。
 
 ### [2026/11/12] v0.10.1（Icedテスト版）
 
