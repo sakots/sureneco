@@ -9,6 +9,7 @@ mod model;
 mod notifications;
 mod settings;
 mod single_instance;
+mod ui_preferences;
 mod window_state;
 mod worker;
 
@@ -44,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     iced::application("スレネコチェッカー", App::update, App::view)
         .subscription(App::subscription)
-        .theme(|_| appearance::theme())
+        .theme(|app: &App| appearance::theme(app.preferences.dark_mode))
         .default_font(japanese_font())
         .window(geometry.settings())
         .run_with(move || (App::new(directory, geometry, geometry_error), Task::none()))?;
@@ -105,6 +106,7 @@ enum Message {
     Copy(String),
     SelectPage(Page),
     ToggleDetails,
+    DarkMode(bool),
     Settings(settings::Message),
     SaveSettings,
     ResetSettings,
@@ -136,6 +138,7 @@ struct App {
     snapshot: Option<Arc<Snapshot>>,
     directory: PathBuf,
     settings: settings::Form,
+    preferences: ui_preferences::Preferences,
     desktop: Option<desktop::Desktop>,
     desktop_status: String,
     hidden: bool,
@@ -172,6 +175,13 @@ impl App {
         if let Some(error) = geometry_error {
             errors.push_back(error);
         }
+        let preferences = match ui_preferences::Preferences::load(&directory) {
+            Ok(preferences) => preferences,
+            Err(error) => {
+                errors.push_back(error);
+                ui_preferences::Preferences::default()
+            }
+        };
         let (worker, failed) = match started {
             Ok(worker) => (Some(worker), false),
             Err(error) => {
@@ -195,6 +205,7 @@ impl App {
             snapshot: None,
             directory,
             settings: settings::Form::new(),
+            preferences,
             desktop,
             desktop_status,
             hidden: false,
@@ -524,6 +535,15 @@ impl App {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::DarkMode(dark_mode) => {
+                if !self.closing && dark_mode != self.preferences.dark_mode {
+                    let preferences = ui_preferences::Preferences { dark_mode };
+                    match preferences.save(&self.directory) {
+                        Ok(()) => self.preferences = preferences,
+                        Err(error) => self.error(format!("配色を保存できません: {error}")),
+                    }
+                }
+            }
             Message::Tick => {
                 self.poll();
                 let mut task = Task::none();
@@ -682,17 +702,10 @@ impl App {
             format!("● {watched}スレッドを監視中")
         };
         let brand = row![
-            container(label("猫").size(20).color(iced::Color::WHITE))
+            container(label("猫").size(20))
                 .center_x(36)
                 .center_y(36)
-                .style(|theme| container::Style {
-                    background: Some(theme.palette().primary.into()),
-                    border: iced::Border {
-                        radius: 10.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }),
+                .style(appearance::brand),
             column![
                 label("スレネコチェッカー").size(22),
                 label(format!("友人戦するにゃ！ · {monitoring}"))
@@ -913,7 +926,28 @@ impl App {
             .align_y(iced::Alignment::Center),
         ]
         .spacing(6);
+        let mut dark_mode = toggler(self.preferences.dark_mode)
+            .label("ダークモード")
+            .size(22)
+            .style(appearance::switch);
+        if !self.closing {
+            dark_mode = dark_mode.on_toggle(Message::DarkMode);
+        }
+        let appearance = container(
+            column![
+                label("外観").size(16),
+                dark_mode,
+                label("配色は自動保存され、次回起動時にも復元されます。")
+                    .size(13)
+                    .style(appearance::muted),
+            ]
+            .spacing(12),
+        )
+        .padding(16)
+        .width(Length::Fill)
+        .style(appearance::panel);
         let mut settings = column![
+            appearance,
             self.settings.view(available).map(Message::Settings),
             button(
                 label(if self.show_details {
@@ -1237,10 +1271,10 @@ fn recruitment_active(item: &model::Recruitment, now: u64, emphasis: u64) -> boo
         && now - item.effective_posted_at <= emphasis
 }
 
-fn expired_badge(_: &iced::Theme) -> container::Style {
+fn expired_badge(theme: &iced::Theme) -> container::Style {
     container::Style {
-        background: Some(appearance::BG.into()),
-        text_color: Some(appearance::MUTED),
+        background: Some(theme.palette().background.into()),
+        text_color: appearance::muted(theme).color,
         border: iced::Border {
             radius: 5.0.into(),
             ..Default::default()
