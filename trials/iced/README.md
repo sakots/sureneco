@@ -2,6 +2,18 @@
 
 Tauri版を置き換えず、Windows／Linux向けUIをIcedで試す。現行のRustライブラリーを`default-features = false`で再利用し、HTTP制約、保存、QuickJS上のTypeScript監視コアは同じものを使う。完全なRust判定コアへの移植ではなく、WebView／ReactとIcedのUI実装差を調べる試作である。
 
+## テスト版の配布
+
+Iced版のバージョンは現行製品と同じ**0.10.1**とし、[既存v0.10.1](https://github.com/sakots/sureneco/releases/tag/v0.10.1)へ追加配布する。既存タグ・Tauri版添付・`latest.json`・既存チェックサムは変更しない。タグのソースアーカイブも従来のままであり、Iced版のソースコミットは同梱の`BUILD-INFO.json`を参照する。
+
+- Windows x64：`sureneco-iced_v0.10.1_win-x64.zip`を展開し、`sureneco-iced.exe`を実行する。
+- Linux x64：`sureneco-iced_v0.10.1_linux-x64.tar.gz`を展開し、GUIセッション内で`./sureneco-iced`を実行する。Ubuntu 26.04.1でビルドしたglibc 2.43以上向けのバイナリーで、古いUbuntuには対応しない。DEB／AppImageではなく、GTK 3と、トレイ利用時はAyatana AppIndicator 3・対応ホストが必要である。
+- `sureneco-iced_v0.10.1_SHA256SUMS.txt`で照合する。アーカイブにはフォントライセンス、MITライセンス、起動案内、ソースコミットを記したビルド情報を同梱する。比較用フィクスチャは含めない。
+
+Tauri版との設定共有・自動移行・自動更新はしない。起動済みの旧Iced版を「終了」してから差し替える。Windows実機での最終配布物確認は未実施である。
+
+公開前にIced版36テスト・共通Rustライブラリー27テスト、両OSのreleaseビルド、整形・差分チェック、Linuxの`--help`起動と共有ライブラリー解決を確認した。両版とも比較フィクスチャを含めていない。
+
 ## 実装範囲
 
 - スレッド一覧取得・手動／定期更新、監視トグル、募集一覧、ルームIDコピー、スレッドを開く。
