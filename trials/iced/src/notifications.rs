@@ -156,6 +156,7 @@ mod windows_native {
             link.SetPath(&target)?;
             link.SetWorkingDirectory(&working_directory)?;
             link.SetDescription(w!("すれねこ · Iced"))?;
+            link.SetIconLocation(&target, 0)?;
             let properties: IPropertyStore = link.cast()?;
             let value = SHStrDupW(PCWSTR(app_id.as_ptr()))?;
             let mut identity = PROPVARIANT::default();

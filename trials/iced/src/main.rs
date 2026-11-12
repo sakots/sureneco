@@ -48,6 +48,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(state) => (state.unwrap_or_default(), None),
         Err(error) => (window_state::Geometry::default(), Some(error)),
     };
+    let mut window = geometry.settings();
+    window.icon = Some(iced::window::icon::from_rgba(
+        include_bytes!("../assets/icons/app.rgba").to_vec(),
+        256,
+        256,
+    )?);
     iced::application("スレネコチェッカー", App::update, App::view)
         .subscription(App::subscription)
         .theme(|app: &App| appearance::theme(app.preferences.dark_mode))
@@ -60,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             weight: iced::font::Weight::Medium,
             ..Font::with_name("Noto Sans JP")
         })
-        .window(geometry.settings())
+        .window(window)
         .run_with(move || {
             (
                 App::new(directory, storage, geometry, geometry_error),

@@ -21,6 +21,9 @@ open = "5"
 tokio = { version = "1", features = ["rt", "time"] }
 tempfile = "3"
 
+[build-dependencies]
+embed-resource = "=3.0.12"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 notify-rust = "4"
 gtk = "0.18"
