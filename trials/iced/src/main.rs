@@ -109,7 +109,7 @@ enum Message {
     DarkMode(bool),
     Settings(settings::Message),
     SaveSettings,
-    ResetSettings,
+    RestoreDefaults,
     ClearErrors,
     Close,
     Quit,
@@ -138,6 +138,7 @@ struct App {
     snapshot: Option<Arc<Snapshot>>,
     directory: PathBuf,
     settings: settings::Form,
+    default_settings: Option<serde_json::Value>,
     preferences: ui_preferences::Preferences,
     desktop: Option<desktop::Desktop>,
     desktop_status: String,
@@ -205,6 +206,7 @@ impl App {
             snapshot: None,
             directory,
             settings: settings::Form::new(),
+            default_settings: None,
             preferences,
             desktop,
             desktop_status,
@@ -307,6 +309,7 @@ impl App {
                         }
                     }
                 }
+                Ok(Event::DefaultSettings(settings)) => self.default_settings = Some(settings),
                 Ok(Event::Busy(busy)) => self.busy = busy,
                 Ok(Event::Scheduled { at, seconds }) => {
                     self.next_poll = Some(at);
@@ -647,6 +650,9 @@ impl App {
             Message::Settings(message) => {
                 if self.available() {
                     self.settings.update(message);
+                    if self.settings.dirty() {
+                        self.notice.clear();
+                    }
                 }
             }
             Message::SaveSettings if self.available() && self.settings.dirty() => {
@@ -655,7 +661,12 @@ impl App {
                     Err(error) => self.error(error),
                 }
             }
-            Message::ResetSettings if self.available() => self.reset_settings(),
+            Message::RestoreDefaults if self.available() => {
+                if let Some(defaults) = &self.default_settings {
+                    self.settings.restore_defaults(defaults);
+                    self.notice.clear();
+                }
+            }
             Message::ClearErrors if !self.closing => self.errors.clear(),
             Message::Close if !self.closing => {
                 return if self.tray_available() {
@@ -675,7 +686,7 @@ impl App {
             | Message::SelectPage(_)
             | Message::ToggleDetails
             | Message::SaveSettings
-            | Message::ResetSettings
+            | Message::RestoreDefaults
             | Message::ClearErrors => {}
         }
         Task::none()
@@ -724,6 +735,9 @@ impl App {
         ]
         .spacing(14);
         let mut content = column![brand, nav, horizontal_rule(1)].spacing(12);
+        // Keep the body at a fixed child index when status banners change.
+        let mut banners = column![].spacing(12);
+        let mut has_banners = false;
 
         if self
             .snapshot
@@ -731,7 +745,8 @@ impl App {
             .is_some_and(|snapshot| !snapshot.notification_available)
             || self.notification_status.contains("利用できません")
         {
-            content = content.push(
+            has_banners = true;
+            banners = banners.push(
                 container(
                     label("OS通知を利用できません。設定の「詳細」で接続情報を確認してください。")
                         .size(12),
@@ -742,7 +757,8 @@ impl App {
             );
         }
         if !self.notice.is_empty() {
-            content = content.push(
+            has_banners = true;
+            banners = banners.push(
                 container(label(&self.notice).size(13))
                     .padding([6, 10])
                     .width(Length::Fill)
@@ -778,7 +794,8 @@ impl App {
                         .on_press_maybe((!self.closing).then_some(Message::ClearErrors)),
                 );
             }
-            content = content.push(
+            has_banners = true;
+            banners = banners.push(
                 container(messages)
                     .max_height(120)
                     .padding([8, 10])
@@ -807,7 +824,11 @@ impl App {
             .style(appearance::panel)
             .into()
         };
-        content = content.push(body);
+        content = content.push(
+            column![banners, body]
+                .spacing(if has_banners { 12 } else { 0 })
+                .height(Length::Fill),
+        );
         let updated = self
             .snapshot
             .as_ref()
@@ -896,34 +917,34 @@ impl App {
     }
 
     fn settings_page(&self, available: bool) -> Element<'_, Message> {
+        let dirty = self.settings.dirty();
+        let mut actions = row![button(label("デフォルトに戻す").size(13))
+            .padding([6, 12])
+            .style(appearance::secondary)
+            .on_press_maybe(
+                (available && self.default_settings.is_some()).then_some(Message::RestoreDefaults)
+            ),]
+        .spacing(10)
+        .align_y(iced::Alignment::Center);
+        if dirty {
+            actions = actions
+                .push(
+                    button(label("保存").size(13))
+                        .padding([6, 14])
+                        .style(appearance::primary)
+                        .on_press_maybe(available.then_some(Message::SaveSettings)),
+                )
+                .push(label("未保存の変更あり").size(12).style(appearance::muted));
+        }
         let heading = column![
             label("設定").size(18),
             label("検出条件と通知の対象を調整できます。")
                 .size(13)
                 .style(appearance::muted),
-            row![
-                button(label("保存").size(13))
-                    .padding([6, 14])
-                    .style(appearance::primary)
-                    .on_press_maybe(
-                        (available && self.settings.dirty()).then_some(Message::SaveSettings)
-                    ),
-                button(label("保存済みに戻す").size(13))
-                    .padding([6, 12])
-                    .style(appearance::secondary)
-                    .on_press_maybe(
-                        (available && self.settings.dirty()).then_some(Message::ResetSettings)
-                    ),
-                label(if self.settings.dirty() {
-                    "未保存の編集あり"
-                } else {
-                    "保存済み"
-                })
+            actions,
+            label("監視設定は「保存」で反映します。デフォルト復元も保存が必要です。")
                 .size(12)
                 .style(appearance::muted),
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
         ]
         .spacing(6);
         let mut dark_mode = toggler(self.preferences.dark_mode)

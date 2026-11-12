@@ -1,5 +1,5 @@
 import { Monitor } from "../core/monitor";
-import { boardUrl, threadUrl, validThreadId } from "../core/settings";
+import { boardUrl, defaults, threadUrl, validThreadId } from "../core/settings";
 import { loadState } from "../core/state";
 import { normalizeRoomId } from "../core/room-id";
 import type { Settings } from "../core/types";
@@ -69,6 +69,9 @@ export async function request(text: string): Promise<string> {
   const { command, payload = {} } = JSON.parse(text);
   let result: unknown = null;
   switch (command) {
+    case "default_settings":
+      result = defaults;
+      break;
     case "notification_status":
       monitor.notificationAvailable = !!payload.available;
       result = monitor.snapshot();

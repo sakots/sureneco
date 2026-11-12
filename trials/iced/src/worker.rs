@@ -27,6 +27,7 @@ pub enum Command {
 #[derive(Debug)]
 pub enum Event {
     Snapshot(Arc<Snapshot>),
+    DefaultSettings(Value),
     Busy(bool),
     Scheduled {
         at: Instant,
@@ -136,6 +137,9 @@ fn run(
         },
         notifications::show,
     )?;
+    let _ = events.send(Event::DefaultSettings(
+        engine.request("default_settings", json!({}))?,
+    ));
     let value = engine.request(
         "notification_status",
         json!({"available": notification_available}),
