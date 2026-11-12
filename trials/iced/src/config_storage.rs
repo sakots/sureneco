@@ -7,6 +7,11 @@ use sureneco::storage::ConfigStorage;
 
 use crate::single_instance;
 
+/// Keep canonical paths for storage and locking; simplify only their UI form.
+pub fn display_path(path: &Path) -> &Path {
+    dunce::simplified(path)
+}
+
 /// The caller must keep the base directory's single-instance lock alive.
 pub struct Storage {
     storage: ConfigStorage,
@@ -105,6 +110,23 @@ mod tests {
 
     fn released_lock(directory: &Path) -> File {
         eventually(|| single_instance::acquire(directory).unwrap())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn canonical_drive_paths_are_presented_in_user_facing_form() {
+        let internal = Path::new(r"\\?\C:\Users\利用者 名\AppData\Roaming\sureneco-iced");
+        assert_eq!(
+            display_path(internal),
+            Path::new(r"C:\Users\利用者 名\AppData\Roaming\sureneco-iced")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn display_preserves_prefix_when_normal_form_changes_path_meaning() {
+        let internal = Path::new(r"\\?\C:\folder.\settings");
+        assert_eq!(display_path(internal), internal);
     }
 
     #[test]
