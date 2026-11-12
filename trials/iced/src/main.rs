@@ -50,8 +50,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             default_text_size: iced::Pixels(14.0),
             ..Default::default()
         })
-        .font(include_bytes!("../assets/fonts/NotoSansJP-Regular.otf").as_slice())
-        .default_font(Font::with_name("Noto Sans JP"))
+        .font(include_bytes!("../assets/fonts/NotoSansJP-Medium.otf").as_slice())
+        .default_font(Font {
+            weight: iced::font::Weight::Medium,
+            ..Font::with_name("Noto Sans JP")
+        })
         .window(geometry.settings())
         .run_with(move || (App::new(directory, geometry, geometry_error), Task::none()))?;
     Ok(())

@@ -1,7 +1,7 @@
-Noto Sans JP Regular
+Noto Sans JP Medium
 © 2014-2021 Adobe (http://www.adobe.com/).
-Source: https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf
-Git blob: 4af556abb9cc42e585aab777b01857246a110746
+Source: https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Medium.otf
+Git blob: 490cc708a90767e9a9c867e147df33a8c62c1f6d
 
 This Font Software is licensed under the SIL Open Font License,
 Version 1.1.
