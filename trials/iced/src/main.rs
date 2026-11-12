@@ -46,22 +46,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     iced::application("スレネコチェッカー", App::update, App::view)
         .subscription(App::subscription)
         .theme(|app: &App| appearance::theme(app.preferences.dark_mode))
-        .default_font(japanese_font())
+        .settings(iced::Settings {
+            default_text_size: iced::Pixels(14.0),
+            ..Default::default()
+        })
+        .font(include_bytes!("../assets/fonts/NotoSansJP-Regular.otf").as_slice())
+        .default_font(Font::with_name("Noto Sans JP"))
         .window(geometry.settings())
         .run_with(move || (App::new(directory, geometry, geometry_error), Task::none()))?;
     Ok(())
-}
-
-fn japanese_font() -> Font {
-    // Advanced shaping below enables cosmic-text's installed system-font fallback.
-    // Do not bundle an unlicensed font or rely on Iced's optional Latin-only font.
-    #[cfg(target_os = "windows")]
-    let family = "Yu Gothic UI";
-    #[cfg(target_os = "macos")]
-    let family = "Hiragino Sans";
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    let family = "Noto Sans CJK JP";
-    Font::with_name(family)
 }
 
 fn data_directory() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
