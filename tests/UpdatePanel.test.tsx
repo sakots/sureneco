@@ -20,6 +20,7 @@ function createApi(): Api {
     watch: vi.fn(async () => {}),
     saveSettings: vi.fn(async () => {}),
     getConfigDirectory: vi.fn(async () => "/config/current"),
+    getDefaultConfigDirectory: vi.fn(async () => "/config/default"),
     chooseConfigDirectory: vi.fn(async () => null),
     changeConfigDirectory: vi.fn(async (path: string) => path),
     openThread: vi.fn(async () => {}),
