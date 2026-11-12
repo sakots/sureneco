@@ -191,7 +191,9 @@ impl App {
         geometry_error: Option<String>,
     ) -> Self {
         let config_directory = storage.directory().to_path_buf();
-        let directory_input = config_directory.to_string_lossy().into_owned();
+        let directory_input = config_storage::display_path(&config_directory)
+            .to_string_lossy()
+            .into_owned();
         let started = Worker::start(storage);
         let mut errors = VecDeque::new();
         if let Some(error) = geometry_error {
@@ -334,7 +336,9 @@ impl App {
                 }
                 Ok(Event::DefaultSettings(settings)) => self.default_settings = Some(settings),
                 Ok(Event::ConfigDirectory(directory)) => {
-                    self.directory_input = directory.to_string_lossy().into_owned();
+                    self.directory_input = config_storage::display_path(&directory)
+                        .to_string_lossy()
+                        .into_owned();
                     self.config_directory = directory;
                 }
                 Ok(Event::Busy(busy)) => self.busy = busy,
@@ -577,7 +581,9 @@ impl App {
                 )));
             }
             Message::RestoreDirectory if self.available() => {
-                self.directory_input = self.directory.to_string_lossy().into_owned();
+                self.directory_input = config_storage::display_path(&self.directory)
+                    .to_string_lossy()
+                    .into_owned();
                 self.notice.clear();
             }
             Message::DarkMode(dark_mode) => {
@@ -1030,14 +1036,14 @@ impl App {
                         .on_press_maybe(available.then_some(Message::RestoreDirectory)),
                 ].spacing(10).align_y(iced::Alignment::Center),
                 label("現在の保存先").size(12).style(appearance::muted),
-                label(self.config_directory.to_string_lossy()).size(13),
+                label(config_storage::display_path(&self.config_directory).to_string_lossy()).size(13),
                 directory_input,
                 button(label("保存先を変更").size(13))
                     .padding([6, 12])
                     .style(appearance::secondary)
                     .on_press_maybe(
                         (available && !self.directory_input.is_empty()
-                            && std::path::Path::new(&self.directory_input) != self.config_directory.as_path())
+                            && config_storage::display_path(std::path::Path::new(&self.directory_input)) != config_storage::display_path(&self.config_directory))
                             .then_some(Message::ChangeDirectory),
                     ),
                 label("保存済み設定・監視対象・既読位置をコピーします。元のファイルは残し、既存のstate.jsonは上書きしません。未保存の編集は変更後に「保存」で反映できます。")
@@ -1080,12 +1086,12 @@ impl App {
                         label("Iced比較試作 · 接続情報").size(14),
                         label(format!(
                             "設定・監視データ: {}",
-                            self.config_directory.display()
+                            config_storage::display_path(&self.config_directory).display()
                         ))
                         .size(12),
                         label(format!(
                             "起動基準（外観・ウィンドウ状態）: {}",
-                            self.directory.display()
+                            config_storage::display_path(&self.directory).display()
                         ))
                         .size(12),
                         label(&self.notification_status).size(12),
