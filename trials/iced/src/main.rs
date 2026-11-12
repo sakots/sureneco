@@ -8,6 +8,7 @@ mod desktop;
 mod model;
 mod notifications;
 mod settings;
+mod single_instance;
 mod window_state;
 mod worker;
 
@@ -28,6 +29,12 @@ const PAGE_BODY_ID: &str = "page-body";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Some(directory) = data_directory()? else {
+        return Ok(());
+    };
+    let Some(_instance) = single_instance::acquire(&directory)
+        .map_err(|error| format!("多重起動防止ロックを取得できません: {error}"))?
+    else {
+        eprintln!("同じ設定フォルダーのIced版は既に起動しています。");
         return Ok(());
     };
     eprintln!("sureneco-iced data directory: {}", directory.display());
