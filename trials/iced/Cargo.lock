@@ -3734,6 +3734,7 @@ dependencies = [
  "encoding_rs",
  "jni",
  "ndk-context",
+ "open",
  "parking_lot 0.12.5",
  "reqwest",
  "rquickjs",

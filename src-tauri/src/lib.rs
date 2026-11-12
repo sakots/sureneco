@@ -5,6 +5,8 @@ compile_error!("Android requires --no-default-features --features mobile");
 pub mod desktop;
 pub mod engine;
 pub mod http;
+#[cfg(feature = "launcher")]
+pub mod launcher;
 #[cfg(all(target_os = "android", feature = "mobile"))]
 mod mobile;
 pub mod storage;

@@ -1,5 +1,5 @@
 use iced::{
-    widget::{column, container, row, text_editor, text_input},
+    widget::{column, container, pick_list, row, text_editor, text_input},
     Element, Length,
 };
 use serde_json::Value;
@@ -21,10 +21,15 @@ pub enum Field {
     NgIds,
     NgWatchois,
     AllowedWatchois,
+    LauncherMode,
+    LauncherPath,
+    LauncherArgs,
+    LauncherProfile,
+    LauncherUserDataDir,
 }
 
 impl Field {
-    const ALL: [Self; 13] = [
+    const ALL: [Self; 18] = [
         Self::UpdateSec,
         Self::ThreadUpdateSec,
         Self::ElapsedDays,
@@ -38,6 +43,11 @@ impl Field {
         Self::NgIds,
         Self::NgWatchois,
         Self::AllowedWatchois,
+        Self::LauncherMode,
+        Self::LauncherPath,
+        Self::LauncherArgs,
+        Self::LauncherProfile,
+        Self::LauncherUserDataDir,
     ];
 
     fn key(self) -> &'static str {
@@ -55,6 +65,11 @@ impl Field {
             Self::NgIds => "ng_ids",
             Self::NgWatchois => "ng_watchois",
             Self::AllowedWatchois => "allowed_watchois",
+            Self::LauncherMode => "launcher_mode",
+            Self::LauncherPath => "launcher_path",
+            Self::LauncherArgs => "launcher_args",
+            Self::LauncherProfile => "launcher_profile",
+            Self::LauncherUserDataDir => "launcher_user_data_dir",
         }
     }
 
@@ -73,6 +88,11 @@ impl Field {
             Self::NgIds => "NG ID（1行1項目）",
             Self::NgWatchois => "NGワッチョイ（1行1項目）",
             Self::AllowedWatchois => "通知を許可するワッチョイ（空欄なら全員・1行1項目）",
+            Self::LauncherMode => "起動方法",
+            Self::LauncherPath => "実行ファイルのパス",
+            Self::LauncherArgs => "起動引数（1行1引数）",
+            Self::LauncherProfile => "プロファイル名（例: Default / Profile 1）",
+            Self::LauncherUserDataDir => "ユーザーデータディレクトリ（空欄可）",
         }
     }
 
@@ -86,8 +106,41 @@ impl Field {
     fn list(self) -> bool {
         matches!(
             self,
-            Self::NgWords | Self::NgIds | Self::NgWatchois | Self::AllowedWatchois
+            Self::NgWords
+                | Self::NgIds
+                | Self::NgWatchois
+                | Self::AllowedWatchois
+                | Self::LauncherArgs
         )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LauncherMode {
+    Default,
+    Browser,
+    Application,
+}
+
+impl LauncherMode {
+    const ALL: [Self; 3] = [Self::Default, Self::Browser, Self::Application];
+
+    fn key(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Browser => "browser",
+            Self::Application => "application",
+        }
+    }
+}
+
+impl std::fmt::Display for LauncherMode {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Default => "既定ブラウザー",
+            Self::Browser => "Chrome / Edge（プロファイル指定）",
+            Self::Application => "指定アプリ（雀魂・Steamなど）",
+        })
     }
 }
 
@@ -191,7 +244,7 @@ impl Draft {
 
 pub struct Form {
     original: Value,
-    fields: [Draft; 13],
+    fields: [Draft; 18],
 }
 
 impl Form {
@@ -293,8 +346,47 @@ impl Form {
     }
 
     pub fn view(&self, enabled: bool) -> Element<'_, Message> {
-        let [update, thread_update, elapsed, emphasis, thread_title, ng_thread_title, recruitment, closed, url, ng_words, ng_ids, ng_watchois, allowed_watchois] =
+        let [update, thread_update, elapsed, emphasis, thread_title, ng_thread_title, recruitment, closed, url, ng_words, ng_ids, ng_watchois, allowed_watchois, launcher_mode, launcher_path, launcher_args, launcher_profile, launcher_user_data_dir] =
             &self.fields;
+        let selected = LauncherMode::ALL
+            .into_iter()
+            .find(|mode| mode.key() == launcher_mode.text);
+        let mode_picker: Element<'_, Message> = if enabled {
+            pick_list(LauncherMode::ALL, selected, |mode| {
+                Message::Input(Field::LauncherMode, mode.key().into())
+            })
+            .into()
+        } else {
+            crate::label(
+                selected
+                    .map(|mode| mode.to_string())
+                    .unwrap_or_else(|| launcher_mode.text.clone()),
+            )
+            .size(14)
+            .into()
+        };
+        let mut launcher = column![crate::label("起動方法").size(13), mode_picker,].spacing(12);
+        match selected {
+            Some(LauncherMode::Browser) => {
+                launcher = launcher
+                    .push(launcher_path.view(enabled))
+                    .push(launcher_profile.view(enabled))
+                    .push(launcher_user_data_dir.view(enabled))
+                    .push(crate::label("Chrome は chrome://version、Edge は edge://version の「実行可能ファイルのパス」「プロフィール パス」で確認できます。プロフィール パスの末尾がプロファイル名、その親がユーザーデータディレクトリです。").size(13).style(appearance::muted));
+            }
+            Some(LauncherMode::Application) => {
+                launcher = launcher
+                    .push(launcher_path.view(enabled))
+                    .push(launcher_args.view(enabled))
+                    .push(crate::label("1行1引数。空白を含む引数も引用符は不要です。Steam は -applaunch と対象の App ID を別々の行に入力してください。").size(13).style(appearance::muted));
+            }
+            _ => {}
+        }
+        launcher = launcher.push(
+            crate::label("自動起動・自動更新はこの試作では利用できません。")
+                .size(13)
+                .style(appearance::muted),
+        );
 
         column![
             settings_card(
@@ -328,12 +420,13 @@ impl Form {
                     crate::label("板URLの変更時は監視対象と取得済みレス番号をリセットします。")
                         .size(13)
                         .style(appearance::muted),
-                    crate::label("ランチャー設定は保持しますが、この試作では起動操作・自動起動・自動更新は利用できません。")
+                    crate::label("募集の起動操作では、ルームIDをコピーして保存済みの設定で雀魂を開きます。")
                         .size(13)
                         .style(appearance::muted),
                 ]
                 .spacing(12),
             ),
+            settings_card("雀魂の起動", launcher),
             settings_card(
                 "NG・通知対象",
                 column![
@@ -449,12 +542,16 @@ mod tests {
     }
 
     #[test]
-    fn defaults_replace_invalid_drafts_but_preserve_hidden_settings_until_saved() {
+    fn defaults_replace_invalid_drafts_and_launcher_but_preserve_unknown_settings() {
         let mut original = saved();
         original["update_sec"] = json!(35);
         let mut defaults = saved();
         defaults["ng_words"] = json!([]);
         defaults["launcher_path"] = json!("");
+        defaults["launcher_mode"] = json!("default");
+        defaults["launcher_args"] = json!([]);
+        defaults["launcher_profile"] = json!("");
+        defaults["launcher_user_data_dir"] = json!("");
         let mut form = Form::new();
         form.refresh(&original);
         form.update(Message::Input(Field::UpdateSec, "-".into()));
@@ -463,7 +560,15 @@ mod tests {
         let candidate = form.candidate().unwrap();
         assert_eq!(candidate["update_sec"], 20);
         assert_eq!(candidate["ng_words"], json!([]));
-        assert_eq!(candidate["launcher_path"], original["launcher_path"]);
+        for field in [
+            Field::LauncherMode,
+            Field::LauncherPath,
+            Field::LauncherArgs,
+            Field::LauncherProfile,
+            Field::LauncherUserDataDir,
+        ] {
+            assert_eq!(candidate[field.key()], defaults[field.key()]);
+        }
         assert_eq!(candidate["future"], original["future"]);
         assert!(form.dirty());
         form.reset(&candidate);
@@ -585,6 +690,60 @@ mod tests {
         assert!(form.dirty());
         form.reset(&snapshot);
         assert_eq!(form.candidate().unwrap()["ng_words"], json!(["保存済み"]));
+        assert!(!form.dirty());
+    }
+
+    #[test]
+    fn launcher_modes_keep_hidden_edits_and_failed_save_drafts() {
+        let original = saved();
+        let mut form = Form::new();
+        form.refresh(&original);
+        for mode in ["default", "browser", "application"] {
+            form.update(Message::Input(Field::LauncherMode, mode.into()));
+            form.update(Message::Input(
+                Field::LauncherPath,
+                "/path with spaces/app".into(),
+            ));
+            form.update(Message::Input(Field::LauncherProfile, "Profile 2".into()));
+            form.update(Message::Input(
+                Field::LauncherUserDataDir,
+                "/data with spaces".into(),
+            ));
+            let candidate = form.candidate().unwrap();
+            assert_eq!(candidate["launcher_mode"], mode);
+            assert_eq!(candidate["launcher_path"], "/path with spaces/app");
+            assert_eq!(candidate["launcher_profile"], "Profile 2");
+            assert_eq!(candidate["launcher_user_data_dir"], "/data with spaces");
+            assert_eq!(candidate["future"], original["future"]);
+            form.refresh(&original);
+            assert_eq!(form.candidate().unwrap(), candidate);
+        }
+    }
+
+    #[test]
+    fn launcher_arguments_keep_spaces_and_separate_lines_across_failed_save() {
+        let mut original = saved();
+        original["launcher_args"] = json!([]);
+        let mut form = Form::new();
+        form.refresh(&original);
+        form.update(Message::List(
+            Field::LauncherArgs,
+            text_editor::Action::Edit(text_editor::Edit::Paste(std::sync::Arc::new(
+                "-applaunch\n12345\n  one argument with spaces  \r\n\n".into(),
+            ))),
+        ));
+        let candidate = form.candidate().unwrap();
+        assert_eq!(
+            candidate["launcher_args"],
+            json!(["-applaunch", "12345", "  one argument with spaces  "])
+        );
+        form.update(Message::Input(Field::LauncherMode, "default".into()));
+        form.refresh(&original);
+        assert_eq!(
+            form.candidate().unwrap()["launcher_args"],
+            candidate["launcher_args"]
+        );
+        form.reset(&original);
         assert!(!form.dirty());
     }
 }
