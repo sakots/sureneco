@@ -17,7 +17,11 @@
 - Ubuntu：DEB（`amd64.deb`）またはAppImage
 - Android：ARM64向け署名付きAPK（手動導入用）。[導入・署名の注意](docs/android.md)を確認してください。AABはローカル保管のみで、GitHubには添付しません。GitHub公開とGoogle Play公開は別です。
 
-WindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
+Tauri版のWindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
+
+### Icedテスト版 v0.10.1
+
+同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.10.1)に、WebViewを使わないRust／Iced版を追加配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。Tauri版の既存配布物・更新情報は変更しません。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
 
 ## 使い方
 
@@ -57,7 +61,7 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/11/12] v0.10.1（開発中）
+### [2026/11/12] v0.10.1（Icedテスト版）
 
 - Iced版でウィンドウの位置・サイズ・最大化状態を記憶する機能を追加。専用ファイルへ保存し、再起動時に復元。保存テスト7件とLinux実画面での移動・再起動・最大化・最小化・終了直前保存を確認し、Windows版もビルド。
 - Iced Windows版の通知初期化エラーが消えたことを利用者環境で確認。募集通知の実表示は未確認。
@@ -69,6 +73,7 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 - Iced版にTauri版と同じ雀魂の起動機能を追加。既定ブラウザー、Chrome／Edgeのプロファイル、指定アプリ・Steamの設定を保存し、募集のルームIDをコピーして起動。
 - Iced版に設定フォルダーの指定機能を追加。保存済み設定・監視対象・既読位置を安全にコピーして切り替え、再起動時も保存先を復元。既存ファイルと使用中の保存先を保護。
 - Iced版のトレイを基に青地・白い猫のアプリアイコンを制作し、ウィンドウとWindows実行ファイルへ適用。
+- Icedテスト版のバージョンを現行版と同じ0.10.1に統一し、既存v0.10.1へWindows x64 ZIP・Linux x64 tar.gz・専用チェックサムを追加配布。
 
 ### [2026/11/11] v0.10.1（開発中）
 
