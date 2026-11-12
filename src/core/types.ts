@@ -86,6 +86,7 @@ export interface Api {
   watch(id: string, enabled: boolean): Promise<void>;
   saveSettings(settings: Settings): Promise<void>;
   getConfigDirectory(): Promise<string>;
+  getDefaultConfigDirectory(): Promise<string>;
   chooseConfigDirectory(): Promise<string | null>;
   changeConfigDirectory(path: string): Promise<string>;
   openThread(id: string, post?: number): Promise<void>;

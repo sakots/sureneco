@@ -66,6 +66,7 @@ function setup(
     watch: vi.fn(async () => {}),
     saveSettings: vi.fn(async () => {}),
     getConfigDirectory: vi.fn(async () => "/config/current"),
+    getDefaultConfigDirectory: vi.fn(async () => "/config/default"),
     chooseConfigDirectory: vi.fn(async () => null),
     changeConfigDirectory: vi.fn(async (path: string) => path),
     openThread: vi.fn(async () => {}),
@@ -318,6 +319,98 @@ it("保存済みの両更新間隔を表示し、一覧間隔を変更しても�
       thread_update_sec: 900,
     }),
   );
+});
+
+it("区分別復元は別区分と未保存の入力を保持し、保存するまで反映しない", async () => {
+  const saved = {
+    ...defaults,
+    update_sec: 45,
+    thread_update_sec: 600,
+    elapsed_days: 30,
+    emphasis_sec: 1200,
+    url: "https://egg.5ch.net/mj/",
+    thread_title_regex: "custom-title",
+    ng_thread_title_regex: "custom-exclude",
+    yujinsen_regex: "custom-recruit",
+    closed_yujinsen_regex: "custom-close",
+    launcher_path: "/saved/game",
+    ng_ids: ["saved-id"],
+  };
+  const api = setup([], undefined, saved);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  fireEvent.change(screen.getByLabelText("NG ID"), {
+    target: { value: "draft-id" },
+  });
+  await user.click(
+    screen.getByRole("button", { name: "正規表現をデフォルトに戻す" }),
+  );
+  expect(
+    (screen.getByLabelText("募集レスの正規表現") as HTMLInputElement).value,
+  ).toBe(defaults.yujinsen_regex);
+  expect(
+    (screen.getByLabelText("友人戦募集の更新間隔（秒）") as HTMLInputElement)
+      .value,
+  ).toBe("45");
+  expect((screen.getByLabelText("NG ID") as HTMLTextAreaElement).value).toBe(
+    "draft-id",
+  );
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("募集レスの正規表現"), {
+    target: { value: "new-recruit" },
+  });
+  await user.click(
+    screen.getByRole("button", { name: "取得と通知をデフォルトに戻す" }),
+  );
+  expect(
+    (screen.getByLabelText("募集レスの正規表現") as HTMLInputElement).value,
+  ).toBe("new-recruit");
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenCalledWith({
+    ...saved,
+    update_sec: defaults.update_sec,
+    thread_update_sec: defaults.thread_update_sec,
+    elapsed_days: defaults.elapsed_days,
+    emphasis_sec: defaults.emphasis_sec,
+    url: defaults.url,
+    thread_title_regex: defaults.thread_title_regex,
+    ng_thread_title_regex: defaults.ng_thread_title_regex,
+    yujinsen_regex: "new-recruit",
+    closed_yujinsen_regex: defaults.closed_yujinsen_regex,
+    ng_ids: ["draft-id"],
+  });
+});
+
+it("Androidの取得と通知を復元しても両更新間隔を60秒未満にせず保存できる", async () => {
+  const api = setup(
+    [],
+    undefined,
+    { ...defaults, update_sec: 90 },
+    {
+      getPushState: vi.fn(async () => ({
+        enabled: false,
+        status: "停止中",
+        permission: false,
+      })),
+      startPush: vi.fn(),
+      stopPush: vi.fn(),
+      deletePush: vi.fn(),
+      syncPush: vi.fn(),
+      requestPushPermission: vi.fn(),
+      copyPushLogin: vi.fn(),
+    },
+  );
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  await user.click(
+    screen.getByRole("button", { name: "取得と通知をデフォルトに戻す" }),
+  );
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenCalledWith({
+    ...defaults,
+    update_sec: 60,
+  });
 });
 
 it("設定フォルダの変更に失敗しても現在の保存先と入力を保持する", async () => {

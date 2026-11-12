@@ -267,6 +267,7 @@ fn start(app: &AppHandle, available: bool) -> Result<Backend, String> {
                 Ok(message) => {
                     let result = match message.command.as_str() {
                         "config_directory" => Ok(json!(storage.borrow().directory())),
+                        "default_config_directory" => Ok(json!(base)),
                         "set_config_directory" => (|| {
                             let path = message.payload["path"]
                                 .as_str()
@@ -359,6 +360,7 @@ async fn request(
         "watch",
         "settings",
         "config_directory",
+        "default_config_directory",
         "set_config_directory",
         "open_thread",
         "copy_room_id",

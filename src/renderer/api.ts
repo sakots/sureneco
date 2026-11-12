@@ -67,6 +67,8 @@ export const api: Api = {
   saveSettings: (settings) => request("settings", { settings }),
   getConfigDirectory: () =>
     mobile ? Promise.resolve("") : request<string>("config_directory"),
+  getDefaultConfigDirectory: () =>
+    mobile ? Promise.resolve("") : request<string>("default_config_directory"),
   chooseConfigDirectory: () => invoke<string | null>("choose_config_directory"),
   changeConfigDirectory: (path) =>
     request<string>("set_config_directory", { path }),

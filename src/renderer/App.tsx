@@ -475,8 +475,23 @@ export function App({ api }: { api: Api }) {
                   <p className="help" id="config-directory-help">
                     絶対パスを入力するか、フォルダを選択してください。「保存先を変更」で保存済みの設定、監視対象、取得済みレス番号を変更先にコピーし、以後の保存先にします。元のフォルダのデータは残ります。state.json
                     が既にあるフォルダには変更できません。ウィンドウの位置・サイズは移しません。
+                    「デフォルトに戻す」は既定パスを入力するだけです。反映には「保存先を変更」が必要です。
                   </p>
                   <div className="form-actions">
+                    <button
+                      className="secondary"
+                      aria-label="設定フォルダをデフォルトに戻す"
+                      disabled={busy || configDirectory === null}
+                      onClick={() =>
+                        void act(async () => {
+                          setConfigDirectoryDraft(
+                            await api.getDefaultConfigDirectory(),
+                          );
+                        })
+                      }
+                    >
+                      デフォルトに戻す
+                    </button>
                     <button
                       className="secondary"
                       disabled={busy || configDirectory === null}
@@ -568,6 +583,21 @@ function SettingsForm({
       ) as Record<keyof Settings, string>,
   );
   const [error, setError] = useState("");
+  const restoreDefaults = (keys: readonly (keyof Settings)[]) => {
+    setDraft((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        keys.map((key) => {
+          const value =
+            mobile && (key === "update_sec" || key === "thread_update_sec")
+              ? Math.max(60, defaults[key])
+              : defaults[key];
+          return [key, Array.isArray(value) ? value.join("\n") : String(value)];
+        }),
+      ),
+    }));
+    setError("");
+  };
   const field = (key: keyof Settings) => (
     <label key={key} htmlFor={key}>
       {labels[key]}
@@ -644,6 +674,18 @@ function SettingsForm({
       )}
       <section className="settings-card">
         <h3>取得と通知</h3>
+        <button
+          type="button"
+          className="secondary"
+          aria-label="取得と通知をデフォルトに戻す"
+          disabled={busy}
+          onClick={() => restoreDefaults([...numeric, "url"])}
+        >
+          デフォルトに戻す
+        </button>
+        <p className="help">
+          この区分だけを戻します。「設定を保存」で反映します。
+        </p>
         <div className="numeric-grid">{numeric.map(field)}</div>
         <p className="help">
           スレッド一覧は起動時と設定した間隔で更新します。
@@ -699,6 +741,18 @@ function SettingsForm({
       )}
       <section className="settings-card">
         <h3>検出する正規表現</h3>
+        <button
+          type="button"
+          className="secondary"
+          aria-label="正規表現をデフォルトに戻す"
+          disabled={busy}
+          onClick={() => restoreDefaults(patterns)}
+        >
+          デフォルトに戻す
+        </button>
+        <p className="help">
+          正規表現だけを戻します。「設定を保存」で反映します。
+        </p>
         <p className="help">
           大文字小文字は区別しません。除外するスレッド名は空欄にできます。
         </p>
@@ -724,17 +778,9 @@ function SettingsForm({
           type="button"
           className="secondary"
           disabled={busy}
-          onClick={() => {
-            setDraft(
-              Object.fromEntries(
-                Object.entries(defaults).map(([key, value]) => [
-                  key,
-                  Array.isArray(value) ? value.join("\n") : String(value),
-                ]),
-              ) as Record<keyof Settings, string>,
-            );
-            setError("");
-          }}
+          onClick={() =>
+            restoreDefaults(Object.keys(defaults) as (keyof Settings)[])
+          }
         >
           既定値を入力
         </button>
