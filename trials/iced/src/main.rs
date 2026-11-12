@@ -122,9 +122,10 @@ enum Message {
     DarkMode(bool),
     DirectoryInput(String),
     ChangeDirectory,
+    RestoreDirectory,
     Settings(settings::Message),
     SaveSettings,
-    RestoreDefaults,
+    RestoreDefaults(settings::Section),
     ClearErrors,
     Close,
     Quit,
@@ -575,6 +576,10 @@ impl App {
                     &self.directory_input,
                 )));
             }
+            Message::RestoreDirectory if self.available() => {
+                self.directory_input = self.directory.to_string_lossy().into_owned();
+                self.notice.clear();
+            }
             Message::DarkMode(dark_mode) => {
                 if !self.closing && dark_mode != self.preferences.dark_mode {
                     let preferences = ui_preferences::Preferences { dark_mode };
@@ -699,9 +704,9 @@ impl App {
                     Err(error) => self.error(error),
                 }
             }
-            Message::RestoreDefaults if self.available() => {
+            Message::RestoreDefaults(section) if self.available() => {
                 if let Some(defaults) = &self.default_settings {
-                    self.settings.restore_defaults(defaults);
+                    self.settings.restore_defaults(defaults, section);
                     self.notice.clear();
                 }
             }
@@ -724,7 +729,8 @@ impl App {
             | Message::SelectPage(_)
             | Message::ToggleDetails
             | Message::SaveSettings
-            | Message::RestoreDefaults
+            | Message::RestoreDefaults(_)
+            | Message::RestoreDirectory
             | Message::ClearErrors => {}
         }
         Task::none()
@@ -956,11 +962,12 @@ impl App {
 
     fn settings_page(&self, available: bool) -> Element<'_, Message> {
         let dirty = self.settings.dirty();
-        let mut actions = row![button(label("デフォルトに戻す").size(13))
+        let mut actions = row![button(label("全体をデフォルトに戻す").size(13))
             .padding([6, 12])
             .style(appearance::secondary)
             .on_press_maybe(
-                (available && self.default_settings.is_some()).then_some(Message::RestoreDefaults)
+                (available && self.default_settings.is_some())
+                    .then_some(Message::RestoreDefaults(settings::Section::All))
             ),]
         .spacing(10)
         .align_y(iced::Alignment::Center);
@@ -1015,7 +1022,13 @@ impl App {
         }
         let config_directory = container(
             column![
-                label("設定フォルダー").size(16),
+                row![
+                    label("設定フォルダー").size(16).width(Length::Fill),
+                    button(label("デフォルトに戻す").size(13))
+                        .padding([6, 12])
+                        .style(appearance::secondary)
+                        .on_press_maybe(available.then_some(Message::RestoreDirectory)),
+                ].spacing(10).align_y(iced::Alignment::Center),
                 label("現在の保存先").size(12).style(appearance::muted),
                 label(self.config_directory.to_string_lossy()).size(13),
                 directory_input,
@@ -1030,6 +1043,9 @@ impl App {
                 label("保存済み設定・監視対象・既読位置をコピーします。元のファイルは残し、既存のstate.jsonは上書きしません。未保存の編集は変更後に「保存」で反映できます。")
                     .size(12)
                     .style(appearance::muted),
+                label("既定パスへの復元も「保存先を変更」で反映します。")
+                    .size(12)
+                    .style(appearance::muted),
                 label("外観・ウィンドウ状態は起動基準フォルダーに残します。")
                     .size(12)
                     .style(appearance::muted),
@@ -1042,7 +1058,8 @@ impl App {
         let mut settings = column![
             appearance,
             config_directory,
-            self.settings.view(available).map(Message::Settings),
+            self.settings
+                .view(available, self.default_settings.is_some()),
             button(
                 label(if self.show_details {
                     "詳細を閉じる"

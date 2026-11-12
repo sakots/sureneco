@@ -1,5 +1,5 @@
 use iced::{
-    widget::{column, container, pick_list, row, text_editor, text_input},
+    widget::{button, column, container, pick_list, row, text_editor, text_input},
     Element, Length,
 };
 use serde_json::Value;
@@ -112,6 +112,29 @@ impl Field {
                 | Self::AllowedWatchois
                 | Self::LauncherArgs
         )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Section {
+    All,
+    Fetch,
+    Patterns,
+}
+
+impl Section {
+    fn contains(self, field: Field) -> bool {
+        match self {
+            Self::All => true,
+            Self::Fetch => field.numeric() || field == Field::Url,
+            Self::Patterns => matches!(
+                field,
+                Field::ThreadTitleRegex
+                    | Field::NgThreadTitleRegex
+                    | Field::YujinsenRegex
+                    | Field::ClosedYujinsenRegex
+            ),
+        }
     }
 }
 
@@ -280,8 +303,12 @@ impl Form {
         }
     }
 
-    pub fn restore_defaults(&mut self, defaults: &Value) {
-        for draft in &mut self.fields {
+    pub fn restore_defaults(&mut self, defaults: &Value, section: Section) {
+        for draft in self
+            .fields
+            .iter_mut()
+            .filter(|draft| section.contains(draft.field))
+        {
             draft.load(defaults);
             draft.dirty = draft.differs(&self.original);
         }
@@ -345,7 +372,11 @@ impl Form {
         Ok(settings)
     }
 
-    pub fn view(&self, enabled: bool) -> Element<'_, Message> {
+    pub(super) fn view(
+        &self,
+        enabled: bool,
+        defaults_available: bool,
+    ) -> Element<'_, crate::Message> {
         let [update, thread_update, elapsed, emphasis, thread_title, ng_thread_title, recruitment, closed, url, ng_words, ng_ids, ng_watchois, allowed_watchois, launcher_mode, launcher_path, launcher_args, launcher_profile, launcher_user_data_dir] =
             &self.fields;
         let selected = LauncherMode::ALL
@@ -390,18 +421,24 @@ impl Form {
 
         column![
             settings_card(
-                "更新と表示",
+                "取得と通知",
                 column![
                     numeric_row(update, thread_update, enabled),
                     numeric_row(elapsed, emphasis, enabled),
                     crate::label("更新間隔は20秒以上、日数・有効期間は1以上（上限2147483）。")
                         .size(13)
                         .style(appearance::muted),
+                    url.view(enabled),
+                    crate::label("板URLの変更時は監視対象と取得済みレス番号をリセットします。")
+                        .size(13)
+                        .style(appearance::muted),
                 ]
                 .spacing(12),
+                Some(Section::Fetch),
+                enabled && defaults_available,
             ),
             settings_card(
-                "検出パターン",
+                "検出する正規表現",
                 column![
                     crate::label("大文字・小文字は区別しません。除外するスレッド名は空欄にできます。")
                         .size(13)
@@ -412,21 +449,10 @@ impl Form {
                     closed.view(enabled),
                 ]
                 .spacing(12),
+                Some(Section::Patterns),
+                enabled && defaults_available,
             ),
-            settings_card(
-                "接続先",
-                column![
-                    url.view(enabled),
-                    crate::label("板URLの変更時は監視対象と取得済みレス番号をリセットします。")
-                        .size(13)
-                        .style(appearance::muted),
-                    crate::label("募集の起動操作では、ルームIDをコピーして保存済みの設定で雀魂を開きます。")
-                        .size(13)
-                        .style(appearance::muted),
-                ]
-                .spacing(12),
-            ),
-            settings_card("雀魂の起動", launcher),
+            settings_card("雀魂の起動", launcher, None, false),
             settings_card(
                 "NG・通知対象",
                 column![
@@ -445,6 +471,8 @@ impl Form {
                         .style(appearance::muted),
                 ]
                 .spacing(12),
+                None,
+                false,
             ),
         ]
         .spacing(12)
@@ -467,9 +495,30 @@ fn numeric_row<'a>(first: &'a Draft, second: &'a Draft, enabled: bool) -> Elemen
 fn settings_card<'a>(
     title: &'static str,
     content: impl Into<Element<'a, Message>>,
-) -> Element<'a, Message> {
+    section: Option<Section>,
+    reset_enabled: bool,
+) -> Element<'a, crate::Message> {
+    let mut heading = row![crate::label(title).size(16).width(Length::Fill)]
+        .spacing(10)
+        .align_y(iced::Alignment::Center);
+    if let Some(section) = section {
+        heading = heading.push(
+            button(crate::label("デフォルトに戻す").size(13))
+                .padding([6, 12])
+                .style(appearance::secondary)
+                .on_press_maybe(reset_enabled.then_some(crate::Message::RestoreDefaults(section))),
+        );
+    }
+    let mut body = column![heading];
+    if section.is_some() {
+        body = body.push(
+            crate::label("この区分だけを戻します。「保存」で反映します。")
+                .size(12)
+                .style(appearance::muted),
+        );
+    }
     container(
-        column![crate::label(title).size(16), content.into()]
+        body.push(content.into().map(crate::Message::Settings))
             .spacing(12)
             .width(Length::Fill),
     )
@@ -555,7 +604,7 @@ mod tests {
         let mut form = Form::new();
         form.refresh(&original);
         form.update(Message::Input(Field::UpdateSec, "-".into()));
-        form.restore_defaults(&defaults);
+        form.restore_defaults(&defaults, Section::All);
         form.refresh(&original);
         let candidate = form.candidate().unwrap();
         assert_eq!(candidate["update_sec"], 20);
@@ -573,8 +622,86 @@ mod tests {
         assert!(form.dirty());
         form.reset(&candidate);
         assert!(!form.dirty());
-        form.restore_defaults(&defaults);
+        form.restore_defaults(&defaults, Section::All);
         assert!(!form.dirty());
+    }
+
+    #[test]
+    fn fetch_defaults_preserve_other_section_drafts_and_save_baseline() {
+        let defaults = saved();
+        let mut original = saved();
+        original["update_sec"] = json!(45);
+        original["thread_update_sec"] = json!(900);
+        original["elapsed_days"] = json!(30);
+        original["emphasis_sec"] = json!(1200);
+        original["url"] = json!("https://egg.5ch.net/mj/");
+        let mut form = Form::new();
+        form.refresh(&original);
+        form.update(Message::Input(Field::YujinsenRegex, "draft-regex".into()));
+        form.update(Message::Input(Field::LauncherPath, "/draft/game".into()));
+        form.update(Message::List(
+            Field::NgIds,
+            text_editor::Action::Edit(text_editor::Edit::Paste(std::sync::Arc::new(
+                "draft-id".into(),
+            ))),
+        ));
+        form.restore_defaults(&defaults, Section::Fetch);
+        let mut expected = original.clone();
+        for key in [
+            "update_sec",
+            "thread_update_sec",
+            "elapsed_days",
+            "emphasis_sec",
+            "url",
+        ] {
+            expected[key] = defaults[key].clone();
+        }
+        expected["yujinsen_regex"] = json!("draft-regex");
+        expected["launcher_path"] = json!("/draft/game");
+        expected["ng_ids"] = json!(["draft-id"]);
+        assert_eq!(form.candidate().unwrap(), expected);
+        form.refresh(&original);
+        assert_eq!(form.candidate().unwrap(), expected);
+        assert!(form.dirty());
+        form.reset(&expected);
+        form.restore_defaults(&defaults, Section::Fetch);
+        assert!(!form.dirty());
+    }
+
+    #[test]
+    fn pattern_defaults_preserve_invalid_fetch_draft_and_other_edits() {
+        let defaults = saved();
+        let mut original = saved();
+        for key in [
+            "thread_title_regex",
+            "ng_thread_title_regex",
+            "yujinsen_regex",
+            "closed_yujinsen_regex",
+        ] {
+            original[key] = json!("custom-pattern");
+        }
+        let mut form = Form::new();
+        form.refresh(&original);
+        form.update(Message::Input(Field::UpdateSec, "-".into()));
+        form.update(Message::Input(Field::LauncherPath, "/draft/game".into()));
+        form.restore_defaults(&defaults, Section::Patterns);
+        assert!(form.candidate().is_err());
+        assert_eq!(form.fields[0].text, "-");
+        form.update(Message::Input(Field::UpdateSec, "45".into()));
+        let mut expected = original.clone();
+        for key in [
+            "thread_title_regex",
+            "ng_thread_title_regex",
+            "yujinsen_regex",
+            "closed_yujinsen_regex",
+        ] {
+            expected[key] = defaults[key].clone();
+        }
+        expected["update_sec"] = json!(45);
+        expected["launcher_path"] = json!("/draft/game");
+        form.refresh(&original);
+        assert_eq!(form.candidate().unwrap(), expected);
+        assert!(form.dirty());
     }
 
     #[test]
