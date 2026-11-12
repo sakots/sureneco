@@ -268,12 +268,14 @@ impl Draft {
 pub struct Form {
     original: Value,
     fields: [Draft; 18],
+    defaults_pending: bool,
 }
 
 impl Form {
     pub fn new() -> Self {
         Self {
             original: Value::Null,
+            defaults_pending: false,
             fields: Field::ALL.map(|field| Draft {
                 field,
                 text: String::new(),
@@ -298,12 +300,14 @@ impl Form {
     // Called after an acknowledged successful settings save.
     pub fn reset(&mut self, settings: &Value) {
         self.original = settings.clone();
+        self.defaults_pending = false;
         for draft in &mut self.fields {
             draft.load(settings);
         }
     }
 
     pub fn restore_defaults(&mut self, defaults: &Value, section: Section) {
+        self.defaults_pending = true;
         for draft in self
             .fields
             .iter_mut()
@@ -315,7 +319,7 @@ impl Form {
     }
 
     pub fn dirty(&self) -> bool {
-        self.fields.iter().any(|draft| draft.dirty)
+        self.defaults_pending || self.fields.iter().any(|draft| draft.dirty)
     }
 
     pub fn update(&mut self, message: Message) {
@@ -622,8 +626,6 @@ mod tests {
         assert!(form.dirty());
         form.reset(&candidate);
         assert!(!form.dirty());
-        form.restore_defaults(&defaults, Section::All);
-        assert!(!form.dirty());
     }
 
     #[test]
@@ -664,7 +666,6 @@ mod tests {
         assert_eq!(form.candidate().unwrap(), expected);
         assert!(form.dirty());
         form.reset(&expected);
-        form.restore_defaults(&defaults, Section::Fetch);
         assert!(!form.dirty());
     }
 
@@ -702,6 +703,22 @@ mod tests {
         form.refresh(&original);
         assert_eq!(form.candidate().unwrap(), expected);
         assert!(form.dirty());
+    }
+
+    #[test]
+    fn unchanged_defaults_still_require_save_until_acknowledged() {
+        let defaults = saved();
+        let mut form = Form::new();
+        form.reset(&defaults);
+        assert!(!form.dirty());
+        form.restore_defaults(&defaults, Section::Patterns);
+        assert!(form.dirty());
+        // Polling and failed saves do not acknowledge the restoration.
+        form.refresh(&defaults);
+        assert!(form.dirty());
+        assert_eq!(form.candidate().unwrap(), defaults);
+        form.reset(&defaults);
+        assert!(!form.dirty());
     }
 
     #[test]
