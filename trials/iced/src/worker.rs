@@ -1,4 +1,4 @@
-use crate::{model::Snapshot, notifications};
+use crate::{config_storage::Storage, model::Snapshot, notifications};
 use serde_json::{json, Value};
 use std::{
     cell::RefCell,
@@ -12,13 +12,14 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
-use sureneco::{engine::Engine, storage::ConfigStorage};
+use sureneco::engine::Engine;
 
 #[derive(Debug)]
 pub enum Command {
     Refresh,
     Watch { id: String, enabled: bool },
     Settings(Value),
+    ConfigDirectory(PathBuf),
     Copy(String),
     Launch(String),
     Open { id: String, post: Option<u64> },
@@ -29,6 +30,7 @@ pub enum Command {
 pub enum Event {
     Snapshot(Arc<Snapshot>),
     DefaultSettings(Value),
+    ConfigDirectory(PathBuf),
     Busy(bool),
     Scheduled {
         at: Instant,
@@ -51,7 +53,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn start(directory: PathBuf) -> Result<Self, String> {
+    pub fn start(storage: Storage) -> Result<Self, String> {
         let (commands, receiver) = mpsc::sync_channel(8);
         let (events, event_receiver) = mpsc::channel();
         let stopping = Arc::new(AtomicBool::new(false));
@@ -59,7 +61,14 @@ impl Worker {
         let join = thread::Builder::new()
             .name("sureneco-iced-engine".into())
             .spawn(move || {
-                if let Err(error) = run(directory, receiver, &events, &stop) {
+                if let Err(error) = run(
+                    storage,
+                    receiver,
+                    &events,
+                    &stop,
+                    |url| sureneco::http::fetch(&url),
+                    notifications::status,
+                ) {
                     eprintln!("sureneco-iced backend: {error}");
                     let _ = events.send(Event::Fatal(error));
                 }
@@ -102,28 +111,25 @@ impl Drop for Worker {
 }
 
 fn run(
-    directory: PathBuf,
+    storage: Storage,
     commands: Receiver<Command>,
     events: &mpsc::Sender<Event>,
     stopping: &AtomicBool,
+    fetch: impl Fn(String) -> Result<String, String> + 'static,
+    notification_status: impl FnOnce() -> (bool, String),
 ) -> Result<(), String> {
-    // Never follow the production app's configurable-storage pointer or migrate it.
-    match std::fs::symlink_metadata(directory.join("config-location.json")) {
-        Ok(_) => return Err("試作は config-location.json の保存先切替を読み込みません。独立した --data-dir を指定してください。".into()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
-        Err(error) => return Err(format!("保存先の確認に失敗しました: {error}")),
-    }
-    let storage = ConfigStorage::load(directory)?;
     let saved = storage.read()?;
+    let storage = Rc::new(RefCell::new(storage));
+    let callback_storage = Rc::clone(&storage);
     let latest: Rc<RefCell<Option<Arc<Snapshot>>>> = Rc::new(RefCell::new(None));
     let callback_latest = Rc::clone(&latest);
     let callback_events = events.clone();
-    let (notification_available, notification_status) = notifications::status();
+    let (notification_available, notification_status) = notification_status();
     let _ = events.send(Event::NotificationStatus(notification_status));
     let engine = Engine::new(
         saved,
-        |url| sureneco::http::fetch(&url),
-        move |text| storage.save(&text),
+        fetch,
+        move |text| callback_storage.borrow().save(&text),
         move |text| match serde_json::from_str::<Snapshot>(&text) {
             Ok(snapshot) => {
                 let snapshot = Arc::new(snapshot);
@@ -183,7 +189,7 @@ fn run(
                     Command::Refresh | Command::Watch { .. } | Command::Settings(_)
                 );
                 let _ = events.send(Event::Busy(true));
-                let result = execute(&engine, command, &mut clipboard);
+                let result = execute(&engine, command, &mut clipboard, &storage, events);
                 let _ = events.send(Event::Completed {
                     settings_saved,
                     result,
@@ -210,6 +216,8 @@ fn execute(
     engine: &Engine,
     command: Command,
     clipboard: &mut Option<arboard::Clipboard>,
+    storage: &Rc<RefCell<Storage>>,
+    events: &mpsc::Sender<Event>,
 ) -> Result<String, String> {
     match command {
         Command::Refresh => {
@@ -223,6 +231,14 @@ fn execute(
         Command::Settings(settings) => {
             engine.request("settings", json!({"settings": settings}))?;
             Ok("設定を検証・保存しました。".into())
+        }
+        Command::ConfigDirectory(directory) => {
+            let saved = engine.request("saved_state", json!({}))?;
+            let text = serde_json::to_string(&saved).map_err(|error| error.to_string())?;
+            let directory = storage.borrow_mut().change(&directory, &text)?;
+            let message = format!("設定保存先を {} に変更しました。", directory.display());
+            let _ = events.send(Event::ConfigDirectory(directory));
+            Ok(message)
         }
         Command::Copy(id) => {
             let normalized = engine.request("copy_room_id", json!({"id": id}))?;
@@ -261,4 +277,151 @@ fn copy_room_id(text: &str, clipboard: &mut Option<arboard::Clipboard>) -> Resul
         .ok_or("クリップボードを初期化できません。")?
         .set_text(text)
         .map_err(|error| format!("クリップボード: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{config_storage::Storage, single_instance};
+
+    fn settings(interval: u64) -> Value {
+        let engine =
+            Engine::new(None, |_| Ok(String::new()), |_| Ok(()), |_| {}, |_| Ok(())).unwrap();
+        let mut settings = engine.request("default_settings", json!({})).unwrap();
+        settings["update_sec"] = json!(interval);
+        settings
+    }
+
+    fn drain(storage: Storage, commands: Vec<Command>) -> Vec<Event> {
+        let (sender, receiver) = mpsc::sync_channel(commands.len());
+        for command in commands {
+            sender.send(command).unwrap();
+        }
+        let (events, receiver_events) = mpsc::channel();
+        run(
+            storage,
+            receiver,
+            &events,
+            &AtomicBool::new(true),
+            |_| Ok(String::new()),
+            || (false, "OS通知: テストでは使用しません。".into()),
+        )
+        .unwrap();
+        drop(events);
+        receiver_events.into_iter().collect()
+    }
+
+    #[test]
+    fn directory_change_drains_commands_and_routes_subsequent_saves() {
+        let root = tempfile::tempdir().unwrap();
+        let base = root.path().join("base");
+        let target = root.path().join("selected");
+        let _base_lock = single_instance::acquire(&base).unwrap().unwrap();
+        let storage = Storage::load(base.clone()).unwrap().unwrap();
+        let events = drain(
+            storage,
+            vec![
+                Command::Settings(settings(45)),
+                Command::ConfigDirectory(target.clone()),
+                Command::Settings(settings(90)),
+                Command::Stop,
+            ],
+        );
+        let old: Value =
+            serde_json::from_str(&std::fs::read_to_string(base.join("state.json")).unwrap())
+                .unwrap();
+        let saved: Value =
+            serde_json::from_str(&std::fs::read_to_string(target.join("state.json")).unwrap())
+                .unwrap();
+        assert_eq!(old["settings"]["update_sec"], 45);
+        assert_eq!(saved["settings"]["update_sec"], 90);
+        let canonical = target.canonicalize().unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .filter_map(|event| match event {
+                    Event::ConfigDirectory(directory) => Some(directory),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            vec![&canonical]
+        );
+        let completed = events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Completed {
+                    settings_saved,
+                    result,
+                } => Some((*settings_saved, result)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            completed
+                .iter()
+                .map(|(saved, _)| *saved)
+                .collect::<Vec<_>>(),
+            vec![true, false, true]
+        );
+        assert!(completed.iter().all(|(_, result)| result.is_ok()));
+        // A concurrent test's fork may hold an inherited FD briefly before exec.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let reopened = loop {
+            if let Some(storage) = Storage::load(base.clone()).unwrap() {
+                break storage;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "保存先のロックが解放されませんでした"
+            );
+            thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(reopened.directory(), canonical);
+        assert_eq!(
+            serde_json::from_str::<Value>(&reopened.read().unwrap().unwrap()).unwrap(),
+            saved
+        );
+    }
+
+    #[test]
+    fn failed_pointer_save_is_an_operation_error_and_preserves_active_storage() {
+        let root = tempfile::tempdir().unwrap();
+        let base = root.path().join("base");
+        let target = root.path().join("selected");
+        let _base_lock = single_instance::acquire(&base).unwrap().unwrap();
+        let storage = Storage::load(base.clone()).unwrap().unwrap();
+        std::fs::create_dir(base.join("config-location.json")).unwrap();
+        let events = drain(
+            storage,
+            vec![
+                Command::Settings(settings(45)),
+                Command::ConfigDirectory(target.clone()),
+                Command::Settings(settings(90)),
+                Command::Stop,
+            ],
+        );
+        let completed = events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Completed {
+                    settings_saved,
+                    result,
+                } => Some((*settings_saved, result)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(completed.len(), 3);
+        assert!(completed[0].1.is_ok());
+        assert!(!completed[1].0);
+        assert!(completed[1].1.is_err());
+        assert!(completed[2].1.is_ok());
+        assert!(!events
+            .iter()
+            .any(|event| matches!(event, Event::Fatal(_) | Event::ConfigDirectory(_))));
+        let saved: Value =
+            serde_json::from_str(&std::fs::read_to_string(base.join("state.json")).unwrap())
+                .unwrap();
+        assert_eq!(saved["settings"]["update_sec"], 90);
+        assert!(!target.join("state.json").exists());
+    }
 }
