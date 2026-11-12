@@ -8,38 +8,85 @@ const fn rgb8(r: u8, g: u8, b: u8) -> Color {
     Color::from_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0)
 }
 
-pub const BG: Color = rgb8(245, 246, 248);
-pub const PANEL: Color = Color::WHITE;
-pub const TEXT: Color = rgb8(32, 45, 56);
-pub const MUTED: Color = rgb8(82, 101, 116);
-pub const BORDER: Color = rgb8(215, 223, 228);
-pub const ACCENT: Color = rgb8(36, 101, 76);
-pub const SOFT: Color = rgb8(232, 243, 237);
-pub const ERROR_BG: Color = rgb8(255, 241, 239);
-pub const ERROR: Color = rgb8(153, 44, 35);
-const FOCUS: Color = rgb8(38, 103, 189);
-pub fn theme() -> Theme {
-    static THEME: LazyLock<Theme> = LazyLock::new(|| {
-        Theme::custom(
-            "Sureneco".into(),
-            iced::theme::Palette {
-                background: BG,
-                text: TEXT,
-                primary: ACCENT,
-                success: ACCENT,
-                danger: ERROR,
-            },
-        )
-    });
-    THEME.clone()
+struct Colors {
+    background: Color,
+    panel: Color,
+    text: Color,
+    muted: Color,
+    border: Color,
+    accent: Color,
+    on_accent: Color,
+    soft: Color,
+    error_background: Color,
+    error: Color,
+    focus: Color,
 }
 
-pub fn panel(_: &Theme) -> container::Style {
+const LIGHT: Colors = Colors {
+    background: rgb8(245, 246, 248),
+    panel: Color::WHITE,
+    text: rgb8(32, 45, 56),
+    muted: rgb8(82, 101, 116),
+    border: rgb8(215, 223, 228),
+    accent: rgb8(36, 101, 76),
+    on_accent: Color::WHITE,
+    soft: rgb8(232, 243, 237),
+    error_background: rgb8(255, 241, 239),
+    error: rgb8(153, 44, 35),
+    focus: rgb8(38, 103, 189),
+};
+
+const DARK: Colors = Colors {
+    background: rgb8(20, 26, 32),
+    panel: rgb8(28, 36, 44),
+    text: rgb8(228, 235, 241),
+    muted: rgb8(159, 177, 190),
+    border: rgb8(60, 77, 90),
+    accent: rgb8(113, 211, 165),
+    on_accent: rgb8(20, 26, 32),
+    soft: rgb8(35, 65, 52),
+    error_background: rgb8(67, 35, 38),
+    error: rgb8(255, 164, 154),
+    focus: rgb8(128, 181, 249),
+};
+
+fn colors(theme: &Theme) -> &'static Colors {
+    if theme.extended_palette().is_dark {
+        &DARK
+    } else {
+        &LIGHT
+    }
+}
+
+pub fn theme(dark_mode: bool) -> Theme {
+    fn create(name: &str, colors: &Colors) -> Theme {
+        Theme::custom(
+            name.into(),
+            iced::theme::Palette {
+                background: colors.background,
+                text: colors.text,
+                primary: colors.accent,
+                success: colors.accent,
+                danger: colors.error,
+            },
+        )
+    }
+    static LIGHT_THEME: LazyLock<Theme> = LazyLock::new(|| create("Sureneco Light", &LIGHT));
+    static DARK_THEME: LazyLock<Theme> = LazyLock::new(|| create("Sureneco Dark", &DARK));
+    if dark_mode {
+        DARK_THEME.clone()
+    } else {
+        LIGHT_THEME.clone()
+    }
+}
+
+pub fn panel(theme: &Theme) -> container::Style {
+    let colors = colors(theme);
     container::Style {
-        background: Some(PANEL.into()),
-        text_color: Some(TEXT),
+        background: Some(colors.panel.into()),
+        text_color: Some(colors.text),
         border: Border {
-            color: BORDER,
+            color: colors.border,
             width: 1.0,
             radius: 12.0.into(),
         },
@@ -47,27 +94,43 @@ pub fn panel(_: &Theme) -> container::Style {
     }
 }
 
-pub fn muted(_: &Theme) -> text::Style {
-    text::Style { color: Some(MUTED) }
+pub fn brand(theme: &Theme) -> container::Style {
+    let colors = colors(theme);
+    container::Style {
+        background: Some(colors.accent.into()),
+        text_color: Some(colors.on_accent),
+        border: Border {
+            radius: 10.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
-pub fn secondary(_: &Theme, status: button::Status) -> button::Style {
+pub fn muted(theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(colors(theme).muted),
+    }
+}
+
+pub fn secondary(theme: &Theme, status: button::Status) -> button::Style {
+    let colors = colors(theme);
     button::Style {
         background: Some(
             if status == button::Status::Hovered {
-                SOFT
+                colors.soft
             } else {
-                PANEL
+                colors.panel
             }
             .into(),
         ),
         text_color: if status == button::Status::Disabled {
-            MUTED
+            colors.muted
         } else {
-            TEXT
+            colors.text
         },
         border: Border {
-            color: BORDER,
+            color: colors.border,
             width: 1.0,
             radius: 8.0.into(),
         },
@@ -75,13 +138,22 @@ pub fn secondary(_: &Theme, status: button::Status) -> button::Style {
     }
 }
 
-pub fn primary(_: &Theme, status: button::Status) -> button::Style {
+pub fn primary(theme: &Theme, status: button::Status) -> button::Style {
+    let colors = colors(theme);
     let disabled = status == button::Status::Disabled;
     button::Style {
-        background: Some(if disabled { SOFT } else { ACCENT }.into()),
-        text_color: if disabled { MUTED } else { Color::WHITE },
+        background: Some(if disabled { colors.soft } else { colors.accent }.into()),
+        text_color: if disabled {
+            colors.muted
+        } else {
+            colors.on_accent
+        },
         border: Border {
-            color: if disabled { BORDER } else { ACCENT },
+            color: if disabled {
+                colors.border
+            } else {
+                colors.accent
+            },
             width: 1.0,
             radius: 8.0.into(),
         },
@@ -89,25 +161,27 @@ pub fn primary(_: &Theme, status: button::Status) -> button::Style {
     }
 }
 
-pub fn tab(_: &Theme, status: button::Status) -> button::Style {
+pub fn tab(theme: &Theme, status: button::Status) -> button::Style {
+    let colors = colors(theme);
     button::Style {
-        background: (status == button::Status::Hovered).then_some(SOFT.into()),
-        text_color: MUTED,
+        background: (status == button::Status::Hovered).then_some(colors.soft.into()),
+        text_color: colors.muted,
         ..Default::default()
     }
 }
 
 pub fn active_tab(theme: &Theme, status: button::Status) -> button::Style {
     button::Style {
-        text_color: ACCENT,
+        text_color: colors(theme).accent,
         ..tab(theme, status)
     }
 }
 
-pub fn badge(_: &Theme) -> container::Style {
+pub fn badge(theme: &Theme) -> container::Style {
+    let colors = colors(theme);
     container::Style {
-        background: Some(SOFT.into()),
-        text_color: Some(ACCENT),
+        background: Some(colors.soft.into()),
+        text_color: Some(colors.accent),
         border: Border {
             radius: 5.0.into(),
             ..Default::default()
@@ -116,10 +190,11 @@ pub fn badge(_: &Theme) -> container::Style {
     }
 }
 
-pub fn closed_badge(_: &Theme) -> container::Style {
+pub fn closed_badge(theme: &Theme) -> container::Style {
+    let colors = colors(theme);
     container::Style {
-        background: Some(ERROR_BG.into()),
-        text_color: Some(ERROR),
+        background: Some(colors.error_background.into()),
+        text_color: Some(colors.error),
         border: Border {
             radius: 5.0.into(),
             ..Default::default()
@@ -128,50 +203,53 @@ pub fn closed_badge(_: &Theme) -> container::Style {
     }
 }
 
-fn input_border(focused: bool) -> Border {
+fn input_border(colors: &Colors, focused: bool) -> Border {
     Border {
-        color: if focused { FOCUS } else { BORDER },
+        color: if focused { colors.focus } else { colors.border },
         width: if focused { 2.0 } else { 1.0 },
         radius: 7.0.into(),
     }
 }
 
 pub fn input(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let colors = colors(theme);
     text_input::Style {
-        background: BG.into(),
-        border: input_border(status == text_input::Status::Focused),
-        value: TEXT,
-        placeholder: MUTED,
-        selection: SOFT,
+        background: colors.background.into(),
+        border: input_border(colors, status == text_input::Status::Focused),
+        value: colors.text,
+        placeholder: colors.muted,
+        selection: colors.soft,
         ..text_input::default(theme, status)
     }
 }
 
 pub fn editor(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
+    let colors = colors(theme);
     text_editor::Style {
-        background: BG.into(),
-        border: input_border(status == text_editor::Status::Focused),
-        value: TEXT,
-        placeholder: MUTED,
-        selection: SOFT,
+        background: colors.background.into(),
+        border: input_border(colors, status == text_editor::Status::Focused),
+        value: colors.text,
+        placeholder: colors.muted,
+        selection: colors.soft,
         ..text_editor::default(theme, status)
     }
 }
 
 pub fn switch(theme: &Theme, status: toggler::Status) -> toggler::Style {
+    let colors = colors(theme);
     let background = match status {
         toggler::Status::Active { is_toggled } | toggler::Status::Hovered { is_toggled } => {
             if is_toggled {
-                ACCENT
+                colors.accent
             } else {
-                MUTED
+                colors.muted
             }
         }
-        toggler::Status::Disabled => BORDER,
+        toggler::Status::Disabled => colors.border,
     };
     toggler::Style {
         background,
-        foreground: Color::WHITE,
+        foreground: colors.on_accent,
         ..toggler::default(theme, status)
     }
 }
