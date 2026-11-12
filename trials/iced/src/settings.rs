@@ -132,6 +132,32 @@ impl Draft {
         self.dirty = false;
     }
 
+    fn differs(&self, settings: &Value) -> bool {
+        let value = &settings[self.field.key()];
+        if let Some(content) = &self.list {
+            let mut expected = value
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .flat_map(|value| value.split('\n'))
+                .peekable();
+            if expected.peek().is_none() {
+                return content.line_count() != 1
+                    || content.line(0).is_some_and(|line| !line.is_empty());
+            }
+            !content.lines().all(|line| expected.next() == Some(&*line))
+                || expected.next().is_some()
+        } else if self.field.numeric() {
+            match parse_integer(&self.text) {
+                Ok(number) => Some(number) != value.as_i64(),
+                Err(()) => true,
+            }
+        } else {
+            value.as_str() != Some(self.text.as_str())
+        }
+    }
+
     fn view(&self, enabled: bool) -> Element<'_, Message> {
         let control: Element<'_, Message> = if let Some(content) = &self.list {
             let mut editor = text_editor(content)
@@ -183,19 +209,28 @@ impl Form {
 
     // Snapshots update the save baseline and pristine controls, never an edited draft.
     pub fn refresh(&mut self, settings: &Value) {
-        self.original = settings.clone();
         for draft in &mut self.fields {
-            if !draft.dirty {
+            if draft.dirty {
+                draft.dirty = draft.differs(settings);
+            } else {
                 draft.load(settings);
             }
         }
+        self.original = settings.clone();
     }
 
-    // Called only for explicit reset or an acknowledged successful settings save.
+    // Called after an acknowledged successful settings save.
     pub fn reset(&mut self, settings: &Value) {
         self.original = settings.clone();
         for draft in &mut self.fields {
             draft.load(settings);
+        }
+    }
+
+    pub fn restore_defaults(&mut self, defaults: &Value) {
+        for draft in &mut self.fields {
+            draft.load(defaults);
+            draft.dirty = draft.differs(&self.original);
         }
     }
 
@@ -212,16 +247,17 @@ impl Form {
                     .find(|draft| draft.field == field && !field.list())
                 {
                     draft.text = value;
-                    draft.dirty = true;
+                    draft.dirty = draft.differs(&self.original);
                 }
             }
             Message::List(field, action) => {
                 if let Some(draft) = self.fields.iter_mut().find(|draft| draft.field == field) {
                     if let Some(content) = &mut draft.list {
-                        if matches!(&action, text_editor::Action::Edit(_)) {
-                            draft.dirty = true;
-                        }
+                        let edited = matches!(&action, text_editor::Action::Edit(_));
                         content.perform(action);
+                        if edited {
+                            draft.dirty = draft.differs(&self.original);
+                        }
                     }
                 }
             }
@@ -382,6 +418,58 @@ mod tests {
             "launcher_args": ["--profile", "  untouched  "], "launcher_profile": "Profile 1",
             "launcher_user_data_dir": "/home/person/profile", "future": {"nested": [1, false, null]}
         })
+    }
+
+    #[test]
+    fn reverting_edits_removes_unsaved_changes_for_numbers_text_and_lists() {
+        let original = saved();
+        let mut form = Form::new();
+        form.refresh(&original);
+        for (field, changed, restored) in [
+            (Field::UpdateSec, "25", "20"),
+            (Field::ThreadTitleRegex, "edited", "雀魂"),
+        ] {
+            form.update(Message::Input(field, changed.into()));
+            assert!(form.dirty());
+            form.update(Message::Input(field, restored.into()));
+            assert!(!form.dirty());
+            assert_eq!(form.candidate().unwrap(), original);
+        }
+        form.update(Message::List(
+            Field::NgWords,
+            text_editor::Action::Edit(text_editor::Edit::Paste(std::sync::Arc::new("X".into()))),
+        ));
+        assert!(form.dirty());
+        form.update(Message::List(
+            Field::NgWords,
+            text_editor::Action::Edit(text_editor::Edit::Backspace),
+        ));
+        assert!(!form.dirty());
+        assert_eq!(form.candidate().unwrap(), original);
+    }
+
+    #[test]
+    fn defaults_replace_invalid_drafts_but_preserve_hidden_settings_until_saved() {
+        let mut original = saved();
+        original["update_sec"] = json!(35);
+        let mut defaults = saved();
+        defaults["ng_words"] = json!([]);
+        defaults["launcher_path"] = json!("");
+        let mut form = Form::new();
+        form.refresh(&original);
+        form.update(Message::Input(Field::UpdateSec, "-".into()));
+        form.restore_defaults(&defaults);
+        form.refresh(&original);
+        let candidate = form.candidate().unwrap();
+        assert_eq!(candidate["update_sec"], 20);
+        assert_eq!(candidate["ng_words"], json!([]));
+        assert_eq!(candidate["launcher_path"], original["launcher_path"]);
+        assert_eq!(candidate["future"], original["future"]);
+        assert!(form.dirty());
+        form.reset(&candidate);
+        assert!(!form.dirty());
+        form.restore_defaults(&defaults);
+        assert!(!form.dirty());
     }
 
     #[test]
