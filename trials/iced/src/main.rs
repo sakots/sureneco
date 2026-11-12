@@ -100,6 +100,7 @@ enum Message {
     Watch(String, bool),
     Open(String, Option<u64>),
     Copy(String),
+    Launch(String),
     SelectPage(Page),
     ToggleDetails,
     DarkMode(bool),
@@ -635,6 +636,7 @@ impl App {
             Message::Watch(id, enabled) => self.dispatch(Command::Watch { id, enabled }),
             Message::Open(id, post) => self.dispatch(Command::Open { id, post }),
             Message::Copy(id) => self.dispatch(Command::Copy(id)),
+            Message::Launch(id) => self.dispatch(Command::Launch(id)),
             Message::SelectPage(page) if !self.closing => {
                 self.page = page;
                 return scrollable::snap_to(
@@ -934,11 +936,11 @@ impl App {
         }
         let heading = column![
             label("設定").size(18),
-            label("検出条件と通知の対象を調整できます。")
+            label("検出条件・通知の対象・雀魂の起動方法を調整できます。")
                 .size(13)
                 .style(appearance::muted),
             actions,
-            label("監視設定は「保存」で反映します。デフォルト復元も保存が必要です。")
+            label("設定は「保存」で反映します。デフォルト復元も保存が必要です。")
                 .size(12)
                 .style(appearance::muted),
         ]
@@ -1210,16 +1212,35 @@ impl App {
             .spacing(8);
             if !item.room_ids.is_empty() {
                 let mut ids =
-                    column![label("ルームIDをコピー").size(12).style(appearance::muted)].spacing(5);
+                    column![label("ルームID").size(12).style(appearance::muted)].spacing(5);
                 for id in &item.room_ids {
+                    let launch_label = if item.room_ids.len() > 1 {
+                        label(format!("雀魂を起動（{id}）"))
+                    } else {
+                        label("雀魂を起動")
+                    };
                     ids = ids.push(
-                        button(label(format!("ID {id} をコピー")).size(13))
-                            .padding([5, 10])
-                            .style(appearance::secondary)
-                            .on_press_maybe(available.then(|| Message::Copy(id.clone()))),
+                        row![
+                            button(label(format!("ID {id} をコピー")).size(13))
+                                .padding([5, 10])
+                                .style(appearance::secondary)
+                                .on_press_maybe(available.then(|| Message::Copy(id.clone()))),
+                            button(launch_label.size(13))
+                                .padding([5, 10])
+                                .style(appearance::primary)
+                                .on_press_maybe(
+                                    (available && active).then(|| Message::Launch(id.clone()))
+                                ),
+                        ]
+                        .spacing(8)
+                        .wrap(),
                     );
                 }
-                card = card.push(ids);
+                card = card.push(ids).push(
+                    label("起動時にIDをコピーします。ゲーム内の友人戦で貼り付けてください。")
+                        .size(12)
+                        .style(appearance::muted),
+                );
             }
             card = card
                 .push(

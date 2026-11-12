@@ -20,6 +20,7 @@ pub enum Command {
     Watch { id: String, enabled: bool },
     Settings(Value),
     Copy(String),
+    Launch(String),
     Open { id: String, post: Option<u64> },
     Stop,
 }
@@ -226,18 +227,15 @@ fn execute(
         Command::Copy(id) => {
             let normalized = engine.request("copy_room_id", json!({"id": id}))?;
             let text = normalized.as_str().ok_or("ルームIDの応答が不正です。")?;
-            if clipboard.is_none() {
-                *clipboard = Some(
-                    arboard::Clipboard::new()
-                        .map_err(|error| format!("クリップボード: {error}"))?,
-                );
-            }
-            clipboard
-                .as_mut()
-                .ok_or("クリップボードを初期化できません。")?
-                .set_text(text.to_owned())
-                .map_err(|error| format!("クリップボード: {error}"))?;
+            copy_room_id(text, clipboard)?;
             Ok(format!("ルームID {text} をコピーしました。"))
+        }
+        Command::Launch(id) => {
+            let launch = engine.request("launch", json!({"id": id}))?;
+            let id = launch["id"].as_str().ok_or("ルームIDの応答が不正です。")?;
+            copy_room_id(id, clipboard)?;
+            sureneco::launcher::launch(&launch["settings"])?;
+            Ok(format!("ルームID {id} をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。"))
         }
         Command::Open { id, post } => {
             let payload = match post {
@@ -251,4 +249,16 @@ fn execute(
         }
         Command::Stop => Err("バックエンドは終了処理中です。".into()),
     }
+}
+
+fn copy_room_id(text: &str, clipboard: &mut Option<arboard::Clipboard>) -> Result<(), String> {
+    if clipboard.is_none() {
+        *clipboard =
+            Some(arboard::Clipboard::new().map_err(|error| format!("クリップボード: {error}"))?);
+    }
+    clipboard
+        .as_mut()
+        .ok_or("クリップボードを初期化できません。")?
+        .set_text(text)
+        .map_err(|error| format!("クリップボード: {error}"))
 }

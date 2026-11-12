@@ -11,9 +11,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
 default = ["desktop"]
-desktop = ["dep:tauri", "dep:tauri-build", "tauri/tray-icon", "tauri/image-png", "tauri/image-ico", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-window-state", "dep:tauri-plugin-updater", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-dialog", "dep:arboard", "dep:open", "dep:notify-rust", "dep:gtk"]
+desktop = ["dep:tauri", "dep:tauri-build", "tauri/tray-icon", "tauri/image-png", "tauri/image-ico", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-window-state", "dep:tauri-plugin-updater", "dep:tauri-plugin-deep-link", "dep:tauri-plugin-dialog", "dep:arboard", "launcher", "dep:notify-rust", "dep:gtk"]
 mobile = ["dep:tauri", "dep:tauri-build"]
 comparison-fixture = []
+launcher = ["dep:open"]
 
 [build-dependencies]
 tauri-build = { version = "2", optional = true , features = [] }
