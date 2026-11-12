@@ -4,6 +4,7 @@
 )]
 
 mod appearance;
+mod config_storage;
 mod desktop;
 mod model;
 mod notifications;
@@ -38,6 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("同じ設定フォルダーのIced版は既に起動しています。");
         return Ok(());
     };
+    let Some(storage) = config_storage::Storage::load(directory.clone())? else {
+        eprintln!("設定保存先は他のIced版が使用中です。");
+        return Ok(());
+    };
     eprintln!("sureneco-iced data directory: {}", directory.display());
     let (geometry, geometry_error) = match window_state::load(&directory) {
         Ok(state) => (state.unwrap_or_default(), None),
@@ -56,7 +61,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Font::with_name("Noto Sans JP")
         })
         .window(geometry.settings())
-        .run_with(move || (App::new(directory, geometry, geometry_error), Task::none()))?;
+        .run_with(move || {
+            (
+                App::new(directory, storage, geometry, geometry_error),
+                Task::none(),
+            )
+        })?;
     Ok(())
 }
 
@@ -65,7 +75,7 @@ fn data_directory() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
     let mut directory = None;
     while let Some(arg) = args.next() {
         if arg == "--help" || arg == "-h" {
-            println!("sureneco-iced [--data-dir ABSOLUTE_DIRECTORY]\nDefault: system config directory/sureneco-iced\nNo production configuration imports or migrations. Closing hides only when a tray host is available; Quit always exits.");
+            println!("sureneco-iced [--data-dir ABSOLUTE_DIRECTORY]\n--data-dir: Icedの起動基準フォルダー（既定: OS設定フォルダー/sureneco-iced）。\n設定データの保存先は画面から変更でき、基準内のconfig-location.jsonで次回も復元します。\n外観・ウィンドウ状態は基準に保持します。本番設定の自動コピー・移行は行いません。\nトレイ利用時は閉じても常駐し、「終了」で終了します。");
             return Ok(None);
         }
         if arg != "--data-dir" || directory.is_some() {
@@ -104,6 +114,8 @@ enum Message {
     SelectPage(Page),
     ToggleDetails,
     DarkMode(bool),
+    DirectoryInput(String),
+    ChangeDirectory,
     Settings(settings::Message),
     SaveSettings,
     RestoreDefaults,
@@ -134,6 +146,8 @@ struct App {
     worker: Option<Worker>,
     snapshot: Option<Arc<Snapshot>>,
     directory: PathBuf,
+    config_directory: PathBuf,
+    directory_input: String,
     settings: settings::Form,
     default_settings: Option<serde_json::Value>,
     preferences: ui_preferences::Preferences,
@@ -165,10 +179,13 @@ struct App {
 impl App {
     fn new(
         directory: PathBuf,
+        storage: config_storage::Storage,
         geometry: window_state::Geometry,
         geometry_error: Option<String>,
     ) -> Self {
-        let started = Worker::start(directory.clone());
+        let config_directory = storage.directory().to_path_buf();
+        let directory_input = config_directory.to_string_lossy().into_owned();
+        let started = Worker::start(storage);
         let mut errors = VecDeque::new();
         if let Some(error) = geometry_error {
             errors.push_back(error);
@@ -202,6 +219,8 @@ impl App {
             worker,
             snapshot: None,
             directory,
+            config_directory,
+            directory_input,
             settings: settings::Form::new(),
             default_settings: None,
             preferences,
@@ -307,6 +326,10 @@ impl App {
                     }
                 }
                 Ok(Event::DefaultSettings(settings)) => self.default_settings = Some(settings),
+                Ok(Event::ConfigDirectory(directory)) => {
+                    self.directory_input = directory.to_string_lossy().into_owned();
+                    self.config_directory = directory;
+                }
                 Ok(Event::Busy(busy)) => self.busy = busy,
                 Ok(Event::Scheduled { at, seconds }) => {
                     self.next_poll = Some(at);
@@ -535,6 +558,17 @@ impl App {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::DirectoryInput(value) => {
+                if self.available() {
+                    self.directory_input = value;
+                    self.notice.clear();
+                }
+            }
+            Message::ChangeDirectory => {
+                self.dispatch(Command::ConfigDirectory(PathBuf::from(
+                    &self.directory_input,
+                )));
+            }
             Message::DarkMode(dark_mode) => {
                 if !self.closing && dark_mode != self.preferences.dark_mode {
                     let preferences = ui_preferences::Preferences { dark_mode };
@@ -965,8 +999,43 @@ impl App {
         .padding(16)
         .width(Length::Fill)
         .style(appearance::panel);
+        let mut directory_input =
+            iced::widget::text_input("変更先の絶対パス", &self.directory_input)
+                .size(14)
+                .padding(8)
+                .style(appearance::input);
+        if available {
+            directory_input = directory_input.on_input(Message::DirectoryInput);
+        }
+        let config_directory = container(
+            column![
+                label("設定フォルダー").size(16),
+                label("現在の保存先").size(12).style(appearance::muted),
+                label(self.config_directory.to_string_lossy()).size(13),
+                directory_input,
+                button(label("保存先を変更").size(13))
+                    .padding([6, 12])
+                    .style(appearance::secondary)
+                    .on_press_maybe(
+                        (available && !self.directory_input.is_empty()
+                            && std::path::Path::new(&self.directory_input) != self.config_directory.as_path())
+                            .then_some(Message::ChangeDirectory),
+                    ),
+                label("保存済み設定・監視対象・既読位置をコピーします。元のファイルは残し、既存のstate.jsonは上書きしません。未保存の編集は変更後に「保存」で反映できます。")
+                    .size(12)
+                    .style(appearance::muted),
+                label("外観・ウィンドウ状態は起動基準フォルダーに残します。")
+                    .size(12)
+                    .style(appearance::muted),
+            ]
+            .spacing(10),
+        )
+        .padding(16)
+        .width(Length::Fill)
+        .style(appearance::panel);
         let mut settings = column![
             appearance,
+            config_directory,
             self.settings.view(available).map(Message::Settings),
             button(
                 label(if self.show_details {
@@ -986,7 +1055,16 @@ impl App {
                 container(
                     column![
                         label("Iced比較試作 · 接続情報").size(14),
-                        label(format!("保存先: {}", self.directory.display())).size(12),
+                        label(format!(
+                            "設定・監視データ: {}",
+                            self.config_directory.display()
+                        ))
+                        .size(12),
+                        label(format!(
+                            "起動基準（外観・ウィンドウ状態）: {}",
+                            self.directory.display()
+                        ))
+                        .size(12),
                         label(&self.notification_status).size(12),
                         label(&self.desktop_status).size(12),
                         label("「終了」は通信・保存の完了を待って終了します。").size(12),
