@@ -4,15 +4,17 @@ Tauri版を置き換えず、Windows／Linux向けUIをIcedで試す。現行の
 
 ## テスト版の配布
 
-Iced版のバージョンは現行製品と同じ**0.10.1**とし、[既存v0.10.1](https://github.com/sakots/sureneco/releases/tag/v0.10.1)へ追加配布する。既存タグ・Tauri版添付・`latest.json`・既存チェックサムは変更しない。タグのソースアーカイブも従来のままであり、Iced版のソースコミットは同梱の`BUILD-INFO.json`を参照する。
+Iced版のバージョンは現行製品と同じ**0.11.0**とし、[v0.11.0](https://github.com/sakots/sureneco/releases/tag/v0.11.0)にTauri版と併せて配布する。Icedはテスト版として区別し、自動更新用`latest.json`には含めない。ソースコミットは同梱の`BUILD-INFO.json`を参照する。
 
-- Windows x64：`sureneco-iced_v0.10.1_win-x64.zip`を展開し、`sureneco-iced.exe`を実行する。
-- Linux x64：`sureneco-iced_v0.10.1_linux-x64.tar.gz`を展開し、GUIセッション内で`./sureneco-iced`を実行する。Ubuntu 26.04.1でビルドしたglibc 2.43以上向けのバイナリーで、古いUbuntuには対応しない。DEB／AppImageではなく、GTK 3と、トレイ利用時はAyatana AppIndicator 3・対応ホストが必要である。
-- `sureneco-iced_v0.10.1_SHA256SUMS.txt`で照合する。アーカイブにはフォントライセンス、MITライセンス、起動案内、ソースコミットを記したビルド情報を同梱する。比較用フィクスチャは含めない。
+- Windows x64：`sureneco-iced_v0.11.0_win-x64.zip`を展開し、`sureneco-iced.exe`を実行する。
+- Linux x64：`sureneco-iced_v0.11.0_linux-x64.tar.gz`を展開し、GUIセッション内で`./sureneco-iced`を実行する。Ubuntu 26.04.1でビルドしたglibc 2.43以上向けのバイナリーで、古いUbuntuには対応しない。DEB／AppImageではなく、GTK 3と、トレイ利用時はAyatana AppIndicator 3・対応ホストが必要である。
+- リリースの`SHA256SUMS`で照合する。アーカイブにはフォントライセンス、MITライセンス、起動案内、ソースコミットを記したビルド情報を同梱する。比較用フィクスチャは含めない。
 
 Tauri版との設定共有・自動移行・自動更新はしない。起動済みの旧Iced版を「終了」してから差し替える。Windows実機での最終配布物確認は未実施である。
 
-公開前にIced版36テスト・共通Rustライブラリー27テスト、両OSのreleaseビルド、整形・差分チェック、Linuxの`--help`起動と共有ライブラリー解決を確認した。両版とも比較フィクスチャを含めていない。
+前回v0.10.1の公開前にはIced版36テスト・共通Rustライブラリー27テスト、両OSのreleaseビルド、整形・差分チェック、Linuxの`--help`起動と共有ライブラリー解決を確認した。両版とも比較フィクスチャを含めていない。
+
+v0.11.0公開前にはIced版38テスト・両OSの通常releaseビルド、Linuxの`--help`起動・共有ライブラリー解決、Windows AMD64／GUI形式、比較フィクスチャ非同梱を確認した。全体チェックのTypeScript 243件・Rust 39件とAndroid JVM 26件も成功。Linuxの実GUI検証は各設定機能の記録を参照し、Windows実機での最終配布物確認は未実施。記録は`release/v0.11.0/verification/`（Git管理外）。
 
 ## 実装範囲
 
