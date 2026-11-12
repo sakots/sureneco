@@ -275,6 +275,32 @@ describe("ルームIDが必須の募集判定", () => {
 });
 
 describe("数字表記の対局形式", () => {
+  it.each([
+    "3人半荘　13589<br>誰でも歓迎にゃ",
+    "３人半荘 13589",
+    "4人半荘 13589",
+    "４人半莊　１３５８９",
+  ])("初期フィルタで数字の人半荘募集を通知する: %s", (body) => {
+    const posts = parseDat(
+      line(
+        body,
+        "IjhfjCnR0",
+        "焼き鳥名無しさん(ﾜｯﾁｮｲ cbaf-kvEO 1/3)",
+        "2026/11/12(木) 21:37:54.23",
+      ),
+    );
+    const result = scanPosts(
+      id,
+      posts,
+      [],
+      defaults,
+      Date.parse("2026-11-12T21:38:00+09:00"),
+    );
+    expect(result.items.map((item) => item.roomIds)).toEqual([["13589"]]);
+    expect(result.notifications.map((item) => item.roomIds)).toEqual([
+      ["13589"],
+    ]);
+  });
   it.each(["三人半荘　29400", "三人半荘 29400", "三人半荘<br>29400"])(
     "初期フィルタで三人半荘の募集を通知する: %s",
     (body) => {
@@ -335,6 +361,11 @@ describe("数字表記の対局形式", () => {
       "三人半荘 294000",
       "四人半莊",
       "四人半莊 294000",
+      "13人半荘 13589",
+      "１４人半荘 13589",
+      "5人半荘 13589",
+      "3人半荘",
+      "3人半荘 135890",
     ]) {
       expect(
         scanPosts(id, parseDat(line(body)), [], defaults, now).items,
