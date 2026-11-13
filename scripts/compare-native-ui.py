@@ -34,6 +34,7 @@ DEFAULT_SETTINGS = {
     "emphasis_sec": 600,
     "thread_title_regex": "雀魂|じゃんたま|ジャンタマ|mahjongsoul|majsoul",
     "ng_thread_title_regex": "",
+    "recruitment_filter": "regex",
     "yujinsen_regex": (
         r"友人戦?|友人部屋|(?:募集|部屋)[\s:：]*[0-9０-９]{5,6}|"
         r"[0-9０-９]{5,6}[\s　]*(?:募|＠|@)|四東|四南|三東|三南|三人半荘|"

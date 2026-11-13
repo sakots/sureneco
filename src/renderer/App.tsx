@@ -18,6 +18,7 @@ const labels: Record<keyof Settings, string> = {
   emphasis_sec: "新規募集の有効期間（秒）",
   thread_title_regex: "スレッド名の正規表現",
   ng_thread_title_regex: "除外するスレッド名の正規表現",
+  recruitment_filter: "募集フィルタ",
   yujinsen_regex: "募集レスの正規表現",
   closed_yujinsen_regex: "締めレスの正規表現",
   url: "5chの板URL",
@@ -576,7 +577,7 @@ function SettingsForm({
   const [draft, setDraft] = useState<Record<keyof Settings, string>>(
     () =>
       Object.fromEntries(
-        Object.entries(initial).map(([key, value]) => [
+        Object.entries({ ...defaults, ...initial }).map(([key, value]) => [
           key,
           Array.isArray(value) ? value.join("\n") : String(value),
         ]),
@@ -629,6 +630,9 @@ function SettingsForm({
               : undefined
           }
           step={1}
+          disabled={
+            key === "yujinsen_regex" && draft.recruitment_filter === "loose"
+          }
           value={draft[key]}
           onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
         />
@@ -746,16 +750,34 @@ function SettingsForm({
           className="secondary"
           aria-label="正規表現をデフォルトに戻す"
           disabled={busy}
-          onClick={() => restoreDefaults(patterns)}
+          onClick={() => restoreDefaults(["recruitment_filter", ...patterns])}
         >
           デフォルトに戻す
         </button>
         <p className="help">
-          正規表現だけを戻します。「設定を保存」で反映します。
+          募集フィルタと正規表現だけを戻します。「設定を保存」で反映します。
         </p>
         <p className="help">
           大文字小文字は区別しません。除外するスレッド名は空欄にできます。
         </p>
+        <label htmlFor="recruitment_filter">
+          {labels.recruitment_filter}
+          <select
+            id="recruitment_filter"
+            value={draft.recruitment_filter}
+            onChange={(e) =>
+              setDraft({ ...draft, recruitment_filter: e.target.value })
+            }
+          >
+            <option value="regex">通常</option>
+            <option value="loose">緩め（誤通知が増えるかもしれません）</option>
+          </select>
+        </label>
+        {draft.recruitment_filter === "loose" && (
+          <p className="help">
+            本文に5桁の数字、人数（3・4・３・４・三・四）、東または南を含む募集を検出します。募集レスの正規表現は通常に戻すと編集できます。
+          </p>
+        )}
         {patterns.map(field)}
       </section>
       <section className="settings-card">

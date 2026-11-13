@@ -31,7 +31,10 @@ export function scanPosts(
 ) {
   const items = previous.map((x) => ({ ...x }));
   const added: Recruitment[] = [];
-  const recruit = new RegExp(settings.yujinsen_regex, "i");
+  const recruit =
+    settings.recruitment_filter === "loose"
+      ? undefined
+      : new RegExp(settings.yujinsen_regex, "i");
   const close = new RegExp(settings.closed_yujinsen_regex, "i");
   const source = new Map(sourcePosts.map((post) => [post.number, post]));
   const closed = new Set(
@@ -117,12 +120,12 @@ function resolveRecruitment(
   post: Post | Recruitment,
   source: Map<number, Post>,
   settings: Settings,
-  pattern: RegExp,
+  pattern: RegExp | undefined,
   closed: Set<number>,
   now: number,
 ) {
   const direct = extractRoomIds(post.body);
-  let matches = pattern.test(post.body);
+  let matches = matchesRecruitment(post.body, direct, pattern);
   let effectivePostedAt =
     "effectivePostedAt" in post ? post.effectivePostedAt : post.postedAt;
   let referenceClosed = false;
@@ -149,7 +152,7 @@ function resolveRecruitment(
     effectivePostedAt = Math.min(effectivePostedAt, referenced.postedAt);
     const ids = extractRoomIds(referenced.body);
     if (collect) {
-      matches ||= pattern.test(referenced.body);
+      matches ||= matchesRecruitment(referenced.body, ids, pattern);
       ids.forEach((id) => roomIds.add(id));
     }
     enqueue(referenced, collect && !ids.length);
@@ -160,4 +163,17 @@ function resolveRecruitment(
     effectivePostedAt,
     referenceClosed,
   };
+}
+
+const loosePlayers = /(?<![0-9０-９])[34３４三四](?![0-9０-９])/u;
+const looseRound = /[東南]/u;
+
+function matchesRecruitment(
+  body: string,
+  roomIds: string[],
+  pattern: RegExp | undefined,
+): boolean {
+  return pattern
+    ? pattern.test(body)
+    : roomIds.length > 0 && loosePlayers.test(body) && looseRound.test(body);
 }

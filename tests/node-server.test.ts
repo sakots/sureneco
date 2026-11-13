@@ -164,6 +164,7 @@ it("validates server settings, ownership fields, limits and consent before persi
     registration("x", { update_sec: null }),
     registration("x", { launcher_path: "/bin/sh" }),
     registration("x", { yujinsen_regex: "[" }),
+    registration("x", { recruitment_filter: "unknown" }),
     registration("bad\n"),
     { ...registration(), consent: false },
     { ...registration(), uid: "victim" },
@@ -185,15 +186,58 @@ it("validates server settings, ownership fields, limits and consent before persi
   }
   const input = registration();
   delete (input.settings as Partial<typeof input.settings>).update_sec;
+  delete (input.settings as Partial<typeof input.settings>).recruitment_filter;
   const saved = await register(db, "defaults", input);
   expect(saved.settings.update_sec).toBe(60);
   expect(saved.settings.thread_update_sec).toBe(300);
+  expect(saved.settings.recruitment_filter).toBe("regex");
   expect(JSON.stringify(saved)).not.toContain("token-one");
   for (let i = 0; i < 9; i++)
     await subscriptions(db, "defaults", "PUT", input, now);
   expect((await subscriptions(db, "defaults", "PUT", input, now)).status).toBe(
     429,
   );
+});
+
+it("preserves the loose filter through registration and uses it in the isolated detector", async () => {
+  const db = store();
+  const saved = await register(
+    db,
+    "loose-filter",
+    registration("loose-filter", {
+      recruitment_filter: "loose",
+      yujinsen_regex: "独自条件",
+    }),
+  );
+  const posts = [
+    {
+      number: 1,
+      name: "名無しさん",
+      id: "poster",
+      watchoi: "",
+      body: "13589 東 3 人",
+      postedAt: now - 1000,
+    },
+  ];
+  const input = {
+    operation: "scan",
+    threadId: thread,
+    posts,
+    previous: [],
+    now,
+  };
+  const loose = await runDetection<{ notifications: { roomIds: string[] }[] }>({
+    ...input,
+    settings: saved.settings,
+  });
+  expect(loose.notifications.map((item) => item.roomIds)).toEqual([["13589"]]);
+  const normal = await runDetection<{ notifications: { roomIds: string[] }[] }>(
+    {
+      ...input,
+      settings: { ...saved.settings, recruitment_filter: "regex" },
+    },
+  );
+  expect(normal.notifications).toEqual([]);
 });
 it("notifies unwatched candidate additions once, retaining seen IDs after disappearance, expiry and restart", async () => {
   let db = store();
