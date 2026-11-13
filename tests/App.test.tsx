@@ -850,8 +850,8 @@ it("満員（〆）と期限切れを区別し、募集中のIDだけで雀魂�
       ...recruitment,
       number: 14,
       roomIds: ["34567"],
-      postedAt: Date.now() - 3600000,
-      effectivePostedAt: Date.now() - 3600000,
+      postedAt: Date.now() - (defaults.emphasis_sec + 1) * 1000,
+      effectivePostedAt: Date.now() - (defaults.emphasis_sec + 1) * 1000,
     },
   ]);
   const user = userEvent.setup();
