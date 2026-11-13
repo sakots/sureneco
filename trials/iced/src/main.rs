@@ -115,7 +115,7 @@ enum Message {
     Refresh,
     Watch(String, bool),
     Open(String, Option<u64>),
-    Copy(String),
+    Copy(String, u64),
     Launch(String),
     SelectPage(Page),
     ToggleDetails,
@@ -686,7 +686,7 @@ impl App {
             Message::Refresh => self.dispatch(Command::Refresh),
             Message::Watch(id, enabled) => self.dispatch(Command::Watch { id, enabled }),
             Message::Open(id, post) => self.dispatch(Command::Open { id, post }),
-            Message::Copy(id) => self.dispatch(Command::Copy(id)),
+            Message::Copy(id, post) => self.dispatch(Command::Copy { id, post }),
             Message::Launch(id) => self.dispatch(Command::Launch(id)),
             Message::SelectPage(page) if !self.closing => {
                 self.page = page;
@@ -1331,7 +1331,9 @@ impl App {
                             button(label(format!("ID {id} をコピー")).size(13))
                                 .padding([5, 10])
                                 .style(appearance::secondary)
-                                .on_press_maybe(available.then(|| Message::Copy(id.clone()))),
+                                .on_press_maybe(
+                                    available.then(|| Message::Copy(id.clone(), item.number)),
+                                ),
                             button(launch_label.size(13))
                                 .padding([5, 10])
                                 .style(appearance::primary)

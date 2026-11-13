@@ -20,7 +20,7 @@ pub enum Command {
     Watch { id: String, enabled: bool },
     Settings(Value),
     ConfigDirectory(PathBuf),
-    Copy(String),
+    Copy { id: String, post: u64 },
     Launch(String),
     Open { id: String, post: Option<u64> },
     Stop,
@@ -240,11 +240,11 @@ fn execute(
             let _ = events.send(Event::ConfigDirectory(directory));
             Ok(message)
         }
-        Command::Copy(id) => {
+        Command::Copy { id, post } => {
             let normalized = engine.request("copy_room_id", json!({"id": id}))?;
             let text = normalized.as_str().ok_or("ルームIDの応答が不正です。")?;
             copy_room_id(text, clipboard)?;
-            Ok(format!("ルームID {text} をコピーしました。"))
+            Ok(format!("レス {post}：ルームID {text}をコピーしました。"))
         }
         Command::Launch(id) => {
             let launch = engine.request("launch", json!({"id": id}))?;
