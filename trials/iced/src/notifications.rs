@@ -95,8 +95,8 @@ mod windows_native {
             Storage::EnhancedStorage::PKEY_AppUserModel_ID,
             System::{
                 Com::{
-                    CoCreateInstance, CoTaskMemFree, IPersistFile, StructuredStorage::PROPVARIANT,
-                    CLSCTX_INPROC_SERVER,
+                    CoCreateInstance, CoIncrementMTAUsage, CoTaskMemFree, IPersistFile,
+                    StructuredStorage::PROPVARIANT, CLSCTX_INPROC_SERVER,
                 },
                 Variant::VT_LPWSTR,
                 WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED},
@@ -179,6 +179,16 @@ mod windows_native {
 
     impl Apartment {
         fn new() -> Result<Self, String> {
+            static PROCESS_MTA: std::sync::LazyLock<Result<(), String>> =
+                std::sync::LazyLock::new(|| {
+                    // WinRT factory caches live for the process. Do not let the last
+                    // RoUninitialize unload their DLLs between notification calls.
+                    // The usage cookie intentionally lives until process termination.
+                    unsafe { CoIncrementMTAUsage() }
+                        .map(|_| ())
+                        .map_err(|error| format!("Windows通知ランタイムを保持できません: {error}"))
+                });
+            PROCESS_MTA.as_ref().map_err(Clone::clone)?;
             unsafe { RoInitialize(RO_INIT_MULTITHREADED) }
                 .map_err(|error| format!("Windows通知APIを初期化できません: {error}"))?;
             Ok(Self)
@@ -261,7 +271,53 @@ mod windows_native {
     mod tests {
         use super::*;
         use std::{ffi::OsString, os::windows::ffi::OsStringExt};
-        use windows::Win32::{System::Com::STGM_READ, UI::Shell::SLGP_RAWPATH};
+        use windows::Win32::{
+            System::Com::{
+                CoGetApartmentType, APTTYPE, APTTYPEQUALIFIER, APTTYPEQUALIFIER_IMPLICIT_MTA,
+                APTTYPE_MTA, STGM_READ,
+            },
+            UI::Shell::SLGP_RAWPATH,
+        };
+
+        #[test]
+        fn notification_runtime_survives_the_last_sender_apartment() {
+            const CHILD: &str = "SURENECO_NOTIFICATION_RUNTIME_TEST_CHILD";
+            if std::env::var_os(CHILD).is_none() {
+                // A fresh process prevents other COM tests from keeping the MTA alive.
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "notifications::windows_native::tests::notification_runtime_survives_the_last_sender_apartment",
+                        "--nocapture",
+                    ])
+                    .env(CHILD, "1")
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "isolated notification runtime test failed: {:?}\n{}\n{}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr),
+                );
+                return;
+            }
+            std::thread::spawn(|| {
+                let _apartment = Apartment::new().unwrap();
+            })
+            .join()
+            .unwrap();
+            std::thread::spawn(|| {
+                let mut apartment = APTTYPE::default();
+                let mut qualifier = APTTYPEQUALIFIER::default();
+                unsafe { CoGetApartmentType(&mut apartment, &mut qualifier) }
+                    .expect("notification runtime must remain active between sends");
+                assert_eq!(apartment, APTTYPE_MTA);
+                assert_eq!(qualifier, APTTYPEQUALIFIER_IMPLICIT_MTA);
+            })
+            .join()
+            .unwrap();
+        }
 
         #[test]
         fn shortcut_persists_notification_identity_and_updates_a_moved_unicode_executable() {
