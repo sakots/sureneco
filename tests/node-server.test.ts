@@ -567,7 +567,9 @@ it("uses the same core for reference rooms, allow-lists, NG and expired/closed t
     post(2, ">>1 続けて募集"),
     post(3, "四南 23456 NG"),
     post(4, "友人戦 34567", { watchoi: "ﾜｯﾁｮｲ no" }),
-    post(5, "友人戦 45678", { postedAt: now - 700000 }),
+    post(5, "友人戦 45678", {
+      postedAt: now - (defaults.emphasis_sec + 100) * 1000,
+    }),
     post(6, ">>5 続けて募集"),
     post(7, "友人戦 56789"),
     post(8, ">>7 〆"),
@@ -758,7 +760,12 @@ it.each(["closed", "expired"])(
         if (payload.type === "recruitment")
           sent.push(payload.recruitment.roomIds);
       },
-      { now: ended === "closed" ? now + 120000 : now + 600001 },
+      {
+        now:
+          ended === "closed"
+            ? now + 120000
+            : now + defaults.emphasis_sec * 1000 + 1,
+      },
     );
     expect(sent).toEqual([["56789"]]);
     expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(0);
@@ -835,7 +842,7 @@ it("drops expired events before send and removes only a proven invalid recipient
     async () => {
       expiredSends++;
     },
-    { now: now + 700000 },
+    { now: now + (defaults.emphasis_sec + 100) * 1000 },
   );
   expect(expiredSends).toBe(0);
 });
