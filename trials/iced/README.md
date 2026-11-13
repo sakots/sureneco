@@ -81,6 +81,8 @@ Linuxでは通常のデスクトップセッションが必要で、日本語フ
 - Windows通知は`io.github.sakots.sureneco.iced`を現在ユーザーの`Software\Classes\AppUserModelId`へ登録し、ユーザーのスタートメニューに同じAppUserModelIDを持つ`sureneco-iced.lnk`を作成する。ZIP版を別フォルダーへ移した場合も起動時にリンク先を現在のEXEへ更新する。本番Tauri版のアプリID・ショートカットは使わない。Windows側で通知が無効の場合も利用不可を表示する。
 - 自動起動・自動更新はまだ提供しない。Windowsの実通知・トレイの実機確認は別途必要。
 - `0x80070490`は通知ID付きショートカットの追加だけでは解消しなかった。未パッケージアプリで初回送信前に`ToastNotifier.Setting`を取得すると失敗するため、[Microsoft.Toolkitの実装](https://github.com/CommunityToolkit/WindowsCommunityToolkit/blob/main/Microsoft.Toolkit.Uwp.Notifications/Toasts/Compat/ToastNotifierCompat.cs)に合わせ、ポップアップ・音を抑えた有効期限15秒の初期登録通知を送信して自分の履歴だけ削除し、その後に通知設定を取得する。登録・送信・履歴削除・設定取得の失敗と、ユーザーが通知を無効にした状態は引き続きエラーとして扱う。
+- Windowsの通知ランタイムは、初回の通知処理より前に`CoIncrementMTAUsage`でプロセス終了まで保持する。送信ごとの`RoInitialize`／`RoUninitialize`は維持するが、最後の通知処理終了時にもMTAを解放しない。`windows`クレートがプロセス全体でキャッシュするWinRTファクトリーを、ランタイム終了後に再利用しないためである（[Windows API仕様](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coincrementmtausage)、[windows-rsの寿命に関する議論](https://github.com/microsoft/windows-rs/issues/1169)）。利用者が報告した通知時の異常終了との因果関係・修正版の実通知はWindows実機で未確認。
+- 通知XMLの既存2テストが成功し、Windows用に「最後の送信アパートメント解放後もMTAが生存する」回帰テストを追加してクロスコンパイルした。検証は他のCOMテストの影響を受けない別プロセスで行う設計とする。Windows x64の通常releaseビルドも成功したが、Windows実行環境がないため新しい回帰テストの実行と実通知は未確認（2026/11/13）。公開リリースの添付は未変更。
 - ショートカット追加時は通知XMLの2テストが成功した。初回送信順序の修正後も、Windows用回帰テストのクロスコンパイルとWindows x64 releaseビルドに成功。通知初期化エラーの解消は利用者のWindows環境で確認済み。Windows用テストの実行・募集通知の実表示は未確認。
 
 ### 実用化の確認（2026/11/11）
