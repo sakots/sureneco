@@ -6,6 +6,7 @@ export interface Settings {
   thread_title_regex: string;
   ng_thread_title_regex: string;
   yujinsen_regex: string;
+  recruitment_filter: "regex" | "loose";
   closed_yujinsen_regex: string;
   url: string;
   ng_words: string[];

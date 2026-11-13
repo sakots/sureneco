@@ -26,10 +26,11 @@ pub enum Field {
     LauncherArgs,
     LauncherProfile,
     LauncherUserDataDir,
+    RecruitmentFilter,
 }
 
 impl Field {
-    const ALL: [Self; 18] = [
+    const ALL: [Self; 19] = [
         Self::UpdateSec,
         Self::ThreadUpdateSec,
         Self::ElapsedDays,
@@ -48,6 +49,7 @@ impl Field {
         Self::LauncherArgs,
         Self::LauncherProfile,
         Self::LauncherUserDataDir,
+        Self::RecruitmentFilter,
     ];
 
     fn key(self) -> &'static str {
@@ -70,6 +72,7 @@ impl Field {
             Self::LauncherArgs => "launcher_args",
             Self::LauncherProfile => "launcher_profile",
             Self::LauncherUserDataDir => "launcher_user_data_dir",
+            Self::RecruitmentFilter => "recruitment_filter",
         }
     }
 
@@ -93,6 +96,7 @@ impl Field {
             Self::LauncherArgs => "起動引数（1行1引数）",
             Self::LauncherProfile => "プロファイル名（例: Default / Profile 1）",
             Self::LauncherUserDataDir => "ユーザーデータディレクトリ（空欄可）",
+            Self::RecruitmentFilter => "募集フィルタ",
         }
     }
 
@@ -133,6 +137,7 @@ impl Section {
                     | Field::NgThreadTitleRegex
                     | Field::YujinsenRegex
                     | Field::ClosedYujinsenRegex
+                    | Field::RecruitmentFilter
             ),
         }
     }
@@ -163,6 +168,32 @@ impl std::fmt::Display for LauncherMode {
             Self::Default => "既定ブラウザー",
             Self::Browser => "Chrome / Edge（プロファイル指定）",
             Self::Application => "指定アプリ（雀魂・Steamなど）",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecruitmentFilter {
+    Regex,
+    Loose,
+}
+
+impl RecruitmentFilter {
+    const ALL: [Self; 2] = [Self::Regex, Self::Loose];
+
+    fn key(self) -> &'static str {
+        match self {
+            Self::Regex => "regex",
+            Self::Loose => "loose",
+        }
+    }
+}
+
+impl std::fmt::Display for RecruitmentFilter {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Regex => "通常",
+            Self::Loose => "緩め（誤通知が増えるかもしれません）",
         })
     }
 }
@@ -200,7 +231,14 @@ impl Draft {
                 .map(ToString::to_string)
                 .unwrap_or_default()
         } else {
-            value.as_str().unwrap_or_default().to_owned()
+            value
+                .as_str()
+                .unwrap_or(if self.field == Field::RecruitmentFilter {
+                    "regex"
+                } else {
+                    ""
+                })
+                .to_owned()
         };
         if self.field.list() {
             self.list = Some(text_editor::Content::with_text(&self.text));
@@ -230,7 +268,10 @@ impl Draft {
                 Err(()) => true,
             }
         } else {
-            value.as_str() != Some(self.text.as_str())
+            let expected = value
+                .as_str()
+                .or_else(|| (self.field == Field::RecruitmentFilter).then_some("regex"));
+            expected != Some(self.text.as_str())
         }
     }
 
@@ -267,7 +308,7 @@ impl Draft {
 
 pub struct Form {
     original: Value,
-    fields: [Draft; 18],
+    fields: [Draft; 19],
     defaults_pending: bool,
 }
 
@@ -322,9 +363,19 @@ impl Form {
         self.defaults_pending || self.fields.iter().any(|draft| draft.dirty)
     }
 
+    fn recruitment_regex_editable(&self) -> bool {
+        self.fields
+            .iter()
+            .find(|draft| draft.field == Field::RecruitmentFilter)
+            .is_none_or(|draft| draft.text != RecruitmentFilter::Loose.key())
+    }
+
     pub fn update(&mut self, message: Message) {
         match message {
             Message::Input(field, value) => {
+                if field == Field::YujinsenRegex && !self.recruitment_regex_editable() {
+                    return;
+                }
                 if let Some(draft) = self
                     .fields
                     .iter_mut()
@@ -381,8 +432,25 @@ impl Form {
         enabled: bool,
         defaults_available: bool,
     ) -> Element<'_, crate::Message> {
-        let [update, thread_update, elapsed, emphasis, thread_title, ng_thread_title, recruitment, closed, url, ng_words, ng_ids, ng_watchois, allowed_watchois, launcher_mode, launcher_path, launcher_args, launcher_profile, launcher_user_data_dir] =
+        let [update, thread_update, elapsed, emphasis, thread_title, ng_thread_title, recruitment, closed, url, ng_words, ng_ids, ng_watchois, allowed_watchois, launcher_mode, launcher_path, launcher_args, launcher_profile, launcher_user_data_dir, recruitment_filter] =
             &self.fields;
+        let selected_filter = RecruitmentFilter::ALL
+            .into_iter()
+            .find(|mode| mode.key() == recruitment_filter.text);
+        let filter_picker: Element<'_, Message> = if enabled {
+            pick_list(RecruitmentFilter::ALL, selected_filter, |mode| {
+                Message::Input(Field::RecruitmentFilter, mode.key().into())
+            })
+            .into()
+        } else {
+            crate::label(
+                selected_filter
+                    .map(|mode| mode.to_string())
+                    .unwrap_or_else(|| recruitment_filter.text.clone()),
+            )
+            .size(14)
+            .into()
+        };
         let selected = LauncherMode::ALL
             .into_iter()
             .find(|mode| mode.key() == launcher_mode.text);
@@ -447,9 +515,10 @@ impl Form {
                     crate::label("大文字・小文字は区別しません。除外するスレッド名は空欄にできます。")
                         .size(13)
                         .style(appearance::muted),
+                    column![crate::label("募集フィルタ").size(13), filter_picker].spacing(6),
                     thread_title.view(enabled),
                     ng_thread_title.view(enabled),
-                    recruitment.view(enabled),
+                    recruitment.view(enabled && self.recruitment_regex_editable()),
                     closed.view(enabled),
                 ]
                 .spacing(12),
@@ -564,6 +633,64 @@ mod tests {
             "launcher_args": ["--profile", "  untouched  "], "launcher_profile": "Profile 1",
             "launcher_user_data_dir": "/home/person/profile", "future": {"nested": [1, false, null]}
         })
+    }
+
+    #[test]
+    fn recruitment_mode_preserves_regex_draft_and_snapshot_save_lifecycle() {
+        let original = saved();
+        let mut form = Form::new();
+        form.refresh(&original);
+        assert!(!form.dirty());
+        form.update(Message::Input(Field::RecruitmentFilter, "regex".into()));
+        assert!(!form.dirty());
+        form.update(Message::Input(
+            Field::YujinsenRegex,
+            "custom recruitment".into(),
+        ));
+        form.update(Message::Input(Field::RecruitmentFilter, "loose".into()));
+        assert!(!form.recruitment_regex_editable());
+        form.update(Message::Input(Field::YujinsenRegex, "ignored".into()));
+        form.update(Message::Input(
+            Field::ClosedYujinsenRegex,
+            "custom close".into(),
+        ));
+        let candidate = form.candidate().unwrap();
+        assert_eq!(candidate["recruitment_filter"], "loose");
+        assert_eq!(candidate["yujinsen_regex"], "custom recruitment");
+        assert_eq!(candidate["closed_yujinsen_regex"], "custom close");
+        // Rejected saves and periodic snapshots must not clear either draft.
+        form.refresh(&original);
+        assert_eq!(form.candidate().unwrap(), candidate);
+        form.update(Message::Input(Field::RecruitmentFilter, "regex".into()));
+        assert!(form.recruitment_regex_editable());
+        assert_eq!(
+            form.candidate().unwrap()["yujinsen_regex"],
+            "custom recruitment"
+        );
+        form.reset(&candidate);
+        assert!(!form.dirty());
+        assert!(!form.recruitment_regex_editable());
+    }
+
+    #[test]
+    fn recruitment_mode_defaults_reset_patterns_and_all_but_not_fetch() {
+        let defaults = saved();
+        let mut original = saved();
+        original["recruitment_filter"] = json!("loose");
+        for section in [Section::Patterns, Section::All] {
+            let mut form = Form::new();
+            form.reset(&original);
+            form.restore_defaults(&defaults, Section::Fetch);
+            assert_eq!(form.candidate().unwrap()["recruitment_filter"], "loose");
+            form.restore_defaults(&defaults, section);
+            form.refresh(&original);
+            let candidate = form.candidate().unwrap();
+            assert_eq!(candidate["recruitment_filter"], "regex");
+            assert!(form.recruitment_regex_editable());
+            assert!(form.dirty());
+            form.reset(&candidate);
+            assert!(!form.dirty());
+        }
     }
 
     #[test]

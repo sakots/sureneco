@@ -274,6 +274,81 @@ describe("ルームIDが必須の募集判定", () => {
   });
 });
 
+describe("緩めの募集フィルタ", () => {
+  const loose = { ...defaults, recruitment_filter: "loose" as const };
+  it.each([
+    "3 人 東 13589",
+    "13589 南 四",
+    "三<br>東<br>１３５８９",
+    "４人 13589 南",
+    "３ 13589 東",
+  ])("語句や並びに依存せず募集を検出する: %s", (body) => {
+    const posts = parseDat(line(body));
+    expect(
+      scanPosts(id, posts, [], loose, now).notifications.map(
+        (item) => item.roomIds,
+      ),
+    ).toEqual([["13589"]]);
+  });
+  it.each([
+    "3 東",
+    "東 13589",
+    "3 13589",
+    "13人 東 13589",
+    "5人 東 13589",
+    "3 東 135890",
+    "3 東 >>13589",
+    "3 東 13589 〆",
+  ])("条件不足・数字の部分一致・締めは通知しない: %s", (body) => {
+    expect(
+      scanPosts(id, parseDat(line(body)), [], loose, now).notifications,
+    ).toEqual([]);
+  });
+  it("通常と緩めを切り替えても通常の独自正規表現を保持する", () => {
+    const settings = { ...loose, yujinsen_regex: "独自条件" };
+    const posts = parseDat(line("3 人 東 13589"));
+    expect(
+      scanPosts(id, posts, [], settings, now).notifications.map(
+        (item) => item.roomIds,
+      ),
+    ).toEqual([["13589"]]);
+    expect(
+      scanPosts(
+        id,
+        posts,
+        [],
+        { ...settings, recruitment_filter: "regex" },
+        now,
+      ).notifications,
+    ).toEqual([]);
+    expect(validateSettings(settings).yujinsen_regex).toBe("独自条件");
+  });
+  it("緩めでもNG・期限・通知許可を適用する", () => {
+    const posts = parseDat(line("3 東 13589"));
+    for (const changes of [
+      { ng_words: ["13589"] },
+      { ng_ids: ["abc"] },
+      { allowed_watchois: ["not-matching"] },
+    ]) {
+      expect(
+        scanPosts(id, posts, [], { ...loose, ...changes }, now).notifications,
+      ).toEqual([]);
+    }
+    expect(scanPosts(id, posts, [], loose, now + 601000).notifications).toEqual(
+      [],
+    );
+  });
+  it("未設定は通常に補完し、不正な切替値は拒否する", () => {
+    const { recruitment_filter: _mode, ...saved } = loose;
+    expect(validateSettings(saved).recruitment_filter).toBe("regex");
+    for (const recruitment_filter of ["invalid", "", null, true]) {
+      expect(() =>
+        validateSettings({ ...defaults, recruitment_filter }),
+      ).toThrow();
+    }
+  });
+});
+
 describe("数字表記の対局形式", () => {
   it.each([
     "3人半荘　13589<br>誰でも歓迎にゃ",

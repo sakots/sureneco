@@ -6,8 +6,9 @@ export const defaults: Settings = {
   emphasis_sec: 600,
   thread_title_regex: "雀魂|じゃんたま|ジャンタマ|mahjongsoul|majsoul",
   ng_thread_title_regex: "",
+  recruitment_filter: "regex",
   yujinsen_regex:
-    "友人戦|友人部屋|(?:募集|部屋)[\\s:：]*[0-9０-９]{5,6}|[0-9０-９]{5,6}[\\s　]*(?:募|＠|@)|四東|四南|三東|三南|三人半荘|四人半[荘莊]|(?<![0-9０-９])[34３４]人半[荘莊]|(?<![0-9０-９IVXLCDMⅠ-Ⅻⅰ-ⅻ])(?:[34３４]|III|IV|Ⅲ|Ⅳ)[東南]",
+    "友人戦?|友人部屋|(?:募集|部屋)[\\s:：]*[0-9０-９]{5,6}|[0-9０-９]{5,6}[\\s　]*(?:募|＠|@)|四東|四南|三東|三南|三人半荘|四人半[荘莊]|(?<![0-9０-９])[34３４]人半[荘莊]|(?<![0-9０-９IVXLCDMⅠ-Ⅻⅰ-ⅻ])(?:[34３４]|III|IV|Ⅲ|Ⅳ)[東南]",
   closed_yujinsen_regex: "〆|締め|しめ|締切|締め切|解散|埋まり|満員",
   url: "https://egg.5ch.io/mj/",
   ng_words: [],
@@ -63,6 +64,13 @@ export function validateSettings(input: unknown): Settings {
       );
     result[key] = n;
   }
+  const filter =
+    value.recruitment_filter === undefined
+      ? defaults.recruitment_filter
+      : value.recruitment_filter;
+  if (filter !== "regex" && filter !== "loose")
+    throw new Error("募集フィルタが不正です。");
+  result.recruitment_filter = filter;
   for (const key of [
     "thread_title_regex",
     "ng_thread_title_regex",

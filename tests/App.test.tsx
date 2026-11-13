@@ -321,6 +321,65 @@ it("保存済みの両更新間隔を表示し、一覧間隔を変更しても�
   );
 });
 
+it("募集フィルタを切り替えても通常の入力を保持し、緩めでは募集レスだけ編集不可にする", async () => {
+  const api = setup();
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  const filter = screen.getByLabelText("募集フィルタ");
+  const recruitment = screen.getByLabelText(
+    "募集レスの正規表現",
+  ) as HTMLInputElement;
+  expect((filter as HTMLSelectElement).value).toBe("regex");
+  await user.clear(recruitment);
+  await user.type(recruitment, "custom-recruit");
+  await user.selectOptions(filter, "loose");
+  expect(recruitment.disabled).toBe(true);
+  expect(recruitment.value).toBe("custom-recruit");
+  for (const label of [
+    "スレッド名の正規表現",
+    "除外するスレッド名の正規表現",
+    "締めレスの正規表現",
+  ]) {
+    expect((screen.getByLabelText(label) as HTMLInputElement).disabled).toBe(
+      false,
+    );
+  }
+  await user.selectOptions(filter, "regex");
+  expect(recruitment.disabled).toBe(false);
+  expect(recruitment.value).toBe("custom-recruit");
+  await user.selectOptions(filter, "loose");
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenCalledWith({
+    ...defaults,
+    recruitment_filter: "loose",
+    yujinsen_regex: "custom-recruit",
+  });
+});
+
+it("全体の既定値を入力すると緩め募集フィルタも通常へ戻り、保存まで反映しない", async () => {
+  const api = setup([], undefined, {
+    ...defaults,
+    recruitment_filter: "loose",
+    yujinsen_regex: "custom-recruit",
+  });
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: "設定" }));
+  expect(
+    (screen.getByLabelText("募集レスの正規表現") as HTMLInputElement).disabled,
+  ).toBe(true);
+  await user.click(screen.getByRole("button", { name: "既定値を入力" }));
+  expect(
+    (screen.getByLabelText("募集フィルタ") as HTMLSelectElement).value,
+  ).toBe("regex");
+  expect(
+    (screen.getByLabelText("募集レスの正規表現") as HTMLInputElement).disabled,
+  ).toBe(false);
+  expect(api.saveSettings).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "設定を保存" }));
+  expect(api.saveSettings).toHaveBeenCalledWith(defaults);
+});
+
 it("区分別復元は別区分と未保存の入力を保持し、保存するまで反映しない", async () => {
   const saved = {
     ...defaults,
@@ -331,6 +390,7 @@ it("区分別復元は別区分と未保存の入力を保持し、保存する�
     url: "https://egg.5ch.net/mj/",
     thread_title_regex: "custom-title",
     ng_thread_title_regex: "custom-exclude",
+    recruitment_filter: "loose" as const,
     yujinsen_regex: "custom-recruit",
     closed_yujinsen_regex: "custom-close",
     launcher_path: "/saved/game",
@@ -345,6 +405,12 @@ it("区分別復元は別区分と未保存の入力を保持し、保存する�
   await user.click(
     screen.getByRole("button", { name: "正規表現をデフォルトに戻す" }),
   );
+  expect(
+    (screen.getByLabelText("募集フィルタ") as HTMLSelectElement).value,
+  ).toBe("regex");
+  expect(
+    (screen.getByLabelText("募集レスの正規表現") as HTMLInputElement).disabled,
+  ).toBe(false);
   expect(
     (screen.getByLabelText("募集レスの正規表現") as HTMLInputElement).value,
   ).toBe(defaults.yujinsen_regex);
@@ -376,6 +442,7 @@ it("区分別復元は別区分と未保存の入力を保持し、保存する�
     url: defaults.url,
     thread_title_regex: defaults.thread_title_regex,
     ng_thread_title_regex: defaults.ng_thread_title_regex,
+    recruitment_filter: "regex",
     yujinsen_regex: "new-recruit",
     closed_yujinsen_regex: defaults.closed_yujinsen_regex,
     ng_ids: ["draft-id"],

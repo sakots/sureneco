@@ -57,6 +57,7 @@ const keys = [
   "thread_title_regex",
   "ng_thread_title_regex",
   "yujinsen_regex",
+  "recruitment_filter",
   "closed_yujinsen_regex",
   "url",
   "ng_words",
@@ -109,6 +110,10 @@ async function validateSettings(input: unknown): Promise<MobileSettings> {
       throw new Error();
     value[key] = number;
   }
+  const filter =
+    input.recruitment_filter === undefined ? "regex" : input.recruitment_filter;
+  if (filter !== "regex" && filter !== "loose") throw new Error();
+  value.recruitment_filter = filter;
   const patterns: string[] = [];
   for (const key of [
     "thread_title_regex",
