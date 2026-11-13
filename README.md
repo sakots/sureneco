@@ -19,9 +19,9 @@
 
 Tauri版のWindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
-### Icedテスト版 v0.12.0
+### Icedテスト版 v0.12.1
 
-同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.12.0)に、WebViewを使わないRust／Iced版も配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
+同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.12.1)に、WebViewを使わないRust／Iced版も配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
 
 ## 使い方
 
@@ -61,12 +61,9 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/11/14] v0.12.0（開発中）
+### [2026/11/14] v0.12.1
 
 - 全版で募集の有効期間の既定値を600秒から6000秒（100分）へ変更。保存済みの設定値は維持。
-
-### [2026/11/13] v0.12.0（開発中）
-
 - Iced版のルームIDコピー完了メッセージに募集レス番号を表示するよう修正。Tauri版と同じ「レス N：ルームID XXXXXをコピーしました。」の形式に統一。
 
 ### [2026/11/13] v0.12.0
