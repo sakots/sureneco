@@ -356,9 +356,10 @@ describe("緩めの募集フィルタ", () => {
         scanPosts(id, posts, [], { ...loose, ...changes }, now).notifications,
       ).toEqual([]);
     }
-    expect(scanPosts(id, posts, [], loose, now + 601000).notifications).toEqual(
-      [],
-    );
+    expect(
+      scanPosts(id, posts, [], loose, now + (loose.emphasis_sec + 1) * 1000)
+        .notifications,
+    ).toEqual([]);
   });
   it("未設定は通常に補完し、不正な切替値は拒否する", () => {
     const { recruitment_filter: _mode, ...saved } = loose;
@@ -684,7 +685,13 @@ describe("通知を許可するワッチョイ", () => {
       ).toHaveLength(0);
     }
     expect(
-      scanPosts(id, posts, [], settings, now + 3600000).notifications,
+      scanPosts(
+        id,
+        posts,
+        [],
+        settings,
+        now + (settings.emphasis_sec + 1) * 1000,
+      ).notifications,
     ).toHaveLength(0);
     const closed = parseDat(
       [line("友人戦 12345"), line("&gt;&gt;1 〆", "other", "名無し")].join(

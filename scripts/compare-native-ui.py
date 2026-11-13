@@ -31,7 +31,7 @@ DEFAULT_SETTINGS = {
     "update_sec": 20,
     "thread_update_sec": 300,
     "elapsed_days": 14,
-    "emphasis_sec": 600,
+    "emphasis_sec": 6000,
     "thread_title_regex": "雀魂|じゃんたま|ジャンタマ|mahjongsoul|majsoul",
     "ng_thread_title_regex": "",
     "recruitment_filter": "regex",
