@@ -274,6 +274,28 @@ describe("ルームIDが必須の募集判定", () => {
   });
 });
 
+describe("友人戦の戦を省略した募集", () => {
+  it.each(["友人 13589", "友人戦 13589", "友人部屋 13589"])(
+    "初期フィルタで通知する: %s",
+    (body) => {
+      const result = scanPosts(id, parseDat(line(body)), [], defaults, now);
+      expect(result.notifications.map((item) => item.roomIds)).toEqual([
+        ["13589"],
+      ]);
+    },
+  );
+  it("戦を省略してもルームIDのない投稿は通知しない", () => {
+    const result = scanPosts(
+      id,
+      parseDat(line("友人 やりませんか")),
+      [],
+      defaults,
+      now,
+    );
+    expect(result.notifications).toEqual([]);
+  });
+});
+
 describe("数字表記の対局形式", () => {
   it.each([
     "3人半荘　13589<br>誰でも歓迎にゃ",
