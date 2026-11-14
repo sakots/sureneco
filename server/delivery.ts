@@ -110,6 +110,7 @@ export async function deliver(
         payload.expiresAt !== Math.floor(row.expires / 1000)
       )
         throw new DeliveryError("invalid_payload", false);
+      if (row.expires <= clock()) throw new DeliveryError("expired", false);
       await send(
         row.token,
         { ...payload, generation: row.generation },

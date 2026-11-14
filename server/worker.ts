@@ -1,4 +1,5 @@
 import { scanPosts } from "../src/core/detection";
+import { isClosingPost } from "../src/core/deadline";
 import { candidates, parseDat, parseSubject } from "../src/core/parser";
 import type { Post, Recruitment, Settings } from "../src/core/types";
 
@@ -118,10 +119,11 @@ export function run(json: string): string {
             input.sourcePosts,
           );
     if (input.operation === "scan" && input.trackPending && result !== null) {
-      // UI history is capped at 200; delivery must cancel every known pending event.
+      // UI history is capped at 200; delivery must reevaluate every pending event.
       const close = new RegExp(input.settings.closed_yujinsen_regex, "i");
-      const closing = input.posts.filter((post) => close.test(post.body));
+      const closing = input.posts.filter((post) => isClosingPost(post, close));
       const closedPrevious: number[] = [];
+      const pendingPrevious: Recruitment[] = [];
       for (let offset = 0; offset < input.previous.length; offset += 200) {
         const pending = scanPosts(
           input.threadId,
@@ -132,12 +134,13 @@ export function run(json: string): string {
           input.sourcePosts,
         );
         for (const item of pending.items) {
+          pendingPrevious.push(item);
           if (item.closed) closedPrevious.push(item.number);
         }
       }
       return JSON.stringify({
         ok: true,
-        result: { ...result, closedPrevious },
+        result: { ...result, closedPrevious, pendingPrevious },
       });
     }
     return JSON.stringify({ ok: true, result });

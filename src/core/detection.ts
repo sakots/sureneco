@@ -1,5 +1,6 @@
 import type { Post, Recruitment, Settings } from "./types";
 import { extractRoomIds, postReferences } from "./room-id";
+import { isClosingPost, parseDeadline, recruitmentExpiresAt } from "./deadline";
 export function isBlocked(post: Post, settings: Settings): boolean {
   return (
     settings.ng_words.some((x) => post.body.includes(x)) ||
@@ -14,11 +15,16 @@ export function isRecent(
 ): boolean {
   const postedAt =
     "effectivePostedAt" in post ? post.effectivePostedAt : post.postedAt;
+  const deadline =
+    ("deadlineAt" in post ? post.deadlineAt : undefined) ??
+    parseDeadline(post)?.deadlineAt;
   return (
     postedAt > 0 &&
     now >= post.postedAt &&
     now >= postedAt &&
-    now - postedAt <= settings.emphasis_sec * 1000
+    (deadline !== undefined
+      ? now < recruitmentExpiresAt(post, settings)
+      : now - postedAt <= settings.emphasis_sec * 1000)
   );
 }
 export function scanPosts(
@@ -44,7 +50,7 @@ export function scanPosts(
   );
   // 履歴に残っていない募集にも、取得済みの締めレスを反映する。
   for (const closing of sourcePosts) {
-    if (!close.test(closing.body)) continue;
+    if (!isClosingPost(closing, close)) continue;
     const refs = postReferences(closing.body);
     for (const target of sourcePosts) {
       if (target.number < closing.number && closesPost(closing, target, refs))
@@ -52,7 +58,7 @@ export function scanPosts(
     }
   }
   for (const post of posts) {
-    if (close.test(post.body)) {
+    if (isClosingPost(post, close)) {
       const refs = postReferences(post.body);
       for (const item of items) {
         if (item.threadId !== threadId) continue;
@@ -62,22 +68,17 @@ export function scanPosts(
         }
       }
     } else if (!isBlocked(post, settings)) {
-      const { roomIds, matches, effectivePostedAt } = resolveRecruitment(
-        post,
-        source,
-        settings,
-        recruit,
-        closed,
-        now,
-      );
+      const { roomIds, matches, effectivePostedAt, deadlineAt } =
+        resolveRecruitment(post, source, settings, recruit, closed, now);
       if (!matches || !roomIds.length) continue;
-      const item = {
+      const item: Recruitment = {
         ...post,
         roomIds,
         effectivePostedAt,
         threadId,
         closed: closed.has(post.number),
       };
+      if (deadlineAt !== undefined) item.deadlineAt = deadlineAt;
       items.push(item);
       added.push(item);
     }
@@ -95,6 +96,8 @@ export function scanPosts(
       now,
     );
     item.effectivePostedAt = resolved.effectivePostedAt;
+    if (resolved.deadlineAt !== undefined)
+      item.deadlineAt = resolved.deadlineAt;
     item.closed ||= closed.has(item.number) || resolved.referenceClosed;
   }
   return {
@@ -128,6 +131,10 @@ function resolveRecruitment(
   let matches = matchesRecruitment(post.body, direct, pattern);
   let effectivePostedAt =
     "effectivePostedAt" in post ? post.effectivePostedAt : post.postedAt;
+  let hasDeadline =
+    (("deadlineAt" in post ? post.deadlineAt : undefined) ??
+      parseDeadline(post)?.deadlineAt) !== undefined;
+  let expires = recruitmentExpiresAt(post, settings);
   let referenceClosed = false;
   let referencesRecent = true;
   const roomIds = new Set<string>();
@@ -150,6 +157,8 @@ function resolveRecruitment(
     referencesRecent &&= isRecent(referenced, settings, now);
     if (isBlocked(referenced, settings)) continue;
     effectivePostedAt = Math.min(effectivePostedAt, referenced.postedAt);
+    hasDeadline ||= parseDeadline(referenced) !== null;
+    expires = Math.min(expires, recruitmentExpiresAt(referenced, settings));
     const ids = extractRoomIds(referenced.body);
     if (collect) {
       matches ||= matchesRecruitment(referenced.body, ids, pattern);
@@ -161,6 +170,7 @@ function resolveRecruitment(
     roomIds: direct.length ? direct : [...roomIds],
     matches: matches && referencesRecent && !referenceClosed,
     effectivePostedAt,
+    deadlineAt: hasDeadline ? expires : undefined,
     referenceClosed,
   };
 }

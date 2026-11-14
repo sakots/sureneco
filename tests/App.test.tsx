@@ -78,6 +78,40 @@ function setup(
   return api;
 }
 
+it("本文指定の締切を表示し、その時刻ちょうどで起動を無効にする", async () => {
+  vi.useFakeTimers();
+  const now = Date.parse("2026-11-14T21:04:54.999+09:00");
+  vi.setSystemTime(now);
+  const api = setup([
+    {
+      number: 1,
+      body: "友人戦 12345 21時05分まで",
+      roomIds: ["12345"],
+      postedAt: now,
+      effectivePostedAt: now,
+      deadlineAt: now + 5001,
+      threadId: "1791034502",
+      closed: false,
+      name: "名無し",
+      id: "host",
+      watchoi: "",
+    },
+  ]);
+  await act(async () => {});
+  fireEvent.click(screen.getByRole("button", { name: /^友人戦募集/ }));
+  expect(screen.getByText(/締切（日本時間）/).textContent).toContain("21:05");
+  const launch = screen.getByRole("button", {
+    name: "ルームID 12345をコピーして雀魂を起動",
+  }) as HTMLButtonElement;
+  expect(launch.disabled).toBe(false);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5001);
+  });
+  expect(launch.disabled).toBe(true);
+  expect(screen.getByText("期限切れ")).toBeTruthy();
+  expect(api.launchMahjongSoul).not.toHaveBeenCalled();
+});
+
 it("Android通知のタップ先を募集から候補一覧へ切り替え、監視は自動で有効にしない", async () => {
   vi.useFakeTimers();
   const consumeNotificationTarget = vi.fn(
