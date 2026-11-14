@@ -66,9 +66,9 @@ pnpm package:win
 
 ローカルの配布コマンドはGitHubへ公開しません。WindowsとLinuxの成果物・`.sig`を同じrelease/へ集めて、`pnpm release:manifest`で全形式を含む`latest.json`を生成してください。GitHub Releasesには配布物、`.sig`、この`latest.json`を添付します。Tauri版ではElectron用のlatest.yml・latest-linux.yml・blockmapを使いません。更新時の署名は[Tauri updater](https://v2.tauri.app/plugin/updater/)で検証します。
 
-v0.12.0ではIcedテスト版も同じ正式リリースページに添付します。Icedは`sureneco-iced_v0.12.0_win-x64.zip`と`sureneco-iced_v0.12.0_linux-x64.tar.gz`として区別し、Tauriの自動更新用`latest.json`には含めません。`SHA256SUMS`は両版の公開添付を対象とし、Android AAB・対応表・署名秘密鍵は公開対象外です。IcedのアーカイブにはMIT／フォントのライセンス・起動案内・ソースコミット情報を同梱します。
+v0.13.0ではIcedテスト版も同じ正式リリースページに添付します。Icedは`sureneco-iced_v0.13.0_win-x64.zip`と`sureneco-iced_v0.13.0_linux-x64.tar.gz`として区別し、Tauriの自動更新用`latest.json`には含めません。`SHA256SUMS`は両版の公開添付を対象とし、Android AAB・対応表・署名秘密鍵は公開対象外です。IcedのアーカイブにはMIT／フォントのライセンス・起動案内・ソースコミット情報を同梱します。
 
-v0.12.0のLinux配布物はUbuntu 26.04.1でビルドします。AppImageは同梱WebKit等、Icedは本体がglibc 2.43以上を要求するため、古いUbuntuでは実行できません。TauriのDEB本体ELFはglibc 2.39以上ですが、GTK／WebKitなどのシステム側依存も満たす必要があります。AppImageはglibcまで互換にする仕組みではありません。
+v0.13.0のLinux配布物はUbuntu 26.04.1でビルドします。AppImageは同梱WebKit等、Icedは本体がglibc 2.43以上を要求するため、古いUbuntuでは実行できません。TauriのDEB本体ELFはglibc 2.39以上ですが、GTK／WebKitなどのシステム側依存も満たす必要があります。AppImageはglibcまで互換にする仕組みではありません。
 
 ## SSH先でLinux版をビルドしてWindowsへ取得する
 

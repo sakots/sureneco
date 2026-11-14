@@ -102,7 +102,7 @@ Git管理外の`src-tauri/gen/android/keystore.properties`へ`storeFile`（絶�
 
 初回Play提出向けビルドでは、Android版を`0.9.0`／versionCode `3`にし、PC版の版番号は変更しませんでした。利用者の承認に基づいて、新しいAndroidアップロード鍵をGit管理外の`.secrets/android-upload.p12`へ作成し、署名設定は`src-tauri/gen/android/keystore.properties`へ保存しました。署名設定にはパスワードが含まれます。鍵と署名設定を別の安全な保管先へバックアップし、チャット・Git・公開配布物へ含めないでください。公開証明書は`release/sureneco_android_upload_certificate.pem`です。デバッグ鍵とは異なるため、既存ベータAPKへのデータ保持付き上書きはできません。
 
-`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。v0.12.0の設定は表示バージョン`0.12.0`／versionCode `120`で、既存の`110`より大きい値を使います。GitHubには署名付きAPKの`sureneco_v0.12.0_android.apk`を公開し、AABは`release/sureneco_v0.12.0_android_versionCode120.aab`としてローカル保管のみとします。新しい募集フィルタ設定を受け付ける通知サーバーへの更新を、アプリ公開前に行います。署名設定不足・公開接続先不足・同名出力では失敗し、ビルドコマンド自体はPlayやGitHubへ公開しません。AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。過去の公開済み成果物は上書きしません。
+`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。v0.13.0の設定は表示バージョン`0.13.0`／versionCode `130`で、既存の`121`より大きい値を使います。GitHubには署名付きAPKの`sureneco_v0.13.0_android.apk`を公開し、AABは`release/sureneco_v0.13.0_android_versionCode130.aab`としてローカル保管のみとします。本文の指定締切をバックグラウンド通知へ適用するため、アプリ公開前に通知サーバーも更新します。署名設定不足・公開接続先不足・同名出力では失敗し、ビルドコマンド自体はPlayやGitHubへ公開しません。AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。過去の公開済み成果物は上書きしません。
 
 ### v0.11.0の配布物（2026/11/12）
 

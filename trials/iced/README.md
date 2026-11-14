@@ -4,10 +4,10 @@ Tauri版を置き換えず、Windows／Linux向けUIをIcedで試す。現行の
 
 ## テスト版の配布
 
-Iced版のバージョンは現行製品と同じ**0.12.1**とし、[v0.12.1](https://github.com/sakots/sureneco/releases/tag/v0.12.1)にTauri版と併せて配布する。Icedはテスト版として区別し、自動更新用`latest.json`には含めない。ソースコミットは同梱の`BUILD-INFO.json`を参照する。
+Iced版のバージョンは現行製品と同じ**0.13.0**とし、[v0.13.0](https://github.com/sakots/sureneco/releases/tag/v0.13.0)にTauri版と併せて配布する。Icedはテスト版として区別し、自動更新用`latest.json`には含めない。ソースコミットは同梱の`BUILD-INFO.json`を参照する。
 
-- Windows x64：`sureneco-iced_v0.12.1_win-x64.zip`を展開し、`sureneco-iced.exe`を実行する。
-- Linux x64：`sureneco-iced_v0.12.1_linux-x64.tar.gz`を展開し、GUIセッション内で`./sureneco-iced`を実行する。Ubuntu 26.04.1でビルドしたglibc 2.43以上向けのバイナリーで、古いUbuntuには対応しない。DEB／AppImageではなく、GTK 3と、トレイ利用時はAyatana AppIndicator 3・対応ホストが必要である。
+- Windows x64：`sureneco-iced_v0.13.0_win-x64.zip`を展開し、`sureneco-iced.exe`を実行する。
+- Linux x64：`sureneco-iced_v0.13.0_linux-x64.tar.gz`を展開し、GUIセッション内で`./sureneco-iced`を実行する。Ubuntu 26.04.1でビルドしたglibc 2.43以上向けのバイナリーで、古いUbuntuには対応しない。DEB／AppImageではなく、GTK 3と、トレイ利用時はAyatana AppIndicator 3・対応ホストが必要である。
 - リリースの`SHA256SUMS`で照合する。アーカイブにはフォントライセンス、MITライセンス、起動案内、ソースコミットを記したビルド情報を同梱する。比較用フィクスチャは含めない。
 
 Tauri版との設定共有・自動移行・自動更新はしない。起動済みの旧Iced版を「終了」してから差し替える。Windows実機での最終配布物確認は未実施である。

@@ -19,9 +19,9 @@
 
 Tauri版のWindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
-### Icedテスト版 v0.12.1
+### Icedテスト版 v0.13.0
 
-同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.12.1)に、WebViewを使わないRust／Iced版も配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
+同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.13.0)に、WebViewを使わないRust／Iced版も配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
 
 ## 使い方
 
@@ -61,9 +61,10 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/11/14] v0.12.1（開発中）
+### [2026/11/14] v0.13.0
 
 - 募集本文の「23時30分まで」「30分で締め切り」「5分後爆破」などから部屋の締切を検出する機能を追加。投稿日時・日本時間を基準にし、指定がない場合は設定済みの有効期間を使う。
+- Tauri Windows・Linux・AndroidとIcedテスト版を0.13.0へ更新。AndroidはversionCode 130。バックグラウンド通知にも指定締切を適用するため通知サーバーを更新し、設定・端末資格情報を維持。
 
 ### [2026/11/14] v0.12.1
 
