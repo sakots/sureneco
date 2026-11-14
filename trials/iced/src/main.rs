@@ -116,7 +116,11 @@ enum Message {
     Watch(String, bool),
     Open(String, Option<u64>),
     Copy(String, u64),
-    Launch(String),
+    Launch {
+        id: String,
+        thread_id: String,
+        post: u64,
+    },
     SelectPage(Page),
     ToggleDetails,
     DarkMode(bool),
@@ -687,7 +691,17 @@ impl App {
             Message::Watch(id, enabled) => self.dispatch(Command::Watch { id, enabled }),
             Message::Open(id, post) => self.dispatch(Command::Open { id, post }),
             Message::Copy(id, post) => self.dispatch(Command::Copy { id, post }),
-            Message::Launch(id) => self.dispatch(Command::Launch(id)),
+            Message::Launch {
+                id,
+                thread_id,
+                post,
+            } => {
+                if self.snapshot.as_ref().is_some_and(|snapshot| {
+                    recruitment_launchable(snapshot, &thread_id, post, &id, unix_millis())
+                }) {
+                    self.dispatch(Command::Launch(id));
+                }
+            }
             Message::SelectPage(page) if !self.closing => {
                 self.page = page;
                 return scrollable::snap_to(
@@ -1314,9 +1328,16 @@ impl App {
                 label(human_datetime(item.posted_at))
                     .size(12)
                     .style(appearance::muted),
-                label(&item.body).size(14).width(Length::Fill),
             ]
             .spacing(8);
+            if let Some(deadline) = item.deadline_at {
+                card = card.push(
+                    label(format!("締切 {}", human_datetime(deadline)))
+                        .size(12)
+                        .style(appearance::muted),
+                );
+            }
+            card = card.push(label(&item.body).size(14).width(Length::Fill));
             if !item.room_ids.is_empty() {
                 let mut ids =
                     column![label("ルームID").size(12).style(appearance::muted)].spacing(5);
@@ -1337,9 +1358,11 @@ impl App {
                             button(launch_label.size(13))
                                 .padding([5, 10])
                                 .style(appearance::primary)
-                                .on_press_maybe(
-                                    (available && active).then(|| Message::Launch(id.clone()))
-                                ),
+                                .on_press_maybe((available && active).then(|| Message::Launch {
+                                    id: id.clone(),
+                                    thread_id: item.thread_id.clone(),
+                                    post: item.number,
+                                })),
                         ]
                         .spacing(8)
                         .wrap(),
@@ -1415,7 +1438,138 @@ fn recruitment_active(item: &model::Recruitment, now: u64, emphasis: u64) -> boo
         && item.effective_posted_at != 0
         && now >= item.posted_at
         && now >= item.effective_posted_at
-        && now - item.effective_posted_at <= emphasis
+        && match item.deadline_at {
+            Some(deadline) => now < deadline,
+            None => now - item.effective_posted_at <= emphasis,
+        }
+}
+
+fn recruitment_launchable(
+    snapshot: &Snapshot,
+    thread_id: &str,
+    post: u64,
+    id: &str,
+    now: u64,
+) -> bool {
+    let emphasis = recruitment_emphasis(snapshot);
+    snapshot.recruitments.iter().any(|item| {
+        item.thread_id == thread_id
+            && item.number == post
+            && item.room_ids.iter().any(|room_id| room_id == id)
+            && recruitment_active(item, now, emphasis)
+    })
+}
+
+#[cfg(test)]
+mod recruitment_tests {
+    use super::{recruitment_active, recruitment_launchable};
+    use crate::model::{Recruitment, Snapshot};
+
+    fn recruitment(deadline_at: Option<u64>) -> Recruitment {
+        Recruitment {
+            number: 1,
+            name: "募集者".to_owned(),
+            id: "synthetic".to_owned(),
+            watchoi: String::new(),
+            body: "友人戦 12345".to_owned(),
+            posted_at: 1_000,
+            effective_posted_at: 2_000,
+            deadline_at,
+            room_ids: vec!["12345".to_owned()],
+            thread_id: "synthetic-thread".to_owned(),
+            closed: false,
+        }
+    }
+
+    #[test]
+    fn explicit_deadline_expires_at_the_exact_millisecond() {
+        let item = recruitment(Some(5_000));
+        assert!(recruitment_active(&item, 4_999, 10_000));
+        assert!(!recruitment_active(&item, 5_000, 10_000));
+        assert!(!recruitment_active(&item, 5_001, 10_000));
+    }
+
+    #[test]
+    fn explicit_deadline_replaces_a_shorter_default_period() {
+        let item = recruitment(Some(60_000));
+        assert!(recruitment_active(&item, 20_000, 10_000));
+        assert!(recruitment_active(&item, 59_999, 10_000));
+        assert!(!recruitment_active(&item, 60_000, 10_000));
+    }
+
+    #[test]
+    fn closed_recruitment_stays_inactive_before_its_deadline() {
+        for deadline in [None, Some(60_000)] {
+            let mut item = recruitment(deadline);
+            item.closed = true;
+            assert!(!recruitment_active(&item, 3_000, 10_000));
+        }
+    }
+
+    #[test]
+    fn missing_deadline_preserves_the_inclusive_default_boundary() {
+        let item = recruitment(None);
+        assert!(recruitment_active(&item, 2_000, 10_000));
+        assert!(recruitment_active(&item, 11_999, 10_000));
+        assert!(recruitment_active(&item, 12_000, 10_000));
+        assert!(!recruitment_active(&item, 12_001, 10_000));
+        assert!(recruitment_active(&item, 2_000, 0));
+        assert!(!recruitment_active(&item, 2_001, 0));
+    }
+
+    #[test]
+    fn deadlines_do_not_bypass_zero_or_future_post_guards() {
+        for deadline in [None, Some(60_000)] {
+            let mut item = recruitment(deadline);
+            assert!(!recruitment_active(&item, 1_999, 10_000));
+            item.posted_at = 4_000;
+            assert!(!recruitment_active(&item, 3_000, 10_000));
+            item.effective_posted_at = 0;
+            assert!(!recruitment_active(&item, 5_000, 10_000));
+        }
+        assert!(!recruitment_active(&recruitment(Some(0)), 3_000, 10_000));
+    }
+
+    #[test]
+    fn launch_rechecks_deadline_and_the_selected_recruitment() {
+        let mut other = recruitment(Some(60_000));
+        other.number = 2;
+        let mut snapshot = Snapshot {
+            settings: serde_json::json!({"emphasis_sec": 10}),
+            watched: vec![],
+            threads: vec![],
+            recruitments: vec![recruitment(Some(5_000)), other],
+            errors: vec![],
+            notices: vec![],
+            refreshing: false,
+            updated_at: None,
+            notification_available: false,
+        };
+        let allowed = |snapshot: &Snapshot, now| {
+            recruitment_launchable(snapshot, "synthetic-thread", 1, "12345", now)
+        };
+        assert!(allowed(&snapshot, 4_999));
+        assert!(!allowed(&snapshot, 5_000));
+        assert!(!allowed(&snapshot, 5_001));
+        assert!(!recruitment_launchable(
+            &snapshot,
+            "other-thread",
+            1,
+            "12345",
+            4_999,
+        ));
+        assert!(!recruitment_launchable(
+            &snapshot,
+            "synthetic-thread",
+            1,
+            "54321",
+            4_999,
+        ));
+        snapshot.recruitments[0].closed = true;
+        assert!(!allowed(&snapshot, 4_999));
+        snapshot.recruitments.remove(0);
+        assert!(!allowed(&snapshot, 4_999));
+    }
 }
 
 fn expired_badge(theme: &iced::Theme) -> container::Style {

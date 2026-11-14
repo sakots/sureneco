@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { defaults, validateSettings } from "../core/settings";
 import { isRecent } from "../core/detection";
+import { recruitmentExpiresAt } from "../core/deadline";
 import { extractRoomIds, postReferences, splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot, UpdateState } from "../core/types";
 import { MobilePushPanel } from "./MobilePushPanel";
@@ -57,7 +58,7 @@ export function App({ api }: { api: Api }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
     const stop = api.subscribe((value) => {
@@ -97,14 +98,32 @@ export function App({ api }: { api: Api }) {
           if (alive) setError(String(err));
         });
     }
-    const timer = setInterval(() => setTick((x) => x + 1), 10000);
     return () => {
       alive = false;
       stop();
       stopUpdates();
-      clearInterval(timer);
     };
   }, [api]);
+  useEffect(() => {
+    const now = Date.now();
+    let delay = 10000;
+    if (snapshot) {
+      for (const item of snapshot.recruitments) {
+        if (
+          !item.closed &&
+          item.deadlineAt !== undefined &&
+          item.deadlineAt > now
+        ) {
+          delay = Math.min(
+            delay,
+            recruitmentExpiresAt(item, snapshot.settings) - now,
+          );
+        }
+      }
+    }
+    const timer = setTimeout(() => setTick((value) => value + 1), delay);
+    return () => clearTimeout(timer);
+  }, [snapshot, tick]);
   useEffect(() => {
     if (!api.mobile) return;
     const refresh = () => {
@@ -374,6 +393,14 @@ export function App({ api }: { api: Api }) {
                         {new Date(item.postedAt).toLocaleString("ja-JP")}
                       </time>
                     </div>
+                    {item.deadlineAt !== undefined && (
+                      <p className="metadata">
+                        締切（日本時間）：
+                        {new Date(item.deadlineAt).toLocaleString("ja-JP", {
+                          timeZone: "Asia/Tokyo",
+                        })}
+                      </p>
+                    )}
                     <div className="recruitment-body">
                       {splitRoomIds(item.body).map((part, index) =>
                         part.roomId
@@ -404,6 +431,12 @@ export function App({ api }: { api: Api }) {
                             aria-label={`ルームID ${id}をコピーして雀魂を起動`}
                             onClick={() =>
                               void act(async () => {
+                                if (
+                                  !isRecent(item, snapshot.settings, Date.now())
+                                ) {
+                                  setNotice("募集の期限が切れています。");
+                                  return;
+                                }
                                 await api.launchMahjongSoul(id);
                                 setNotice(
                                   `レス ${noticePost}：ルームID ${id}をコピーして雀魂を起動しました。ゲーム内の友人戦で貼り付けてください。`,

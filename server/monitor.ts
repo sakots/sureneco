@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Post, Recruitment, Thread } from "../src/core/types";
+import { recruitmentExpiresAt } from "../src/core/deadline";
 import { Store } from "./store";
 import type { MobileSettings, Subscription } from "./subscriptions";
 import { runDetection } from "./detection";
@@ -111,6 +112,7 @@ export async function monitor(
       let detected: {
         notifications: Recruitment[];
         closedPrevious: number[];
+        pendingPrevious: Recruitment[];
       } | null = null;
       let code: string | null = null;
       try {
@@ -271,9 +273,30 @@ export async function monitor(
                 "DELETE FROM outbox WHERE id=?",
                 eventId(subscription.uid, board, thread, number),
               );
+            for (const item of detected.pendingPrevious) {
+              if (item.closed) continue;
+              const id = eventId(subscription.uid, board, thread, item.number);
+              const event = db.get<{ expires: number }>(
+                "UPDATE events SET expires=MIN(expires,?) WHERE id=? RETURNING expires",
+                recruitmentExpiresAt(item, settings),
+                id,
+              );
+              if (!event) continue;
+              const expires = event.expires;
+              if (expires <= now) {
+                db.run("DELETE FROM outbox WHERE id=?", id);
+                continue;
+              }
+              db.run(
+                "UPDATE outbox SET expires=?,payload=json_set(payload,'$.expiresAt',?,'$.recruitment',json(?)) WHERE id=?",
+                expires,
+                Math.floor(expires / 1000),
+                JSON.stringify(item),
+                id,
+              );
+            }
             for (const item of detected.notifications) {
-              const expires =
-                item.effectivePostedAt + settings.emphasis_sec * 1000;
+              const expires = recruitmentExpiresAt(item, settings);
               if (expires <= now) continue;
               const id = eventId(subscription.uid, board, thread, item.number);
               const payload: Payload = {

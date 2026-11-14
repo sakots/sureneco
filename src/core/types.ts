@@ -39,6 +39,8 @@ export interface Recruitment extends Post {
   closed: boolean;
   /** 投稿自身と参照連鎖で最も古い投稿時刻。表示用のpostedAtは変更しない。 */
   effectivePostedAt: number;
+  /** 本文指定と参照元の制約を反映した締切。未指定時は有効期間を使う。 */
+  deadlineAt?: number;
 }
 export interface SavedState {
   settings: Settings;

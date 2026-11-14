@@ -33,7 +33,40 @@ pub struct Recruitment {
     pub body: String,
     pub posted_at: u64,
     pub effective_posted_at: u64,
+    pub deadline_at: Option<u64>,
     pub room_ids: Vec<String>,
     pub thread_id: String,
     pub closed: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Recruitment;
+
+    #[test]
+    fn recruitment_accepts_optional_camel_case_deadline() {
+        let mut value = serde_json::json!({
+            "number": 1,
+            "name": "募集者",
+            "id": "synthetic",
+            "watchoi": "",
+            "body": "友人戦 12345",
+            "postedAt": 1000,
+            "effectivePostedAt": 1000,
+            "roomIds": ["12345"],
+            "threadId": "synthetic-thread",
+            "closed": false
+        });
+        for (deadline, expected) in [
+            (None, None),
+            (Some(serde_json::Value::Null), None),
+            (Some(serde_json::json!(60000)), Some(60000)),
+        ] {
+            if let Some(deadline) = deadline {
+                value["deadlineAt"] = deadline;
+            }
+            let item: Recruitment = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(item.deadline_at, expected);
+        }
+    }
 }

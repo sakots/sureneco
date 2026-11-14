@@ -727,6 +727,142 @@ it("cancels every known closing event beyond the 200-item UI history limit", asy
   expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(204);
 });
 
+it("queues relative cutoffs instead of the default lifetime and never sends at the cutoff", async () => {
+  const db = store();
+  await register(db, "one", registration("one", { emphasis_sec: 60 }));
+  let bodies = ["挨拶"];
+  const fetcher = async (url: string) =>
+    url.endsWith("subject.txt") ? `${thread}.dat<>雀魂 (3)` : dat(bodies);
+  await monitor(db, { now, fetcher });
+  bodies.push("友人戦 12345 5分後爆破", "友人戦 23456 1分後爆破");
+  await monitor(db, { now: now + 60000, fetcher });
+  const cutoff = now + 300000;
+  const queued = db.get<{ expires: number; payload: string }>(
+    "SELECT expires,payload FROM outbox",
+  )!;
+  expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(1);
+  expect(queued.expires).toBe(cutoff);
+  expect(JSON.parse(queued.payload)).toMatchObject({
+    expiresAt: cutoff / 1000,
+    recruitment: { roomIds: ["12345"], deadlineAt: cutoff, closed: false },
+  });
+  expect(db.get("SELECT expires FROM events")?.expires).toBe(cutoff);
+  await monitor(db, { now: now + 120000, fetcher });
+  expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(1);
+  const send = vi.fn(async () => {});
+  await deliver(db, send, { now: cutoff });
+  expect(send).not.toHaveBeenCalled();
+  expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(0);
+});
+
+it("keeps pending notices for a future closing announcement but honors a separate closing marker", async () => {
+  const db = store();
+  await register(db);
+  let bodies = ["挨拶"];
+  const fetcher = async (url: string) =>
+    url.endsWith("subject.txt") ? `${thread}.dat<>雀魂 (209)` : dat(bodies);
+  await monitor(db, { now, fetcher });
+  bodies.push(
+    ...Array.from({ length: 205 }, (_, i) => `友人戦 ${String(10000 + i)}`),
+  );
+  await monitor(db, { now: now + 60000, fetcher });
+  bodies.push(">>2 30分で締め切り");
+  await monitor(db, { now: now + 120000, fetcher });
+  expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(206);
+  expect(
+    db.get(
+      "SELECT COUNT(*) AS n FROM outbox WHERE json_extract(payload,'$.recruitment.number')=2",
+    )?.n,
+  ).toBe(1);
+  bodies.push(">>2 5分で締め切り 〆");
+  await monitor(db, { now: now + 180000, fetcher });
+  expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(204);
+});
+
+it("refreshes every legacy pending reply from its inherited cutoff beyond the history limit", async () => {
+  const db = store();
+  await register(db);
+  const line = (body: string, time: string) =>
+    `名無し<>sage<>2026/10/22(木) ${time} ID:author<>${body}<>雀魂`;
+  let content = line("友人戦 12345 5分後爆破", "12:00:00");
+  const fetcher = async (url: string) =>
+    url.endsWith("subject.txt") ? `${thread}.dat<>雀魂 (207)` : content;
+  await monitor(db, { now, fetcher });
+  content +=
+    "\n" +
+    [
+      ...Array.from({ length: 205 }, () =>
+        line("&gt;&gt;1 あと1人 30分後爆破", "12:01:00"),
+      ),
+      line("友人戦 56789", "12:01:00"),
+    ].join("\n");
+  await monitor(db, { now: now + 60000, fetcher });
+  const cutoff = now + 300000;
+  const rows = db.all<{ id: string; expires: number; payload: string }>(
+    "SELECT id,expires,payload FROM outbox",
+  );
+  expect(rows).toHaveLength(206);
+  for (const row of rows) {
+    const payload = JSON.parse(row.payload) as Payload;
+    if (
+      payload.type !== "recruitment" ||
+      payload.recruitment.roomIds[0] !== "12345"
+    )
+      continue;
+    expect(row.expires).toBe(cutoff);
+    expect(payload.recruitment.deadlineAt).toBe(cutoff);
+    const { deadlineAt, ...legacy } = payload.recruitment;
+    const expires = legacy.effectivePostedAt + settings.emphasis_sec * 1000;
+    db.run("UPDATE events SET expires=? WHERE id=?", expires, row.id);
+    db.run(
+      "UPDATE outbox SET expires=?,payload=? WHERE id=?",
+      expires,
+      JSON.stringify({
+        ...payload,
+        expiresAt: Math.floor(expires / 1000),
+        recruitment: legacy,
+      }),
+      row.id,
+    );
+  }
+  const first = rows.find(
+    (row) => JSON.parse(row.payload).recruitment.roomIds[0] === "12345",
+  )!;
+  db.run("UPDATE events SET expires=? WHERE id=?", cutoff - 60000, first.id);
+  db.run("UPDATE outbox SET expires=? WHERE id=?", cutoff - 60000, first.id);
+  await monitor(db, { now: now + 120000, fetcher });
+  const refreshed = db.all<{ expires: number; payload: string }>(
+    "SELECT expires,payload FROM outbox WHERE json_extract(payload,'$.recruitment.roomIds[0]')='12345'",
+  );
+  expect(refreshed).toHaveLength(205);
+  expect(refreshed.map((row) => row.expires).sort((a, b) => a - b)).toEqual([
+    cutoff - 60000,
+    ...Array(204).fill(cutoff),
+  ]);
+  expect(
+    refreshed.map((row) => JSON.parse(row.payload).recruitment.deadlineAt),
+  ).toEqual(Array(205).fill(cutoff));
+  expect(
+    refreshed.map((row) => JSON.parse(row.payload).expiresAt * 1000),
+  ).toEqual(refreshed.map((row) => row.expires));
+  expect(
+    db.get(
+      "SELECT COUNT(*) AS n FROM events e JOIN outbox o ON o.id=e.id WHERE e.expires<>o.expires",
+    )?.n,
+  ).toBe(0);
+  const sent: string[][] = [];
+  await deliver(
+    db,
+    async (_token, payload) => {
+      if (payload.type === "recruitment")
+        sent.push(payload.recruitment.roomIds);
+    },
+    { now: cutoff },
+  );
+  expect(sent).toEqual([["56789"]]);
+  expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(0);
+});
+
 it.each(["closed", "expired"])(
   "cancels referenced pending replies beyond the history limit when the source is %s",
   async (ended) => {
