@@ -43,6 +43,10 @@ export function scanPosts(
       : new RegExp(settings.yujinsen_regex, "i");
   const close = new RegExp(settings.closed_yujinsen_regex, "i");
   const source = new Map(sourcePosts.map((post) => [post.number, post]));
+  for (const item of items) {
+    if (item.threadId === threadId && !source.has(item.number))
+      source.set(item.number, item);
+  }
   const closed = new Set(
     previous
       .filter((item) => item.threadId === threadId && item.closed)
@@ -52,22 +56,25 @@ export function scanPosts(
   for (const closing of sourcePosts) {
     if (!isClosingPost(closing, close)) continue;
     const refs = postReferences(closing.body);
-    for (const target of sourcePosts) {
+    for (const target of source.values()) {
       if (target.number < closing.number && closesPost(closing, target, refs))
         closed.add(target.number);
     }
   }
+  // 追記を締めた場合も、過去の参照先を元募集まで遡って締める。
+  const pending = [...closed];
+  while (pending.length) {
+    const post = source.get(pending.pop()!);
+    if (!post) continue;
+    for (const number of postReferences(post.body)) {
+      if (number >= post.number || closed.has(number) || !source.has(number))
+        continue;
+      closed.add(number);
+      pending.push(number);
+    }
+  }
   for (const post of posts) {
-    if (isClosingPost(post, close)) {
-      const refs = postReferences(post.body);
-      for (const item of items) {
-        if (item.threadId !== threadId) continue;
-        if (closesPost(post, item, refs)) {
-          item.closed = true;
-          closed.add(item.number);
-        }
-      }
-    } else if (!isBlocked(post, settings)) {
+    if (!isClosingPost(post, close) && !isBlocked(post, settings)) {
       const { roomIds, matches, effectivePostedAt, deadlineAt } =
         resolveRecruitment(post, source, settings, recruit, closed, now);
       if (!matches || !roomIds.length) continue;
