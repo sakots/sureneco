@@ -2,6 +2,8 @@ node_modules/
 dist/
 release/
 coverage/
+__pycache__/
+*.pyc
 *.log
 src-tauri/target/
 src-tauri/gen/*
