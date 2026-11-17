@@ -606,6 +606,81 @@ describe("取得済み返信の状態", () => {
     expect(isRecent(result.items[0], defaults, now)).toBe(false);
   });
 
+  it.each(["&gt;&gt;5 満員", "満員"])(
+    "追記への締めを元募集・連鎖・既存の別返信へ反映する: %s",
+    (body) => {
+      const posts = parseDat(
+        [
+          line("友人戦 12345", "original", "名無し"),
+          line("友人戦 12345", "unrelated", "名無し"),
+          line("&gt;&gt;1 あと2人", "reply", "名無し"),
+          line("&gt;&gt;1 あと1人", "sibling", "名無し"),
+          line("&gt;&gt;3 あと1人", "latest", "名無し"),
+        ].join("\n"),
+      );
+      const initial = scanPosts(id, posts, [], defaults, now).items;
+      const otherThread = initial.map((item) => ({
+        ...item,
+        threadId: "1791034503",
+      }));
+      const closing = parseDat(line(body, "latest", "名無し"))[0];
+      closing.number = 6;
+      for (const sourcePosts of [[...posts, closing], [closing]]) {
+        const updated = scanPosts(
+          id,
+          [closing],
+          [...initial, ...otherThread],
+          defaults,
+          now,
+          sourcePosts,
+        );
+        expect(
+          updated.items
+            .filter((item) => item.threadId === id)
+            .map((item) => [item.number, item.closed]),
+        ).toEqual([
+          [1, true],
+          [2, false],
+          [3, true],
+          [4, true],
+          [5, true],
+        ]);
+        expect(
+          updated.items
+            .filter((item) => item.threadId !== id)
+            .some((item) => item.closed),
+        ).toBe(false);
+        expect(updated.notifications).toEqual([]);
+      }
+    },
+  );
+
+  it("同一取得で追記が締まった元募集を通知せず、後の独立募集は閉じない", () => {
+    const posts = parseDat(
+      [
+        line("友人戦 12345", "original", "名無し"),
+        line("&gt;&gt;1 あと1人", "latest", "名無し"),
+        line("&gt;&gt;2 満員", "latest", "名無し"),
+        line("友人戦 23456", "latest", "名無し"),
+      ].join("\n"),
+    );
+    const updated = scanPosts(id, posts, [], defaults, now);
+    expect(updated.items.find((item) => item.number === 1)?.closed).toBe(true);
+    expect(updated.notifications.map((item) => item.number)).toEqual([4]);
+  });
+
+  it("締めた追記の未来参照をたどって独立募集を閉じない", () => {
+    const posts = parseDat(
+      [
+        line("友人戦 12345 &gt;&gt;3", "latest", "名無し"),
+        line("&gt;&gt;1 満員", "latest", "名無し"),
+        line("友人戦 23456", "other", "名無し"),
+      ].join("\n"),
+    );
+    const updated = scanPosts(id, posts, [], defaults, now);
+    expect(updated.notifications.map((item) => item.number)).toEqual([3]);
+  });
+
   it.each(["&gt;&gt;1 〆", "〆"])(
     "後から取得した締めを既存の返信・連鎖・複数参照・ID再掲へ反映する: %s",
     (body) => {
