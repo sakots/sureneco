@@ -19,9 +19,9 @@
 
 Tauri版のWindowsではWebView2が必要です。インストーラーは必要に応じて導入します。Electron版から切り替える場合は[移行手順](docs/usage.md#electron版からの切り替え)を確認してください。
 
-### Icedテスト版 v0.13.0
+### Icedテスト版 v0.13.1
 
-同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.13.0)に、WebViewを使わないRust／Iced版も配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
+同じ[リリースページ](https://github.com/sakots/sureneco/releases/tag/v0.13.1)に、WebViewを使わないRust／Iced版も配布します。Windows x64 ZIPとLinux x64 tar.gzは、名前が`sureneco-iced_`で始まるものを選んでください。設定はIced専用で、自動更新はありません。旧Iced版を終了してから差し替えてください。[起動方法・Linux依存関係・検証上の制約](trials/iced/README.md)を確認してください。
 
 ## 使い方
 
@@ -61,10 +61,11 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/11/17] v0.13.0（開発中）
+### [2026/11/17] v0.13.1
 
 - 追記募集への締めを元募集まで遡って反映し、元レスが募集中のまま残る不具合を修正。
 - Pythonの生成キャッシュを追跡対象から外し、`.pyc`が未ステージ変更として残る問題を修正。
+- Tauri Windows・Linux・AndroidとIcedテスト版を0.13.1へ更新。AndroidはversionCode 131。通知サーバーにも修正を反映し、設定・端末資格情報を保持する。
 
 ### [2026/11/14] v0.13.0
 
