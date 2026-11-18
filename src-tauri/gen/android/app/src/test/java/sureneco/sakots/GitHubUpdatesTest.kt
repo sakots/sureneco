@@ -109,10 +109,11 @@ class GitHubUpdatesTest {
             release().put("tag_name", "v0.14.0\n"), release().put("tag_name", "v0.14.2147483648")
         )
         val f = Fixture()
-        f.body = page(*(ignored + listOf(release("0.9.0"), release("0.14.0"), release("0.13.9"))).toTypedArray())
+        f.pages = (ignored + listOf(release("0.9.0"), release("0.14.0"), release("0.13.9")))
+            .chunked(10).map { page(*it.toTypedArray()) }
         assertEquals("available", f.updates.check().getString("status"))
         assertEquals("0.14.0", f.updates.state().getString("latestVersion"))
-        f.body = page(*ignored.toTypedArray())
+        f.pages = ignored.chunked(10).map { page(*it.toTypedArray()) }
         assertEquals("current", f.updates.check().getString("status"))
         assertTrue(f.updates.state().isNull("latestVersion"))
         rejectsOpen(f.updates, Robolectric.buildActivity(Activity::class.java).setup().get())
