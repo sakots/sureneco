@@ -808,7 +808,7 @@ function SettingsForm({
         </label>
         {draft.recruitment_filter === "loose" && (
           <p className="help">
-            本文に5桁の数字、人数（3・4・３・４・三・四）、東または南を含む募集を検出します。募集レスの正規表現は通常に戻すと編集できます。
+            本文に5桁の数字、人数（3・4・３・４・三・四）、東・南・半荘（半莊）のいずれかを含む募集を検出します。募集レスの正規表現は通常に戻すと編集できます。
           </p>
         )}
         {patterns.map(field)}

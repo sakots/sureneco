@@ -183,7 +183,7 @@ function resolveRecruitment(
 }
 
 const loosePlayers = /(?<![0-9０-９])[34３４三四](?![0-9０-９])/u;
-const looseRound = /[東南]/u;
+const looseRound = /[東南]|半[荘莊]/u;
 
 function matchesRecruitment(
   body: string,
