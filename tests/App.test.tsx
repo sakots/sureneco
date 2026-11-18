@@ -1009,7 +1009,47 @@ it("AndroidではPC専用操作を呼ばず、通知設定と60秒下限を表�
   ).toBeNull();
   expect(desktop.getAutostart).not.toHaveBeenCalled();
   expect(desktop.setAutostart).not.toHaveBeenCalled();
-  expect(api.getUpdateState).not.toHaveBeenCalled();
+  expect(api.getUpdateState).toHaveBeenCalledTimes(1);
+  expect(api.checkUpdate).not.toHaveBeenCalled();
+  expect(screen.getByRole("heading", { name: "アプリの更新" })).toBeTruthy();
+  expect(
+    screen.queryByRole("button", { name: "APKをダウンロード" }),
+  ).toBeNull();
+  const emitUpdate = vi.mocked(api.subscribeUpdate).mock.calls[0][0];
+  const update: UpdateState = {
+    version: "0.2.0",
+    mode: "manual",
+    status: "idle",
+    latestVersion: null,
+    progress: 0,
+    error: null,
+  };
+  act(() => emitUpdate(update));
+  await user.click(screen.getByRole("button", { name: "更新を確認" }));
+  expect(api.checkUpdate).toHaveBeenCalledTimes(1);
+  act(() => emitUpdate({ ...update, status: "checking" }));
+  expect(
+    screen.getByRole("button", { name: "更新を確認" }).hasAttribute("disabled"),
+  ).toBe(true);
+  act(() =>
+    emitUpdate({ ...update, status: "error", error: "通信に失敗しました。" }),
+  );
+  expect(screen.getByRole("alert").textContent).toContain(
+    "通信に失敗しました。",
+  );
+  await user.click(screen.getByRole("button", { name: "更新を確認" }));
+  expect(api.checkUpdate).toHaveBeenCalledTimes(2);
+  act(() =>
+    emitUpdate({ ...update, status: "available", latestVersion: "0.3.0" }),
+  );
+  await user.click(screen.getByRole("button", { name: "APKをダウンロード" }));
+  expect(api.openRelease).toHaveBeenCalledTimes(1);
+  expect(api.downloadUpdate).not.toHaveBeenCalled();
+  expect(api.installUpdate).not.toHaveBeenCalled();
+  act(() => emitUpdate({ ...update, status: "current" }));
+  expect(
+    screen.queryByRole("button", { name: "APKをダウンロード" }),
+  ).toBeNull();
   expect(api.getConfigDirectory).not.toHaveBeenCalled();
   const interval = screen.getByLabelText("友人戦募集の更新間隔（秒）");
   expect(interval.getAttribute("min")).toBe("60");

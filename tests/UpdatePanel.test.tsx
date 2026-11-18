@@ -154,3 +154,109 @@ it("外部エラーと操作失敗が同じ場合は通知を重複せず、閉�
   expect(screen.queryByRole("alert")).toBeNull();
   expect(api.downloadUpdate).toHaveBeenCalledTimes(1);
 });
+
+it("Androidの手動更新は新版だけAPKを開き、確認中と失敗から復旧できる", async () => {
+  const api = createApi();
+  api.mobile = {} as NonNullable<Api["mobile"]>;
+  const state: UpdateState = {
+    version: "0.2.0",
+    mode: "manual",
+    status: "idle",
+    latestVersion: null,
+    progress: 0,
+    error: null,
+  };
+  const view = render(<UpdatePanel api={api} state={state} />);
+  const user = userEvent.setup();
+  expect(
+    screen.queryByRole("button", { name: "APKをダウンロード" }),
+  ).toBeNull();
+  await user.click(screen.getByRole("button", { name: "更新を確認" }));
+  expect(api.checkUpdate).toHaveBeenCalledTimes(1);
+  view.rerender(
+    <UpdatePanel api={api} state={{ ...state, status: "checking" }} />,
+  );
+  expect(
+    screen.getByRole("button", { name: "更新を確認" }).hasAttribute("disabled"),
+  ).toBe(true);
+  view.rerender(
+    <UpdatePanel
+      api={api}
+      state={{ ...state, status: "error", error: "通信に失敗しました。" }}
+    />,
+  );
+  expect(screen.getByRole("alert").textContent).toContain(
+    "通信に失敗しました。",
+  );
+  await user.click(screen.getByRole("button", { name: "更新を確認" }));
+  expect(api.checkUpdate).toHaveBeenCalledTimes(2);
+  view.rerender(
+    <UpdatePanel
+      api={api}
+      state={{ ...state, status: "available", latestVersion: "0.3.0" }}
+    />,
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "APKをダウンロード" }));
+  expect(api.openRelease).toHaveBeenCalledTimes(1);
+  expect(api.downloadUpdate).not.toHaveBeenCalled();
+  expect(api.installUpdate).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "リリースを開く" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "再起動して更新" })).toBeNull();
+  view.rerender(
+    <UpdatePanel api={api} state={{ ...state, status: "current" }} />,
+  );
+  expect(screen.getByRole("status").textContent).toContain("最新");
+  expect(
+    screen.queryByRole("button", { name: "APKをダウンロード" }),
+  ).toBeNull();
+  view.rerender(
+    <UpdatePanel
+      api={api}
+      state={{ ...state, mode: "disabled", status: "disabled" }}
+    />,
+  );
+  expect(screen.getByRole("status").textContent).toContain("Play版");
+  expect(screen.queryByRole("button", { name: "更新を確認" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "APKをダウンロード" }),
+  ).toBeNull();
+});
+
+it("Androidの確認操作が失敗したら古いAPK案内を閉じ、エラーを消しても再確認まで戻さない", async () => {
+  const api = createApi();
+  api.mobile = {} as NonNullable<Api["mobile"]>;
+  vi.mocked(api.checkUpdate).mockRejectedValueOnce(
+    new Error("端末と通信できませんでした。"),
+  );
+  render(
+    <UpdatePanel
+      api={api}
+      state={{
+        version: "0.2.0",
+        mode: "manual",
+        status: "available",
+        latestVersion: "0.3.0",
+        progress: 0,
+        error: null,
+      }}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "更新を確認" }));
+  expect(screen.getByRole("alert").textContent).toContain(
+    "端末と通信できませんでした。",
+  );
+  expect(
+    screen.queryByRole("button", { name: "APKをダウンロード" }),
+  ).toBeNull();
+  await user.click(screen.getByRole("button", { name: "通知を閉じる" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "APKをダウンロード" }),
+  ).toBeNull();
+  await user.click(screen.getByRole("button", { name: "更新を確認" }));
+  expect(
+    screen.getByRole("button", { name: "APKをダウンロード" }),
+  ).toBeTruthy();
+});

@@ -20,6 +20,8 @@ import org.json.JSONObject
 class MobileArgs { var operation: String = ""; var payload: String = "{}" }
 @TauriPlugin
 class MobilePlugin(private val activity: Activity) : Plugin(activity) {
+    private val updates by lazy { GitHubUpdates(activity.applicationContext) }
+
     @Command
     fun execute(invoke: Invoke) {
         val args = invoke.parseArgs(MobileArgs::class.java)
@@ -27,6 +29,15 @@ class MobilePlugin(private val activity: Activity) : Plugin(activity) {
         fun resolve(value: Any? = null) { invoke.resolve(JSObject().apply { put("value", value ?: JSONObject.NULL) }) }
         try {
             when (args.operation) {
+                "update_state" -> resolve(updates.state())
+                "update_check" -> {
+                    updates.beginCheck()
+                    GitHubUpdates.executor.execute { resolve(updates.check()) }
+                }
+                "update_open" -> activity.runOnUiThread {
+                    try { updates.open(activity); resolve() }
+                    catch (_: Exception) { invoke.reject("更新用APKを開けませんでした。更新を確認して再試行してください。") }
+                }
                 "notification_target" -> resolve(PushState.consumeNotificationTarget(activity))
                 "changing" -> { PushState.changing(activity); resolve() }
                 "foreground" -> resolve((activity as androidx.lifecycle.LifecycleOwner).lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))

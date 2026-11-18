@@ -28,6 +28,28 @@ fn engine(app: &AppHandle, command: &str, payload: Value) -> Result<Value, Strin
 async fn request(app: AppHandle, command: String, payload: Value) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         match command.as_str() {
+            "mobile_update_state" => native(&app, "update_state", json!({})),
+            "mobile_update_check" => {
+                let mut state = native(&app, "update_state", json!({}))?;
+                if state["mode"] != "disabled" {
+                    state["status"] = json!("checking");
+                    state["latestVersion"] = Value::Null;
+                    state["error"] = Value::Null;
+                    let _ = app.emit("update-state", &state);
+                    state = match native(&app, "update_check", json!({})) {
+                        Ok(state) => state,
+                        Err(_) => {
+                            state["status"] = json!("error");
+                            state["error"] =
+                                json!("更新を確認できませんでした。再試行してください。");
+                            state
+                        }
+                    };
+                }
+                let _ = app.emit("update-state", state);
+                Ok(Value::Null)
+            }
+            "mobile_update_open" => native(&app, "update_open", json!({})),
             "mobile_notification_target" => native(&app, "notification_target", json!({})),
             "mobile_status" => native(&app, "status", json!({})),
             "mobile_permission" => native(&app, "permission", json!({})),

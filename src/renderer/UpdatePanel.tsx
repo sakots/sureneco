@@ -5,12 +5,16 @@ export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
   const [error, setError] = useState("");
   const [errorGeneration, setErrorGeneration] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [apkBlocked, setApkBlocked] = useState(false);
+  const mobile = !!api.mobile;
   async function act(task: () => Promise<void>) {
     setBusy(true);
     setError("");
     try {
       await task();
+      setApkBlocked(false);
     } catch (err) {
+      setApkBlocked(true);
       setError(err instanceof Error ? err.message : String(err));
       setErrorGeneration((generation) => generation + 1);
     } finally {
@@ -26,7 +30,9 @@ export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
     downloaded: `v${state.latestVersion}の準備ができました。`,
     installing: "更新を適用しています…",
     error: "更新処理に失敗しました。再試行できます。",
-    disabled: "開発実行ではアプリの更新を利用できません。",
+    disabled: mobile
+      ? "Play版と開発用APKはGitHubからの更新案内の対象外です。"
+      : "開発実行ではアプリの更新を利用できません。",
   };
   const working =
     busy || ["checking", "downloading", "installing"].includes(state.status);
@@ -38,7 +44,9 @@ export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
       <p role="status">{messages[state.status]}</p>
       {state.mode === "manual" && (
         <p className="help">
-          この配布形式はリリース画面から手動で更新してください。
+          {mobile
+            ? "APKをブラウザーで開き、Androidの確認画面から更新してください。インストールには利用者の操作が必要です。同じ署名のAPKなら設定を保持します。"
+            : "この配布形式はリリース画面から手動で更新してください。"}
         </p>
       )}
       {displayError && (
@@ -65,7 +73,8 @@ export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
           >
             更新を確認
           </button>
-          {state.mode === "auto" &&
+          {!mobile &&
+            state.mode === "auto" &&
             state.latestVersion &&
             ["available", "error"].includes(state.status) && (
               <button
@@ -76,22 +85,30 @@ export function UpdatePanel({ api, state }: { api: Api; state: UpdateState }) {
                 ダウンロード
               </button>
             )}
-          {state.mode === "auto" && state.status === "downloaded" && (
+          {!mobile &&
+            state.mode === "auto" &&
+            state.status === "downloaded" && (
+              <button
+                className="primary"
+                disabled={working}
+                onClick={() => void act(() => api.installUpdate())}
+              >
+                再起動して更新
+              </button>
+            )}
+          {(!mobile ||
+            (state.mode === "manual" &&
+              state.status === "available" &&
+              !apkBlocked &&
+              !displayError)) && (
             <button
-              className="primary"
-              disabled={working}
-              onClick={() => void act(() => api.installUpdate())}
+              className="secondary"
+              disabled={mobile ? working : busy}
+              onClick={() => void act(() => api.openRelease())}
             >
-              再起動して更新
+              {mobile ? "APKをダウンロード" : "リリースを開く"}
             </button>
           )}
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={() => void act(() => api.openRelease())}
-          >
-            リリースを開く
-          </button>
         </div>
       )}
     </section>

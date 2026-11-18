@@ -72,20 +72,18 @@ export function App({ api }: { api: Api }) {
       .catch((err) => {
         if (alive) setError(String(err));
       });
-    const stopUpdates = api.mobile
-      ? () => {}
-      : api.subscribeUpdate((value) => {
-          if (alive) setUpdate(value);
-        });
+    const stopUpdates = api.subscribeUpdate((value) => {
+      if (alive) setUpdate(value);
+    });
+    void api
+      .getUpdateState()
+      .then((value) => {
+        if (alive) setUpdate(value);
+      })
+      .catch((err) => {
+        if (alive) setError(String(err));
+      });
     if (!api.mobile) {
-      void api
-        .getUpdateState()
-        .then((value) => {
-          if (alive) setUpdate(value);
-        })
-        .catch((err) => {
-          if (alive) setError(String(err));
-        });
       void api
         .getConfigDirectory()
         .then((value) => {
@@ -480,9 +478,7 @@ export function App({ api }: { api: Api }) {
           {page === "settings" && (
             <>
               {api.mobile && <MobilePushPanel api={api.mobile} />}
-              {!api.mobile && update && (
-                <UpdatePanel api={api} state={update} />
-              )}
+              {update && <UpdatePanel api={api} state={update} />}
               {!api.mobile && api.desktop && (
                 <AutostartPanel api={api.desktop} />
               )}

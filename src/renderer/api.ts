@@ -1,4 +1,3 @@
-import { version } from "../../package.json";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
@@ -23,14 +22,6 @@ function subscribe<T>(event: string, callback: (value: T) => void) {
 const request = <T = void>(command: string, payload: object = {}) =>
   invoke<T>("request", { command, payload });
 const mobile = /Android/i.test(navigator.userAgent);
-const disabledUpdate: UpdateState = {
-  version,
-  mode: "disabled",
-  status: "disabled",
-  latestVersion: null,
-  progress: 0,
-  error: null,
-};
 export const api: Api = {
   ...(mobile
     ? {
@@ -78,12 +69,14 @@ export const api: Api = {
   subscribe: (callback) => subscribe<Snapshot>("state", callback),
   getUpdateState: () =>
     mobile
-      ? Promise.resolve(disabledUpdate)
+      ? request<UpdateState>("mobile_update_state")
       : invoke<UpdateState>("update_state"),
-  checkUpdate: () => invoke("check_update"),
+  checkUpdate: () =>
+    mobile ? request("mobile_update_check") : invoke("check_update"),
   downloadUpdate: () => invoke("download_update"),
   installUpdate: () => invoke("install_update"),
-  openRelease: () => invoke("open_release"),
+  openRelease: () =>
+    mobile ? request("mobile_update_open") : invoke("open_release"),
   subscribeUpdate: (callback) =>
-    mobile ? () => {} : subscribe<UpdateState>("update-state", callback),
+    subscribe<UpdateState>("update-state", callback),
 };
