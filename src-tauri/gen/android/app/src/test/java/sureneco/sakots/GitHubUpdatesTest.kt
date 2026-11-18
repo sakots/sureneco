@@ -27,16 +27,25 @@ class GitHubUpdatesTest {
     private fun release(version: String = "0.14.0") = JSONObject()
         .put("draft", false).put("prerelease", false).put("tag_name", "v$version")
         .put("assets", JSONArray().put(asset(version)))
+    private fun page(vararg releases: JSONObject) = JSONArray(releases.toList()).toString()
+    private fun pcRelease(version: String) = release(version).put("assets", JSONArray()
+        .put(JSONObject().put("name", "sureneco_${version}_x64.exe")))
+    private fun fullPcPage(version: String = "1.0.0") =
+        JSONArray(List(10) { pcRelease(version) }).toString()
     private class Fixture(version: String = "0.13.2", debug: Boolean = false, installer: () -> String? = { null }) {
-        var body = ""
+        var body = "[]"
+        var pages: List<String>? = null
+        val requestedPages = mutableListOf<Int>()
+        var failPage: Int? = null
         var failure = false
         var calls = 0
         var duringFetch: (() -> Unit)? = null
-        val updates = GitHubUpdates(version, debug, installer) {
+        val updates = GitHubUpdates(version, debug, installer) { page ->
             calls++
+            requestedPages.add(page)
             duringFetch?.invoke()
-            if (failure) error("untrusted remote detail https://attacker.invalid")
-            body.toByteArray(Charsets.UTF_8)
+            if (failure || page == failPage) error("untrusted remote detail https://attacker.invalid")
+            (pages?.get(page - 1) ?: body).toByteArray(Charsets.UTF_8)
         }
     }
     private fun rejectsOpen(updates: GitHubUpdates, activity: Activity) {
@@ -46,7 +55,7 @@ class GitHubUpdatesTest {
 
     @Test fun checksOnlyOnRequestAndOpensOnlyVerifiedApkWithActionView() {
         val f = Fixture()
-        f.body = release().toString()
+        f.body = page(release())
         val idle = f.updates.state()
         assertEquals("0.13.2", idle.getString("version"))
         assertEquals("manual", idle.getString("mode"))
@@ -82,7 +91,7 @@ class GitHubUpdatesTest {
             Triple("1.0.0", "0.99.99", "current")
         )) {
             val f = Fixture(installed)
-            f.body = release(latest).toString()
+            f.body = page(release(latest))
             val state = f.updates.check()
             assertEquals(expected, state.getString("status"))
             assertEquals(latest, state.getString("latestVersion"))
@@ -90,23 +99,51 @@ class GitHubUpdatesTest {
         }
     }
 
-    @Test fun rejectsDraftPrereleaseInvalidTagsAndMissingOrDuplicateApks() {
-        val malformed = listOf(
-            release().put("draft", true), release().put("prerelease", true),
+    @Test fun skipsPcDraftPrereleaseAndInvalidTagsWhileSelectingLargestAndroidVersion() {
+        val ignored = listOf(
+            pcRelease("9.0.0"),
+            release("8.0.0").put("draft", true), release("7.0.0").put("prerelease", true),
             release().put("draft", "false"), release().put("prerelease", JSONObject.NULL),
             release().put("tag_name", "0.14.0"), release().put("tag_name", "v0.14.0-beta.1"),
             release().put("tag_name", "v0.14.0+build"), release().put("tag_name", "v00.14.0"),
-            release().put("tag_name", "v0.14.0\n"), release().put("tag_name", "v0.14.2147483648"),
-            release().put("assets", JSONArray()), release().put("assets", JSONArray().put(asset("0.14.0")).put(asset("0.14.0"))),
-            release("0.13.2").put("assets", JSONArray()), release("0.13.1").put("assets", JSONArray()),
-            release().put("assets", JSONArray().put(asset("0.14.0").put("name", "renamed.apk")))
+            release().put("tag_name", "v0.14.0\n"), release().put("tag_name", "v0.14.2147483648")
         )
-        for (body in malformed) {
+        val f = Fixture()
+        f.body = page(*(ignored + listOf(release("0.9.0"), release("0.14.0"), release("0.13.9"))).toTypedArray())
+        assertEquals("available", f.updates.check().getString("status"))
+        assertEquals("0.14.0", f.updates.state().getString("latestVersion"))
+        f.body = page(*ignored.toTypedArray())
+        assertEquals("current", f.updates.check().getString("status"))
+        assertTrue(f.updates.state().isNull("latestVersion"))
+        rejectsOpen(f.updates, Robolectric.buildActivity(Activity::class.java).setup().get())
+    }
+
+    @Test fun findsAndroidBehindMultipleFullPcPagesAndIgnoresListOrder() {
+        val f = Fixture()
+        f.pages = listOf(fullPcPage("9.0.0"), fullPcPage("8.0.0"),
+            page(release("0.13.9"), release("0.14.0"), release("0.10.0")))
+        assertEquals("available", f.updates.check().getString("status"))
+        assertEquals("0.14.0", f.updates.state().getString("latestVersion"))
+        assertEquals(listOf(1, 2, 3), f.requestedPages)
+    }
+
+    @Test fun newerMalformedAndroidCannotBeHiddenByOlderValidRelease() {
+        val malformed = listOf(
+            release().put("assets", JSONArray().put(asset("0.14.0")).put(asset("0.14.0"))),
+            release().put("assets", JSONArray().put(asset("0.14.0").put("name", "renamed.apk"))),
+            release().put("assets", JSONArray().put(asset("0.14.0").put("browser_download_url", "https://attacker.invalid/app.apk"))),
+            release().put("assets", JSONArray().put(asset("0.14.0").put("name", "sureneco_v0.13.2_android.apk")))
+        )
+        for (bad in malformed) {
             val f = Fixture()
-            f.body = body.toString()
-            assertEquals(body.toString(), "error", f.updates.check().getString("status"))
+            f.body = page(release("0.13.3"), bad)
+            assertEquals(bad.toString(), "error", f.updates.check().getString("status"))
             assertTrue(f.updates.state().isNull("latestVersion"))
         }
+        val f = Fixture()
+        f.body = page(malformed.first(), release("0.15.0"))
+        assertEquals("available", f.updates.check().getString("status"))
+        assertEquals("0.15.0", f.updates.state().getString("latestVersion"))
     }
 
     @Test fun rejectsEveryNonCanonicalDownloadUrl() {
@@ -119,7 +156,7 @@ class GitHubUpdatesTest {
             canonical.replace("/sakots/", "/other/")
         )) {
             val f = Fixture()
-            f.body = release().put("assets", JSONArray().put(asset("0.14.0").put("browser_download_url", url))).toString()
+            f.body = page(release().put("assets", JSONArray().put(asset("0.14.0").put("browser_download_url", url))))
             assertEquals(url, "error", f.updates.check().getString("status"))
         }
     }
@@ -127,7 +164,7 @@ class GitHubUpdatesTest {
     @Test fun failureClearsOldApkAndCanRecoverWithoutLeakingRemoteDetails() {
         val f = Fixture()
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
-        f.body = release().toString()
+        f.body = page(release())
         assertEquals("available", f.updates.check().getString("status"))
         f.failure = true
         val failed = f.updates.check()
@@ -139,7 +176,7 @@ class GitHubUpdatesTest {
         f.body = "not JSON https://attacker.invalid"
         assertEquals("error", f.updates.check().getString("status"))
         rejectsOpen(f.updates, activity)
-        f.body = release("0.15.0").toString()
+        f.body = page(release("0.15.0"))
         assertEquals("available", f.updates.check().getString("status"))
         f.updates.open(activity)
         assertEquals(apk("0.15.0"), shadowOf(activity).nextStartedActivity.dataString)
@@ -151,7 +188,7 @@ class GitHubUpdatesTest {
         val updates = GitHubUpdates("0.13.2", false, { null }) {
             started.countDown()
             check(finish.await(5, TimeUnit.SECONDS))
-            release().toString().toByteArray()
+            page(release()).toByteArray()
         }
         val worker = Thread { updates.check() }
         worker.start()
@@ -185,14 +222,16 @@ class GitHubUpdatesTest {
         }
     }
 
-    private class Connection(var code: Int = 200, var bytes: ByteArray = ByteArray(0), var length: Long = -1) :
-        HttpsURLConnection(URL("https://api.github.com/repos/sakots/sureneco/releases/latest")) {
+    private class Connection(var code: Int = 200, var bytes: ByteArray = ByteArray(0), var length: Long = -1,
+        private val link: String? = null) :
+        HttpsURLConnection(URL("https://api.github.com/repos/sakots/sureneco/releases?per_page=10&page=1")) {
         var disconnected = false
         override fun connect() = Unit
         override fun disconnect() { disconnected = true }
         override fun usingProxy() = false
         override fun getResponseCode() = code
         override fun getContentLengthLong() = length
+        override fun getHeaderField(name: String?): String? = if (name.equals("Link", true)) link else null
         override fun getInputStream() = ByteArrayInputStream(bytes)
         override fun getCipherSuite() = "test"
         override fun getLocalCertificates(): Array<Certificate>? = null
@@ -202,8 +241,11 @@ class GitHubUpdatesTest {
     }
 
     @Test fun boundsHttpResponsesRejectsRedirectsAndUsesTimeouts() {
-        val good = Connection(bytes = release().toString().toByteArray())
-        assertArrayEquals(good.bytes, GitHubUpdates.fetchRelease { good })
+        val good = Connection(bytes = page(release()).toByteArray(),
+            link = "<https://attacker.invalid/releases?page=999>; rel=\"next\"")
+        var requested: URL? = null
+        assertArrayEquals(good.bytes, GitHubUpdates.fetchRelease(2) { url -> requested = url; good })
+        assertEquals("https://api.github.com/repos/sakots/sureneco/releases?per_page=10&page=2", requested.toString())
         assertFalse(good.instanceFollowRedirects)
         assertTrue(good.connectTimeout in 1..15000)
         assertTrue(good.readTimeout in 1..15000)
@@ -212,16 +254,40 @@ class GitHubUpdatesTest {
             Connection(code = 302), Connection(code = 404), Connection(code = 429),
             Connection(length = 262145), Connection(bytes = ByteArray(262145))
         )) {
-            try { GitHubUpdates.fetchRelease { connection }; fail("must reject HTTP response") } catch (_: IllegalStateException) { }
+            try { GitHubUpdates.fetchRelease(1) { connection }; fail("must reject HTTP response") } catch (_: IllegalStateException) { }
             assertTrue(connection.disconnected)
         }
     }
 
     @Test fun rejectsOversizedInvalidUtf8AndTrailingJson() {
-        for (bytes in listOf(ByteArray(262145), byteArrayOf(0xc3.toByte(), 0x28), (release().toString() + " {}").toByteArray())) {
+        for (bytes in listOf(ByteArray(262145), byteArrayOf(0xc3.toByte(), 0x28),
+            (page(release()) + " {}").toByteArray(), release().toString().toByteArray())) {
             val updates = GitHubUpdates("0.13.2", false, { null }) { bytes }
             assertEquals("error", updates.check().getString("status"))
             assertTrue(updates.state().isNull("latestVersion"))
+        }
+    }
+
+    @Test fun pageFailureAndSafetyLimitsClearPreviouslyVerifiedUrl() {
+        val oversizedPage = JSONArray(List(10) { pcRelease("9.0.0") })
+            .put(0, release().put("padding", "x".repeat(220000))).toString()
+        assertTrue(oversizedPage.toByteArray().size < 262144)
+        val cases = listOf(
+            Pair(listOf(fullPcPage(), page(release())), 2),
+            Pair(List(10) { fullPcPage() }, null),
+            Pair(List(5) { oversizedPage }, null)
+        )
+        for ((pages, failPage) in cases) {
+            val f = Fixture()
+            f.body = page(release())
+            assertEquals("available", f.updates.check().getString("status"))
+            f.pages = pages
+            f.failPage = failPage
+            val failed = f.updates.check()
+            assertEquals("error", failed.getString("status"))
+            assertTrue(failed.isNull("latestVersion"))
+            rejectsOpen(f.updates, Robolectric.buildActivity(Activity::class.java).setup().get())
+            assertTrue(f.requestedPages.maxOrNull()!! <= 10)
         }
     }
 }

@@ -61,9 +61,10 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
-### [2026/11/18] v0.13.2（開発中）
+### [2026/11/18] v0.13.3（Android版のみ）
 
 - AndroidのGitHub APK版に、最新版確認と公式APKのダウンロード案内を追加。
+- Android版のみ0.13.3（versionCode 133）として公開。PC・Iced・通知サーバーは0.13.2のまま維持し、PC向けGitHub Latestとlatest.jsonは変更しない。
 
 ### [2026/11/18] v0.13.2
 

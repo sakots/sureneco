@@ -18,7 +18,7 @@ Androidのサーバー監視は`update_sec`が既定60秒、`thread_update_sec`�
 
 PC版のトレイ、実行ファイル指定、設定フォルダー変更、ウィンドウ状態の保存、自動インストールはAndroidに持ち込みません。GitHubの署名付きAPK版では、設定の「アプリの更新」から利用者が「更新を確認」を押し、新版があれば「APKをダウンロード」で公式GitHubのAPKをブラウザーで開きます。ダウンロード後はAPKを開き、Androidの確認画面で上書き更新してください。起動時の自動確認・アプリ内APK保存・追加のインストール権限は設けません。Google Playから導入した版と開発用APKはGitHub更新案内の対象外とし、Play版はGoogle Playで更新します。同じパッケージでも署名が異なるデバッグ版やPlay配布版へは上書きできず、アプリを削除すると設定が失われます。
 
-更新確認は固定の`https://api.github.com/repos/sakots/sureneco/releases/latest`だけに接続し、応答サイズと接続・読み取り時間を制限します。draft・prereleaseを拒否し、正式版の版番号と現在版を比較します。該当版の`sureneco_vVERSION_android.apk`が存在し、ダウンロード先が公式リポジトリーのその版・そのファイルと完全一致するときだけ案内します。通信失敗やAPK未添付はエラーとして再試行可能にし、旧い取得結果からのAPK案内は残しません。通知の停止・登録とは別の実行キューで確認し、更新処理を理由に通知設定・端末資格情報を変更しません。
+更新確認は固定の`https://api.github.com/repos/sakots/sureneco/releases`の公開一覧をページ単位で取得し、正式なAndroid APKを持つ最大の版番号と現在版を比較します。PC専用リリース・draft・prerelease・非正式タグは候補外です。応答サイズ・総量・ページ数・接続／読み取り時間を制限し、上限到達はエラーとして扱います。該当版の`sureneco_vVERSION_android.apk`が存在し、ダウンロード先が公式リポジトリーのその版・そのファイルと完全一致するときだけ案内します。最新Android候補の不正なAPKを古い正常版で覆い隠さず、通信失敗時は旧いAPK案内を残しません。通知とは別の実行キューを使い、端末資格情報を変更しません。
 
 Androidには別途中継アプリのntfyを導入し、自前サーバーを設定してもらいます。Google Play版・F-Droid版の両方を利用できます。自前サーバーへの接続ではGoogle Play版もFirebaseを使いません。F-Droid版はFirebaseの機能自体を含まない配布版です。[ntfy公式説明](https://docs.ntfy.sh/subscribe/phone/#instant-delivery)を参照してください。スレネコチェッカーにUnifiedPush connectorを追加し、中継選択・未導入・通知先更新・解除を扱います。接続維持はntfyが担当するため、そちらの常駐通知・電池設定が必要になる場合があります。
 
@@ -104,7 +104,7 @@ Git管理外の`src-tauri/gen/android/keystore.properties`へ`storeFile`（絶�
 
 初回Play提出向けビルドでは、Android版を`0.9.0`／versionCode `3`にし、PC版の版番号は変更しませんでした。利用者の承認に基づいて、新しいAndroidアップロード鍵をGit管理外の`.secrets/android-upload.p12`へ作成し、署名設定は`src-tauri/gen/android/keystore.properties`へ保存しました。署名設定にはパスワードが含まれます。鍵と署名設定を別の安全な保管先へバックアップし、チャット・Git・公開配布物へ含めないでください。公開証明書は`release/sureneco_android_upload_certificate.pem`です。デバッグ鍵とは異なるため、既存ベータAPKへのデータ保持付き上書きはできません。
 
-`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。v0.13.2の設定は表示バージョン`0.13.2`／versionCode `132`で、既存の`131`より大きい値を使います。GitHubには署名付きAPKの`sureneco_v0.13.2_android.apk`を公開し、AABは`release/sureneco_v0.13.2_android_versionCode132.aab`としてローカル保管のみとします。緩めフィルタでの半荘検出修正をバックグラウンド通知にも適用するため、アプリ公開前に通知サーバーも更新します。署名設定不足・公開接続先不足・同名出力では失敗し、ビルドコマンド自体はPlayやGitHubへ公開しません。AABは生成後にJAR署名、applicationId・versionName/versionCode・SDK・ABI、ネイティブライブラリーの16KB LOAD整列とbundletool検証を確認します。静的整列検証は16KB端末での実動作確認とは区別します。過去の公開済み成果物は上書きしません。
+`pnpm package:android`はチェック後にAABを生成し、Android専用設定のversionとversionCodeを使って`release/sureneco_vVERSION_android_versionCodeCODE.aab`へ配置します。Android専用v0.13.3は表示バージョン`0.13.3`／versionCode `133`で、GitHubには署名付きAPKの`sureneco_v0.13.3_android.apk`だけを公開します。今回はAAB生成・Play提出・通知サーバー更新・PC／Iced再配布を行いません。正式リリースは`v0.13.3`タグで公開しますがGitHub Latestには設定せず、PC向けLatestはv0.13.2を維持します。既存の署名鍵を継続し、過去の公開済み成果物は上書きしません。署名、applicationId・versionName/versionCode・ABI、16KB整列と秘密情報非同梱を検証し、実機での動作確認とは区別します。
 
 ### v0.11.0の配布物（2026/11/12）
 
