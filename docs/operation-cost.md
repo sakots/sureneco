@@ -64,11 +64,17 @@ Node.js・SQLite・ntfy・HTTPSプロキシを同じ小規模VPSにまとめま�
 
 - 利用者から、Playプロテクトを有効にしたままブロックが解消して導入できたとの報告を受けました。Googleの審査結果・分類理由をこちらで確認したという意味ではありません。
 - USBデバッグを承認したPixel 7 Proで、試験アプリ`sureneco.sakots.phptrial`の導入・起動・利用同意・FCM登録とOS通知権限を確認しました。既存PHP送信CLIから、アプリ表示中とホーム画面へ戻した状態で疎通通知を各1件送信し、FCM受理・端末受信記録・OS通知のeventId一致と、実画面の「通知を表示しました」を確認しました。本体のアプリ・通知先・本番サーバーは変更していません。
-- WindowsではWSLのUbuntu-26.04とPHP CLIを使用し、既存のUnix秘密ファイル権限チェックを維持しました。秘密鍵は標準入力、宛先は同意済みのデバッグアプリからメモリー上で読み取り、Linuxの所有者限定一時ファイル（0600）を経由して試験後に削除しました。トークンをホストのファイル・チャット・Gitへ残していません。非秘密の証跡は`release/php-fcm-device-debug/2026-11-22.json`です。自然放置による長時間のDoze・実5ch新着募集からの配送・cron運用は未確認です。
+- WindowsではWSLのUbuntu-26.04とPHP CLIを使用し、既存のUnix秘密ファイル権限チェックを維持しました。秘密鍵は標準入力、宛先は同意済みのデバッグアプリからメモリー上で読み取り、Linuxの所有者限定一時ファイル（0600）を経由して試験後に削除しました。トークンをホストのファイル・チャット・Gitへ残していません。非秘密の証跡は`release/php-fcm-device-debug/2026-11-22.json`です。自然放置による長時間のDoze・実5ch新着募集からの配送・常設cronの長期運用は未確認です。
 - 追加の消灯試験では、USB給電中に常時表示（AOD）を一時抑止し、送信直前・受信後ともDisplayの`mScreenState=OFF`を確認しました。PHPから疎通通知を1件送信し、端末の受信記録とOS通知のeventIdが一致し、「通知を表示しました」と記録されたことを確認しました。Powerのwakefulnessは`Dozing`ですが、device-idleは`ACTIVE`／`mLightState=ACTIVE`で、長時間放置によるDozeの検証ではありません。一時抑止を解除して画面の復帰を確認し、非秘密の証跡を`release/php-fcm-device-debug/2026-11-22-screen-off.json`へ保存しました。
 - Deep Dozeの追加試験では、USB接続は維持したまま`cmd battery unplug`で未給電を模擬し、画面をオフにして`cmd deviceidle force-idle deep`を実行しました。試験アプリは恒久的な省電力除外に登録されておらず、除外設定も変更していません。送信前・受信後とも`mState=IDLE`・`mScreenOn=false`・`mCharging=false`のまま、PHP疎通通知1件の端末受信とOS通知のeventId一致を確認しました。試験後に`unforce`と`battery reset`を実行し、強制状態false・通常状態ACTIVE・実際の給電状態への復帰を確認しました。証跡は`release/php-fcm-device-debug/2026-11-22-deep-doze.json`です。これは開発コマンドで強制したDeep Dozeの検証で、自然放置による長時間試験とは区別します。
 - 実5chの2スレッドを専用DB・緩めフィルタ・60秒間隔で15分間監視しました。初回は通知せず、取得エラーなしで30レスの増加を確認しましたが、対象の新着募集がなく実配送には到達しませんでした。履歴の取得位置や投稿時刻は改変せず、試験用の5ch投稿も行っていません。証跡は`release/php-fcm-device-debug/2026-11-22-live-delivery.json`です。
 - 利用者の了承により、入力だけを隔離した試験DATへ置き換え、実際のRecruitmentMonitor・判定ワーカー・SQLite・Sender・FCM・Pixel 7 Proを接続しました。初回の基準レスで送信0件、次の「3人半荘 13589」でレス2の検出・送信前のキュー保存・実FCM送信1件・端末受信・OS通知のeventId／レス番号／部屋ID一致を確認しました。受理後のキューは0件、同じDATの再取得も送信0件でした。入力は架空で、本物の新着取得とは区別します。秘密情報と専用DBは試験後に削除し、非秘密の証跡を`release/php-fcm-device-debug/2026-11-22-recruitment-fixture.json`へ保存しました。本体・本番サーバー・cronは変更していません。
+
+### エックスサーバーの一時cron試験（2026/11/22）
+
+- 利用者の承認により、実際のエックスサーバーのcronで募集配送経路を確認しました。PHP 8.4.28とcurl・OpenSSL・mbstring・PDO SQLite・`proc_open`を確認し、glibc 2.28のホストへx86_64 Linux static musl判定ワーカーを配備しました。配備先で実際の5ch候補4件の取得・判定にも成功しました。サーバー上にNode.jsやRustのビルド環境は追加していません。
+- 公開領域外の所有者限定ディレクトリー（0700）、FCM鍵・宛先（0600）と専用DBを使い、実cronの60秒間隔3回で、初回基準の送信抑止・架空の新着募集1件の実FCM配送・同じDATの再取得時の再送抑止を確認しました。配送前のSQLite保存、受理後の待ち行削除、Pixel 7 Proの受信記録とOS通知のeventId／レス番号／部屋ID一致を確認しています。入力は隔離した試験DATで、本物の新着取得とは区別します。
+- cron実行はPHP・判定ワーカーを絶対パスで指定し、`umask 077`・限定PATH・`flock`・45秒の実行上限を使用しました。試験用cronは期限付きとし、終了後に自分の1行と鍵・宛先・DBを含む一時領域を撤去して、試験前後のcrontabの存在状態・SHA-256一致を確認しました。常設cron・長期運用・再起動後の復旧は未確認で、既存Node.js本番は変更していません。証跡は`release/php-fcm-device-debug/2026-11-22-cron-verification.json`です。
 
 ### 試験の実行順序
 
