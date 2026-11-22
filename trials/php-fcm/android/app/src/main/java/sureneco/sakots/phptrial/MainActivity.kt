@@ -90,7 +90,7 @@ class MainActivity : Activity() {
         button("Android の通知設定を開く") { openNotificationSettings() }
         text("端末の最終受信", 19f)
         receipt = text("")
-        text("FCM の送信受理だけでは端末の受信成功になりません。eventId と受信記録を照合してください。有効期限は送信から300秒です。端末時計を正しく設定してください。停止後も既存の FCM 登録自体は残りますが、このアプリは受信通知を表示しません。")
+        text("FCM の送信受理だけでは端末の受信成功になりません。eventId と受信記録を照合してください。接続試験の有効期限は300秒、募集通知は募集期限までの最大300秒です。端末時計を正しく設定してください。停止後も既存の FCM 登録自体は残りますが、このアプリは受信通知を表示しません。")
         feedback = text("")
         if (!app.firebaseReady) feedback.text = "Firebase の初期化に失敗しました。試験用のクライアント設定で APK を作り直してください。"
         render()

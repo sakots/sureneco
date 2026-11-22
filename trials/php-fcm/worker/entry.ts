@@ -78,6 +78,7 @@ export function run(json: string): string {
       return failure("invalid_request");
     const previous = input.previous;
     const closed: number[] = [];
+    const shortened: [number, number][] = [];
     // scanPosts caps its returned history at 200 items.
     for (let offset = 0; offset < previous.length; offset += 200) {
       const { items } = scanPosts(
@@ -88,9 +89,17 @@ export function run(json: string): string {
         now,
         posts,
       );
+      const savedExpiry = new Map<number, number>();
+      for (let i = offset; i < Math.min(offset + 200, previous.length); i++) {
+        savedExpiry.set(previous[i].number, previous[i].expiresAt);
+      }
       for (const item of items) {
-        if (item.closed || recruitmentExpiresAt(item, settings) <= now)
+        const expiresAt = recruitmentExpiresAt(item, settings);
+        if (item.closed || expiresAt <= now) {
           closed.push(item.number);
+        } else if (expiresAt < (savedExpiry.get(item.number) ?? expiresAt)) {
+          shortened.push([item.number, expiresAt]);
+        }
       }
     }
     const recruitments =
@@ -109,7 +118,7 @@ export function run(json: string): string {
           }));
     return JSON.stringify({
       ok: true,
-      result: { lastPost, recruitments, closed },
+      result: { lastPost, recruitments, closed, shortened },
     });
   } catch (error) {
     return failure(

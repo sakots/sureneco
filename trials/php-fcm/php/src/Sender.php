@@ -25,6 +25,37 @@ final class Sender
 
     public function run(#[\SensitiveParameter] Configuration $configuration): array
     {
+        return $this->execute($configuration);
+    }
+
+    public function sendRecruitment(
+        #[\SensitiveParameter] Configuration $configuration,
+        string $threadId,
+        int $postNumber,
+        array $roomIds,
+        int $expiresAtMs,
+    ): array {
+        if ($configuration->operation !== 'send') {
+            throw new SafeFailure('invalid_operation');
+        }
+        return $this->execute($configuration, static function (int $now) use ($threadId, $postNumber, $roomIds, $expiresAtMs): array {
+            $expiresAt = min($now + 300, intdiv($expiresAtMs, 1000));
+            if ($expiresAt <= $now) {
+                throw new SafeFailure('recruitment_expired');
+            }
+            return [
+                'type' => 'recruitment',
+                'eventId' => substr(hash('sha256', "recruitment:$threadId:$postNumber"), 0, 32),
+                'sentAt' => (string) $now,
+                'expiresAt' => (string) $expiresAt,
+                'title' => 'スレネコ PHP試験：友人戦募集',
+                'body' => 'レス #' . $postNumber . ' ／ 部屋ID: ' . implode('、', array_slice($roomIds, 0, 5)),
+            ];
+        });
+    }
+
+    private function execute(#[\SensitiveParameter] Configuration $configuration, ?\Closure $recruitment = null): array
+    {
         try {
             $credentials = new ServiceAccountCredentials(self::SCOPE, $configuration->credentials);
             $authentication = $credentials->fetchAuthToken(function (RequestInterface $request, array $options = []): ResponseInterface {
@@ -54,20 +85,20 @@ final class Sender
             return $result;
         }
         $now = time();
-        $data = [
+        $data = $recruitment === null ? [
             'type' => 'connectivity_test',
             'eventId' => bin2hex(random_bytes(16)),
             'sentAt' => (string) $now,
             'expiresAt' => (string) ($now + 300),
             'title' => 'スレネコ PHP・FCM疎通試験',
             'body' => 'PHPからFCM経由で送信した試験通知です。本番の募集通知ではありません。',
-        ];
+        ] : $recruitment($now);
         $validateOnly = $configuration->operation !== 'send';
         $message = [
             'data' => $data,
             'android' => [
                 'priority' => 'high',
-                'ttl' => '300s',
+                'ttl' => ((int) $data['expiresAt'] - $now) . 's',
                 'restricted_package_name' => Configuration::PACKAGE,
             ],
         ];

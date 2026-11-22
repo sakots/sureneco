@@ -11,7 +11,9 @@ object ReceiptPolicy {
 
     fun evaluate(data: Map<String, String>, now: Long, enabled: Boolean, seen: Set<String>): Decision {
         if (!enabled) return Decision(Reason.STOPPED)
-        if (data.keys != keys || data["type"] != "connectivity_test") return Decision(Reason.MALFORMED)
+        if (data.keys != keys) return Decision(Reason.MALFORMED)
+        val type = data.getValue("type")
+        if (type != "connectivity_test" && type != "recruitment") return Decision(Reason.MALFORMED)
         // Bound strings before encoding/counting them, including hostile oversized input.
         if (data.any { it.key.length > 32 || it.value.length > 1024 } ||
             data.entries.sumOf { it.key.toByteArray(Charsets.UTF_8).size + it.value.toByteArray(Charsets.UTF_8).size } > 2048
@@ -26,7 +28,9 @@ object ReceiptPolicy {
         ) return Decision(Reason.MALFORMED)
         val sentAt = sentText.toLong()
         val expiresAt = expiresText.toLong()
-        if (expiresAt - sentAt != 300L || sentAt > now) return Decision(Reason.MALFORMED)
+        val lifetime = expiresAt - sentAt
+        if (sentAt > now || lifetime !in 1L..300L || (type == "connectivity_test" && lifetime != 300L))
+            return Decision(Reason.MALFORMED)
         if (expiresAt <= now) return Decision(Reason.EXPIRED)
         if (id in seen) return Decision(Reason.DUPLICATE)
         return Decision(Reason.ACCEPTED, Payload(id, expiresAt, title, body))

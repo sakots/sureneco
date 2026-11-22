@@ -35,6 +35,17 @@ class ReceiptPolicyTest {
         )) assertEquals(ReceiptPolicy.Reason.MALFORMED, ReceiptPolicy.evaluate(payload() + change, now, true, emptySet()).reason)
     }
 
+    @Test fun recruitmentMayExpireSoonerThanConnectivityMessage() {
+        val notice = payload() + mapOf("type" to "recruitment", "expiresAt" to (now + 20).toString())
+        assertEquals(ReceiptPolicy.Reason.ACCEPTED, ReceiptPolicy.evaluate(notice, now, true, emptySet()).reason)
+        assertEquals(ReceiptPolicy.Reason.EXPIRED, ReceiptPolicy.evaluate(notice, now + 20, true, emptySet()).reason)
+        assertEquals(ReceiptPolicy.Reason.DUPLICATE, ReceiptPolicy.evaluate(notice, now, true, setOf(id)).reason)
+        val tooLong = notice + ("expiresAt" to (now + 291).toString())
+        assertEquals(ReceiptPolicy.Reason.MALFORMED, ReceiptPolicy.evaluate(tooLong, now, true, emptySet()).reason)
+        val wrongKind = notice + ("type" to "connectivity_test")
+        assertEquals(ReceiptPolicy.Reason.MALFORMED, ReceiptPolicy.evaluate(wrongKind, now, true, emptySet()).reason)
+    }
+
     @Test fun rejectsWrongKindIdsTimestampsAndUnexpectedFields() {
         val changes = listOf(
             mapOf("type" to "notification"), mapOf("eventId" to id.uppercase()),
