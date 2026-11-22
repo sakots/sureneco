@@ -61,6 +61,10 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 ## 更新履歴
 
+### [2026/11/22] v0.13.3（開発中）
+
+- PHP＋FCM試験構成に、現行版と同じ判定で5chの候補と新着募集を確認できる[PHP監視CLI](docs/operation-cost.md#phpcronの募集監視試作20261122)を追加。
+
 ### [2026/11/18] v0.13.3（Android版のみ）
 
 - AndroidのGitHub APK版に、最新版確認と公式APKのダウンロード案内を追加。

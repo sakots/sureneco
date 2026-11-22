@@ -14,3 +14,4 @@ src-tauri/gen/android/.idea/
 google-services.json
 server/data/
 server/worker/target/
+trials/php-fcm/worker/target/
