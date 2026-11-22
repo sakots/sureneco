@@ -60,6 +60,16 @@ Node.js・SQLite・ntfy・HTTPSプロキシを同じ小規模VPSにまとめま�
 - 次は、手元の警告対象APKのハッシュを照合し、開発者が[Googleの警告別ガイダンス](https://developers.google.com/android/play-protect/warning-dev-guidance)に沿って対象APK・SDKを確認したうえで、必要なら[Play Protectの分類に対する審査申し立て](https://support.google.com/googleplay/android-developer/contact/protectappeals)を行います。APK・署名情報・上記の報告文面を対象の識別に使い、サービスアカウント秘密鍵・FCM受信トークン・OAuthトークンは提出資料に含めません。APKの外部提出・一般公開・Google Playへのアップロードは今回行っていません。
 - ブロックが解消し、安全に導入できる状態を確認するまでは、この端末へのインストール、トークン取得、実宛先への送信試験を保留します。正式署名・Play内部テストへの変更だけで警告が消えるとは保証しません。現行Node.js版の稼働・登録と試験前のPHP／FCM認証確認結果は変更しません。
 
+### 実機デバッグの再開（2026/11/22）
+
+- 利用者から、Playプロテクトを有効にしたままブロックが解消して導入できたとの報告を受けました。Googleの審査結果・分類理由をこちらで確認したという意味ではありません。
+- USBデバッグを承認したPixel 7 Proで、試験アプリ`sureneco.sakots.phptrial`の導入・起動・利用同意・FCM登録とOS通知権限を確認しました。既存PHP送信CLIから、アプリ表示中とホーム画面へ戻した状態で疎通通知を各1件送信し、FCM受理・端末受信記録・OS通知のeventId一致と、実画面の「通知を表示しました」を確認しました。本体のアプリ・通知先・本番サーバーは変更していません。
+- WindowsではWSLのUbuntu-26.04とPHP CLIを使用し、既存のUnix秘密ファイル権限チェックを維持しました。秘密鍵は標準入力、宛先は同意済みのデバッグアプリからメモリー上で読み取り、Linuxの所有者限定一時ファイル（0600）を経由して試験後に削除しました。トークンをホストのファイル・チャット・Gitへ残していません。非秘密の証跡は`release/php-fcm-device-debug/2026-11-22.json`です。自然放置による長時間のDoze・実5ch新着募集からの配送・cron運用は未確認です。
+- 追加の消灯試験では、USB給電中に常時表示（AOD）を一時抑止し、送信直前・受信後ともDisplayの`mScreenState=OFF`を確認しました。PHPから疎通通知を1件送信し、端末の受信記録とOS通知のeventIdが一致し、「通知を表示しました」と記録されたことを確認しました。Powerのwakefulnessは`Dozing`ですが、device-idleは`ACTIVE`／`mLightState=ACTIVE`で、長時間放置によるDozeの検証ではありません。一時抑止を解除して画面の復帰を確認し、非秘密の証跡を`release/php-fcm-device-debug/2026-11-22-screen-off.json`へ保存しました。
+- Deep Dozeの追加試験では、USB接続は維持したまま`cmd battery unplug`で未給電を模擬し、画面をオフにして`cmd deviceidle force-idle deep`を実行しました。試験アプリは恒久的な省電力除外に登録されておらず、除外設定も変更していません。送信前・受信後とも`mState=IDLE`・`mScreenOn=false`・`mCharging=false`のまま、PHP疎通通知1件の端末受信とOS通知のeventId一致を確認しました。試験後に`unforce`と`battery reset`を実行し、強制状態false・通常状態ACTIVE・実際の給電状態への復帰を確認しました。証跡は`release/php-fcm-device-debug/2026-11-22-deep-doze.json`です。これは開発コマンドで強制したDeep Dozeの検証で、自然放置による長時間試験とは区別します。
+- 実5chの2スレッドを専用DB・緩めフィルタ・60秒間隔で15分間監視しました。初回は通知せず、取得エラーなしで30レスの増加を確認しましたが、対象の新着募集がなく実配送には到達しませんでした。履歴の取得位置や投稿時刻は改変せず、試験用の5ch投稿も行っていません。証跡は`release/php-fcm-device-debug/2026-11-22-live-delivery.json`です。
+- 利用者の了承により、入力だけを隔離した試験DATへ置き換え、実際のRecruitmentMonitor・判定ワーカー・SQLite・Sender・FCM・Pixel 7 Proを接続しました。初回の基準レスで送信0件、次の「3人半荘 13589」でレス2の検出・送信前のキュー保存・実FCM送信1件・端末受信・OS通知のeventId／レス番号／部屋ID一致を確認しました。受理後のキューは0件、同じDATの再取得も送信0件でした。入力は架空で、本物の新着取得とは区別します。秘密情報と専用DBは試験後に削除し、非秘密の証跡を`release/php-fcm-device-debug/2026-11-22-recruitment-fixture.json`へ保存しました。本体・本番サーバー・cronは変更していません。
+
 ### 試験の実行順序
 
 プロジェクトのルートで実行します。ComposerとPHP 8.2以上、AndroidビルドにはJava 21・Android SDKが必要です。
@@ -78,7 +88,7 @@ ANDROID_HOME="$PWD/.android-sdk" src-tauri/gen/android/gradlew \
 
 `auth`はOAuth認証だけ、`validate-topic`は端末へ送らないFCM要求の検証です。どちらも端末への通知到達を示しません。鍵は公開領域へ置かず、送信CLIはPHP CLI専用でWebからの実行を拒否します。
 
-以下は、上記のブロック調査・必要な修正またはGoogle側の再審査を経て、安全に導入できることを確認した後の手順です。現時点で利用者の端末では導入を再開しません。再開後は「スレネコ PHP・FCM試験」を開き、同意欄をチェックして「同意して通知試験を開始」を押し、通知を許可してください。「登録トークンを機密クリップボードにコピー」からコピーし、開発端末の`.secrets/php-fcm/registration-token.txt`へ保存します。このファイルは`chmod 600 .secrets/php-fcm/registration-token.txt`で0600にしてください。トークンはチャット・Gitへ貼らず、保存できたことだけを伝えてください。現行版のUnifiedPush通知先やntfy資格情報を宛先に流用しません。
+2026/11/22に上記の導入再開条件を利用者へ確認し、接続した実機で試験を再開しました。「スレネコ PHP・FCM試験」を開き、同意欄をチェックして「同意して通知試験を開始」を押し、通知を許可してください。「登録トークンを機密クリップボードにコピー」からコピーし、開発端末の`.secrets/php-fcm/registration-token.txt`へ保存します。このファイルはUnixでは0600、Windowsでは所有者限定ACLにしてください。トークンはチャット・Gitへ貼らず、保存できたことだけを伝えてください。現行版のUnifiedPush通知先やntfy資格情報を宛先に流用しません。
 
 ```sh
 php trials/php-fcm/php/bin/fcm-trial.php validate \
@@ -126,7 +136,7 @@ php trials/php-fcm/php/bin/monitor.php deliver THREAD_ID /absolute/private/deliv
 
 `deliver`には試験端末1台専用の新しいDBを使い、同じ端末・フィルターで継続します。初回は過去のレスを送らず、2回目以降は最新DATで再確認した募集を古い順に1回につき最大1件送信します。再判定からFCMの応答・保存まで同じDBの実行ロックを保持します。FCM受理後にだけ配送済みとして待ち行から削除し、失敗時は次回実行時に再判定します。受理直後に切断・停止した場合は再送され得ますが、同じイベントIDを使い、初回試行で固定した期限を再送で延長しないことで端末側の重複を抑えます。
 
-通知は試験アプリIDに限定し、FCMのTTLと端末が受信を受け入れる期限は募集の期限を超えない最大300秒です。募集通知を受信するには対応した試験アプリが必要です。既存の疎通試験メッセージは従来の300秒のままです。FCM受理と実機の受信は別に扱います。Playプロテクトの解除・再審査結果は未確認のため、今回はAPK再配布・実端末送信・cron登録・本番切替を行いません。
+通知は試験アプリIDに限定し、FCMのTTLと端末が受信を受け入れる期限は募集の期限を超えない最大300秒です。募集通知を受信するには対応した試験アプリが必要です。既存の疎通試験メッセージは従来の300秒のままです。FCM受理と実機の受信は別に扱います。この機能の実装時点ではPlayプロテクトの解除・再審査結果が未確認だったため、APK再配布・実端末送信・cron登録・本番切替は行いませんでした。2026/11/22の実機再開後の結果は上記に記録しており、疎通通知の受信と実際の募集監視からの配送は区別します。
 
 ローカルでは実判定ワーカーと一時SQLiteで、最新DATを取得できない回の送信抑止、締め済みの除外、受理済みの再送防止、失敗後の再試行とその打ち切りを確認しました。FCM HTTP v1の要求本文は隔離HTTPテストで、募集通知の期限と重複抑止はAndroidのJVMテストで確認しました。
 
