@@ -163,6 +163,23 @@ try {
     $mock = new MockHandler([new Response(200, [], '{"access_token":"secret-access-token","expires_in":3600,"token_type":"Bearer"}'), new Response(200, [], 'not-json secret-private-key')]);
     $failure(fn () => (new Sender(new Client(['handler' => HandlerStack::create($mock)])))->run($load()), 'invalid_provider_response');
 
+    $history = [];
+    $oauth = static fn () => new Response(200, [], '{"access_token":"secret-access-token","expires_in":3600,"token_type":"Bearer"}');
+    $accepted = static fn () => new Response(200, [], '{"name":"projects/trial-project/messages/provider-id"}');
+    $stack = HandlerStack::create(new MockHandler([$oauth(), $accepted(), $oauth(), $accepted(), $oauth()]));
+    $stack->push(Middleware::history($history));
+    $sender = new Sender(new Client(['handler' => $stack]));
+    $deadline = time() + 45;
+    $sent = $sender->sendRecruitment($load(), '1795262711', 11, ['24328'], $deadline * 1000);
+    $retry = $sender->sendRecruitment($load(), '1795262711', 11, ['24328'], $deadline * 1000);
+    $message = json_decode((string) $history[1]['request']->getBody(), true, 16, JSON_THROW_ON_ERROR)['message'];
+    $notice = $message['data'];
+    $assert($notice['type'] === 'recruitment' && str_contains($notice['body'], '24328'), 'Recruitment uses its own payload and includes the room ID');
+    $assert((int) $notice['expiresAt'] === $deadline && $message['android']['ttl'] === ($deadline - (int) $notice['sentAt']) . 's', 'FCM TTL cannot exceed the recruitment deadline');
+    $assert($sent['eventId'] === $retry['eventId'] && $sent['deviceDeliveryVerified'] === false, 'Retry keeps event ID without claiming device receipt');
+    $failure(fn () => $sender->sendRecruitment($load(), '1795262711', 12, ['34567'], (time() - 1) * 1000), 'recruitment_expired');
+    $assert(count($history) === 5, 'No FCM request for expired recruitment');
+
     echo json_encode(['ok' => true, 'assertions' => $assertions], JSON_THROW_ON_ERROR) . PHP_EOL;
 } finally {
     foreach (glob($directory . '/*') as $path) {

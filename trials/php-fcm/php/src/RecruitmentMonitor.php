@@ -24,6 +24,17 @@ final class RecruitmentMonitor
 
     public function scan(string $threadId, string $path, string $filter = 'regex', ?int $now = null): array
     {
+        return $this->run($threadId, $path, $filter, $now, null);
+    }
+
+    /** $send returns an FCM acceptance receipt or throws, leaving the recruitment queued. */
+    public function deliver(string $threadId, string $path, string $filter, Closure $send, ?int $now = null): array
+    {
+        return $this->run($threadId, $path, $filter, $now, $send);
+    }
+
+    private function run(string $threadId, string $path, string $filter, ?int $now, ?Closure $send): array
+    {
         if (preg_match('/\A[0-9]{9,11}\z/', $threadId) !== 1 || !in_array($filter, ['regex', 'loose'], true)) {
             throw new SafeFailure('invalid_arguments');
         }
@@ -49,7 +60,13 @@ final class RecruitmentMonitor
                     throw new SafeFailure('monitor_busy');
                 }
                 self::requirePrivateFileIfPresent($path);
-                return $this->scanLocked($threadId, $path, $filter, $now);
+                $db = new PDO('sqlite:' . $path, null, null, [PDO::ATTR_TIMEOUT => 1]);
+                $scan = $this->scanLocked($threadId, $db, $filter, $now);
+                if ($send !== null) {
+                    unset($scan['recruitments']);
+                    $scan['delivery'] = $this->deliverLocked($db, $threadId, $now ?? self::now(), $send);
+                }
+                return $scan;
             } finally {
                 fclose($lock);
             }
@@ -58,9 +75,8 @@ final class RecruitmentMonitor
         }
     }
 
-    private function scanLocked(string $threadId, string $path, string $filter, ?int $now): array
+    private function scanLocked(string $threadId, PDO $db, string $filter, ?int $now): array
     {
-        $db = new PDO('sqlite:' . $path, null, null, [PDO::ATTR_TIMEOUT => 1]);
         $db->exec('CREATE TABLE IF NOT EXISTS cursors (thread_id TEXT PRIMARY KEY, last_post INTEGER NOT NULL)');
         $db->exec('CREATE TABLE IF NOT EXISTS detected_recruitments (
             thread_id TEXT NOT NULL, post_number INTEGER NOT NULL, expires_at INTEGER NOT NULL,
@@ -72,11 +88,13 @@ final class RecruitmentMonitor
         $after = $last === false ? null : (int) $last;
         $text = ($this->fetch)("dat/$threadId.dat");
         $now ??= self::now();
-        $saved = $db->prepare('SELECT payload_json FROM detected_recruitments WHERE thread_id = ? AND expires_at > ?');
+        $saved = $db->prepare('SELECT payload_json, expires_at FROM detected_recruitments WHERE thread_id = ? AND expires_at > ?');
         $saved->execute([$threadId, $now]);
         $previous = [];
-        while (($payload = $saved->fetchColumn()) !== false) {
-            $previous[] = json_decode($payload, true, 64, JSON_THROW_ON_ERROR);
+        while (($row = $saved->fetch(PDO::FETCH_ASSOC)) !== false) {
+            $item = json_decode($row['payload_json'], true, 64, JSON_THROW_ON_ERROR);
+            $item['expiresAt'] = (int) $row['expires_at'];
+            $previous[] = $item;
         }
         $saved->closeCursor();
         $detected = MonitorIo::detect([
@@ -97,6 +115,11 @@ final class RecruitmentMonitor
             foreach ($detected['closed'] as $number) {
                 $remove->execute([$threadId, $number]);
             }
+            $shorten = $db->prepare('UPDATE detected_recruitments SET expires_at = ?
+                WHERE thread_id = ? AND post_number = ? AND expires_at > ?');
+            foreach ($detected['shortened'] as [$number, $expiresAt]) {
+                $shorten->execute([$expiresAt, $threadId, $number, $expiresAt]);
+            }
             $insert = $db->prepare('INSERT INTO detected_recruitments
                 (thread_id, post_number, expires_at, payload_json) VALUES (?, ?, ?, ?)
                 ON CONFLICT(thread_id, post_number) DO NOTHING');
@@ -110,8 +133,31 @@ final class RecruitmentMonitor
             $db->rollBack();
             throw $failure;
         }
-        unset($detected['closed']);
+        unset($detected['closed'], $detected['shortened']);
         return ['threadId' => $threadId, 'baseline' => $after === null] + $detected;
+    }
+
+    private function deliverLocked(PDO $db, string $threadId, int $now, Closure $send): array
+    {
+        $select = $db->prepare('SELECT post_number, expires_at, payload_json FROM detected_recruitments
+            WHERE thread_id = ? AND expires_at > ? ORDER BY post_number LIMIT 1');
+        $select->execute([$threadId, $now]);
+        $row = $select->fetch(PDO::FETCH_ASSOC);
+        $select->closeCursor();
+        if ($row === false) {
+            return ['status' => 'idle'];
+        }
+        $payload = json_decode($row['payload_json'], true, 64, JSON_THROW_ON_ERROR);
+        // Keep retries within the original notification window, even after an ambiguous FCM response.
+        $expiresAt = min((int) $row['expires_at'], (intdiv($now, 1000) + 300) * 1000);
+        if ($expiresAt < (int) $row['expires_at']) {
+            $db->prepare('UPDATE detected_recruitments SET expires_at = ? WHERE thread_id = ? AND post_number = ?')
+                ->execute([$expiresAt, $threadId, $row['post_number']]);
+        }
+        $receipt = $send($threadId, (int) $row['post_number'], $payload['roomIds'], $expiresAt);
+        $db->prepare('DELETE FROM detected_recruitments WHERE thread_id = ? AND post_number = ?')
+            ->execute([$threadId, $row['post_number']]);
+        return $receipt;
     }
 
     private static function requirePrivateFileIfPresent(string $path): void

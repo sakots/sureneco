@@ -92,6 +92,34 @@ try {
     $dat[] = $line('&gt;&gt;9 満員', 'followup');
     $monitor->scan($id, $db, 'loose', $now + 241_000);
     $assert($state->query('SELECT post_number FROM detected_recruitments')->fetchAll(PDO::FETCH_COLUMN) === [], 'Closing a later reply removes the saved original');
+
+    $dat[] = $line('四南 67890', 'send1');
+    $attempts = [];
+    $send = static function (string $thread, int $post, array $rooms, int $expiry) use (&$attempts): array {
+        $attempts[] = [$thread, $post, $rooms, $expiry];
+        if (count($attempts) === 1) {
+            throw new SafeFailure('fcm_network_failed');
+        }
+        return ['status' => 'accepted'];
+    };
+    $fails(fn () => $monitor->deliver($id, $db, 'loose', $send, $now + 242_000), 'fcm_network_failed');
+    $failedDat = $dat;
+    $dat = ['not a DAT'];
+    $fails(fn () => $monitor->deliver($id, $db, 'loose', $send, $now + 243_000), 'invalid_dat');
+    $assert(count($attempts) === 1, 'Never send queued items when refresh fails');
+    $dat = [...$failedDat, $line('四南 78901', 'send2')];
+    $assert($monitor->deliver($id, $db, 'loose', $send, $now + 244_000)['delivery']['status'] === 'accepted'
+        && $attempts[0] === $attempts[1], 'Retry the same recruitment, at most one per run');
+    $dat[] = $line('&gt;&gt;12 満員', 'send2');
+    $assert($monitor->deliver($id, $db, 'loose', $send, $now + 245_000)['delivery']['status'] === 'idle'
+        && count($attempts) === 2, 'Do not resend accepted recruitment or send newly closed pending recruitment');
+    $dat[] = $line('四南 89012', 'send3');
+    $reject = static function (): never {
+        throw new SafeFailure('fcm_network_failed');
+    };
+    $fails(fn () => $monitor->deliver($id, $db, 'loose', $reject, $now + 246_000), 'fcm_network_failed');
+    $assert($monitor->deliver($id, $db, 'loose', $send, $now + 546_000)['delivery']['status'] === 'idle'
+        && count($attempts) === 2, 'Ambiguous events expire at the first attempt window even if the room is open');
 } finally {
     foreach (glob($directory . '/*') as $file) {
         unlink($file);

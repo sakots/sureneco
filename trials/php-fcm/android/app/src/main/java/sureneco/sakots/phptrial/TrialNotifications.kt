@@ -17,7 +17,7 @@ object TrialNotifications {
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= 26) manager(context).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "PHP・FCM 接続試験", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "明示的に送信した接続試験だけを表示します"
+                description = "試験用の接続確認と友人戦募集を表示します"
                 lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             }
         )
