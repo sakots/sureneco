@@ -107,7 +107,7 @@ php trials/php-fcm/php/bin/monitor.php scan THREAD_ID /absolute/private/monitor.
 
 `scan`のモードは省略時`regex`（通常）、`loose`で緩めです。保存先には公開領域外の既存の所有者専用ディレクトリー（0700）を用い、DBと実行ロックは同じディレクトリーに0600で配置します。初回取得は履歴を基準として記録するだけで、次回以降は基準より後の募集をJSONで返します。参照を含め全DATを判定し、締め済み・期限切れの募集は除外します。失敗時は取得位置を進めず、同じDBを使う実行の重複は拒否します。毎分cronから呼び出す場合も、同じDBを継続使用してください。
 
-`list`は`threads`、`scan`は`threadId`・`baseline`・`lastPost`・`recruitments`を返します。募集の`expiresAt`はUnixミリ秒です。壊れたDATや前回より短いDATは失敗として扱い、取得位置を維持します。JSONはその実行の検出結果であり、送信待ちキューではありません。
+`list`は`threads`、`scan`は`threadId`・`baseline`・`lastPost`・`recruitments`を返します。募集の`expiresAt`はUnixミリ秒です。壊れたDATや前回より短いDATは失敗として扱い、取得位置を維持します。新着の検出結果は、標準出力を受け取れなくても失われないよう、取得位置と同じSQLiteトランザクションで`detected_recruitments`に保存します。スレッドIDとレス番号で重複を防ぎ、成功した監視回で期限切れを削除します。この記録は検出時点の結果であり、後から締まった募集を含み得るため、そのまま配送には使いません。
 
 ローカルでは`php trials/php-fcm/php/tests/monitor.php`で、実際の判定プロセスと一時SQLiteを使用して初回基準、新着の半荘募集、締め・期限切れと取得失敗からの復旧を確認しました。実際の5ch取得でも候補3件と指定スレッドのDAT 758レスを読み込み、初回に募集を出力しないことを確認しました。
 

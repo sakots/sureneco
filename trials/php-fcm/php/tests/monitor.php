@@ -73,8 +73,21 @@ try {
     } finally {
         fclose($lock);
     }
+    $state = new PDO('sqlite:' . $db);
+    $state->exec("CREATE TRIGGER reject_detection BEFORE INSERT ON detected_recruitments
+        BEGIN SELECT RAISE(ABORT, 'write failed'); END");
+    try {
+        $monitor->scan($id, $db, 'loose', $now);
+        throw new RuntimeException('Expected database failure');
+    } catch (PDOException) {
+        $assert((int) $state->query('SELECT last_post FROM cursors')->fetchColumn() === 7, 'Failed persistence rolls back cursor');
+    }
+    $state->exec('DROP TRIGGER reject_detection');
     $retry = $monitor->scan($id, $db, 'loose', $now);
     $assert(array_column($retry['recruitments'], 'number') === [8], 'Failed or overlapping scan must not consume posts');
+    $assert($state->query('SELECT post_number FROM detected_recruitments ORDER BY post_number')->fetchAll(PDO::FETCH_COLUMN) === [3, 8], 'Keep each detection once across scans');
+    $monitor->scan($id, $db, 'loose', $now + 240_000);
+    $assert($state->query('SELECT post_number FROM detected_recruitments')->fetchAll(PDO::FETCH_COLUMN) === [8], 'Remove detections at expiry');
 } finally {
     foreach (glob($directory . '/*') as $file) {
         unlink($file);
