@@ -76,6 +76,7 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 - 常設PHP監視用のAndroid試験APKを生成。受信ポリシー7テストと、既存APKとの署名一致・秘密情報非同梱を確認。
 - PHP試験アプリに、認証付き設定APIを使って通知対象スレッドを選択する機能を追加。
 - PHP版の設定APIをエックスサーバーへ配備。[Androidの接続手順](docs/operation-cost.md#androidからの監視スレッド選択)を追加。
+- PHP試験アプリの選択トークンを登録済み端末で自動取得する機能を追加し、設定APIを `oekakibbs.moe` へ移設。
 
 ### [2026/11/18] v0.13.3（Android版のみ）
 

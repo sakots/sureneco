@@ -102,9 +102,10 @@ PHP試験アプリで候補一覧を表示し、通知対象をスレッドご�
 
 配備時は新コードの初回cron実行より前に `/usr/bin/php8.4 "$ROOT/php/bin/service.php" provision-selection "$ROOT"` を実行します。公開領域に置くのは `trials/php-fcm/php/public/selection.php` だけです。Web側のPHPはcronと同じアカウントで実行し、サーバー側で `HTTPS`、`HTTP_AUTHORIZATION`（または `REDIRECT_HTTP_AUTHORIZATION`）、`SURENECO_PHP_WORKER_BIN=$ROOT/bin/sureneco-php-worker` が利用できるようにします。非公開の `ROOT` はWeb側の `SURENECO_PHP_ROOT` で明示できます（既定は `$HOME/.sureneco-php`）。
 
-Androidの「通知対象スレッドを選択」で、公開したAPIのHTTPS URLと、非公開の `ROOT/secrets/selection-auth.json` の `token` を入力します。トークンはログ・チャット・Gitに残さないでください。オン操作は最新DATの取得に成功してから保存し、取得失敗時はオフのままです。監視と競合した場合は監視回終了後に再読み込みして操作してください。一覧から外れたスレッドは、再出現してもオフです。
+Androidの「通知対象スレッドを選択」は、端末でFCM登録済みなら `https://oekakibbs.moe/sureneco-php/selection.php` から専用トークンを自動取得します。URLやトークンを手入力する必要はありません。サーバーに登録済みのFCM宛先だけが交換できます。交換にはFCMトークン自体ではなく、用途を固定したSHA-256証明値をHTTPSのリクエスト本文で使います。この証明値も認証情報なので記録しません。未登録・再登録直後に一致しない場合は、先にサーバーのFCM宛先を更新する必要があります。
+オン操作は最新DATの取得に成功してから保存し、取得失敗時はオフのままです。監視と競合した場合は監視回終了後に再読み込みして操作してください。一覧から外れたスレッドは、再出現してもオフです。
 
-エックスサーバーの公開先は `https://natsuki001.xsrv.jp/sureneco-php/selection.php` です。`f8b060bb06` のPHPコードへ切り替え、既存の選択2件・取得DB・crontabを保持しました。認証必須の一覧取得、隔離状態でのHTTPSによるオフ・オンと最新DATの基準化、本番cron再開後の2件の正常監視を確認しました。隔離試験で通知は送っていません。
+エックスサーバーで公開先を `oekakibbs.moe` へ移し、旧URLと旧選択トークンを無効にしました。接続中のPixel 7 ProのFCM登録情報で専用トークンの取得と一覧取得が成功し、未登録の証明値は拒否されることを確認しました。既存の選択2件・取得DB・crontabを保持し、切替後のcronでも2件を正常に監視しました。新APKは `release/sureneco_php_fcm_trial_auto_selection_debug.apk` です。実機への上書きインストールは行っていません。
 
 ### 試験の実行順序
 

@@ -14,17 +14,21 @@ final class SelectionEndpoint
         string $method,
         #[\SensitiveParameter] ?string $authorization,
         ?string $contentType,
-        string $body,
+        #[\SensitiveParameter] string $body,
     ): array {
         if ($method !== 'GET' && $method !== 'POST') {
             return [405, ['error' => 'method_not_allowed']];
+        }
+        $isJson = $contentType !== null && strtolower(trim(explode(';', $contentType, 2)[0])) === 'application/json';
+        if ($method === 'POST' && $authorization === null && $isJson && $body !== '') {
+            return self::exchange($monitor, $body);
         }
         if ($authorization === null || preg_match('/\A(?i:Bearer) ([a-f0-9]{64})\z/', $authorization, $match) !== 1) {
             return [401, ['error' => 'unauthorized']];
         }
         $id = $enabled = null;
         if ($method === 'POST') {
-            if ($contentType === null || strtolower(trim(explode(';', $contentType, 2)[0])) !== 'application/json') {
+            if (!$isJson) {
                 return [415, ['error' => 'unsupported_media_type']];
             }
             $change = strlen($body) <= self::MAX_BODY_BYTES ? json_decode($body, true, 4) : null;
@@ -45,6 +49,33 @@ final class SelectionEndpoint
                 'monitor_busy' => [409, ['error' => 'busy']],
                 default => [503, ['error' => 'unavailable']],
             };
+        } catch (\Throwable) {
+            return [503, ['error' => 'unavailable']];
+        }
+    }
+
+    private static function exchange(PersistentMonitor $monitor, #[\SensitiveParameter] string $body): array
+    {
+        $request = strlen($body) <= self::MAX_BODY_BYTES ? json_decode($body, false, 4) : null;
+        if (!$request instanceof \stdClass) {
+            return [400, ['error' => 'invalid_request']];
+        }
+        if (!property_exists($request, 'registrationProof')) {
+            return [401, ['error' => 'unauthorized']];
+        }
+        // json_decode collapses duplicate keys; require a single string-to-string member in the wire object.
+        if (!is_string($request->registrationProof) || preg_match('/\A[a-f0-9]{64}\z/', $request->registrationProof) !== 1
+            || preg_match('/\A\s*\{\s*"(?:[^"\x5c]|\x5c.)*"\s*:\s*"(?:[^"\x5c]|\x5c.)*"\s*\}\s*\z/s', $body) !== 1) {
+            return [400, ['error' => 'invalid_request']];
+        }
+
+        try {
+            return [200, ['token' => $monitor->exchangeSelectionToken($request->registrationProof)]];
+        } catch (SafeFailure $error) {
+            if ($error->reason === 'selection_unauthorized') {
+                return [401, ['error' => 'unauthorized']];
+            }
+            return [503, ['error' => 'unavailable']];
         } catch (\Throwable) {
             return [503, ['error' => 'unavailable']];
         }

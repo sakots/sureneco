@@ -206,12 +206,65 @@ try {
     $request = static function (string $method, ?string $authorization, string $body = '', ?string $type = 'application/json') use ($scheduler): array {
         return SelectionEndpoint::dispatch($scheduler, $method, $authorization, $type, $body);
     };
+    $registrationPath = $root . '/secrets/registration-token.txt';
+    $registration = 'fixture:configured_registration-token';
+    $proofFor = static fn (string $value): string => hash('sha256', 'sureneco-php-selection-v1:' . $value);
+    $proofBody = static fn (string $proof): string => json_encode(['registrationProof' => $proof], JSON_THROW_ON_ERROR);
+    $proof = $proofFor($registration);
+    $exchange = static fn (string $proof): array => $request('POST', null, $proofBody($proof));
+    $unauthorized = [401, ['error' => 'unauthorized']];
+    $invalid = [400, ['error' => 'invalid_request']];
+    $unavailable = [503, ['error' => 'unavailable']];
+    file_put_contents($registrationPath, $registration . "\n");
+    chmod($registrationPath, 0600);
+    $assert($exchange($proof) === $unavailable, 'Exchange never provisions selection');
+    $authPath = $root . '/secrets/selection-auth.json';
+    $writeJson($authPath, ['token' => str_repeat('a', 64)]);
+    $assert($exchange($proof) === $unavailable, 'A bearer file alone does not make selection ready');
+    unlink($authPath);
     $assert($request('GET', 'Bearer ' . str_repeat('a', 64))[0] === 503, 'API unavailable before explicit provisioning');
     $scheduler->provisionSelection();
-    $authPath = $root . '/secrets/selection-auth.json';
     $token = json_decode(file_get_contents($authPath), true, 64, JSON_THROW_ON_ERROR)['token'];
     $authorization = 'Bearer ' . $token;
     $assert(preg_match('/\A[a-f0-9]{64}\z/', $token) === 1 && (fileperms($authPath) & 0777) === 0600, 'Provision a private dedicated token');
+    $assert($exchange($proof) === [200, ['token' => $token]], 'Exchange returns only the existing bearer for the configured recipient');
+    $assert($request('POST', null, ' { "registration\u0050roof" : "' . $proof . '" } ') === [200, ['token' => $token]],
+        'Equivalent JSON encoding still exchanges a single proof');
+    $assert($exchange(str_repeat('0', 64)) === $unauthorized, 'Reject a nonmatching registration proof without returning a bearer');
+    $assert($request('POST', null, '{}') === $unauthorized && $request('POST', null) === $unauthorized,
+        'Reject a missing credential');
+    $assert($request('GET', null, $proofBody($proof)) === $unauthorized, 'GET cannot exchange proofs');
+    $assert($request('POST', null, '{"id":"' . $id . '","enabled":false}') === $unauthorized,
+        'An unauthenticated mutation cannot use the exchange');
+    foreach (['', 'Basic credentials'] as $header) {
+        $assert($request('POST', $header, $proofBody($proof)) === $unauthorized, 'Invalid Authorization prevents exchange');
+    }
+    foreach (['Bearer ' . str_repeat('0', 64), $authorization] as $header) {
+        $assert($request('POST', $header, $proofBody($proof)) === $invalid, 'Bearer-shaped Authorization routes to mutation validation');
+    }
+    foreach (['[]', '{', str_repeat(' ', 1025), '{"registrationProof":null}', $proofBody(strtoupper($proof)),
+        $proofBody($registration), '{"registrationProof":"' . $proof . '","extra":true}',
+        '{"registrationProof":"' . $proof . '","registrationProof":"' . $proof . '"}'] as $bad) {
+        $assert($request('POST', null, $bad) === $invalid, 'Reject malformed or non-exact exchange input');
+    }
+    $assert($request('POST', null, $proofBody($proof), 'text/plain') !== [200, ['token' => $token]],
+        'Non-JSON media types cannot exchange');
+    chmod($registrationPath, 0644);
+    $assert($exchange($proof) === $unavailable, 'Fail closed on a non-private registration file');
+    chmod($registrationPath, 0600);
+    chmod($root . '/secrets', 0755);
+    $assert($exchange($proof) === $unavailable, 'Fail closed on a non-private secrets directory');
+    chmod($root . '/secrets', 0700);
+    rename($registrationPath, $registrationPath . '.old');
+    $assert($exchange($proof) === $unauthorized, 'No registration file means no authorized recipient');
+    symlink($registrationPath . '.old', $registrationPath);
+    $assert($exchange($proof) === $unavailable, 'Fail closed on a symlink to another private file');
+    unlink($registrationPath);
+    $replacement = 'fixture:replacement_registration-token';
+    file_put_contents($registrationPath, $replacement);
+    chmod($registrationPath, 0600);
+    $assert($exchange($proof) === $unauthorized && $exchange($proofFor($replacement)) === [200, ['token' => $token]],
+        'Exchange immediately follows rotation of the configured recipient');
     $assert($request('GET', null)[0] === 401 && $request('GET', 'Bearer ' . str_repeat('0', 64))[0] === 401, 'Reject missing and incorrect credentials');
     $assert($request('DELETE', $authorization)[0] === 405 && $request('POST', $authorization, '', 'text/plain')[0] === 415, 'Only allow supported methods and JSON mutations');
     foreach (['[]', '{', '{"id":123,"enabled":true}', '{"id":"' . $id . '","enabled":"true"}',
