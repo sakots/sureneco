@@ -29,7 +29,8 @@ object ReceiptPolicy {
         val sentAt = sentText.toLong()
         val expiresAt = expiresText.toLong()
         val lifetime = expiresAt - sentAt
-        if (sentAt > now || lifetime !in 1L..300L || (type == "connectivity_test" && lifetime != 300L))
+        val allowedClockLead = if (type == "recruitment") 5L else 0L
+        if (sentAt > now + allowedClockLead || lifetime !in 1L..300L || (type == "connectivity_test" && lifetime != 300L))
             return Decision(Reason.MALFORMED)
         if (expiresAt <= now) return Decision(Reason.EXPIRED)
         if (id in seen) return Decision(Reason.DUPLICATE)

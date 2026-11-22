@@ -7,6 +7,7 @@ namespace Sureneco\FcmTrial;
 final class Configuration
 {
     public const PACKAGE = 'sureneco.sakots.phptrial';
+    public const PUBLIC_PACKAGE = 'sureneco.sakots.php';
     public const OAUTH_ENDPOINT = 'https://oauth2.googleapis.com/token';
     public const OPERATIONS = ['auth', 'validate', 'validate-topic', 'validate-recruitment', 'send'];
     private const JSON_LIMIT = 65536;
@@ -16,6 +17,7 @@ final class Configuration
         public readonly string $projectId,
         #[\SensitiveParameter] public readonly array $credentials,
         #[\SensitiveParameter] public readonly ?string $registrationToken,
+        public readonly string $package,
     ) {
     }
 
@@ -26,6 +28,26 @@ final class Configuration
         string $clientConfigPath,
         ?string $tokenPath,
         $stdin = null,
+    ): self {
+        return self::read($operation, $credentialPath, $clientConfigPath, $tokenPath, $stdin, self::PACKAGE);
+    }
+
+    public static function loadPublic(string $credentialPath, string $clientConfigPath): self
+    {
+        if ($credentialPath === '-') {
+            throw new SafeFailure('input_file_unavailable');
+        }
+        return self::read('send', $credentialPath, $clientConfigPath, null, null, self::PUBLIC_PACKAGE);
+    }
+
+    /** @param resource|null $stdin */
+    private static function read(
+        string $operation,
+        string $credentialPath,
+        string $clientConfigPath,
+        ?string $tokenPath,
+        $stdin,
+        string $package,
     ): self {
         if (!in_array($operation, self::OPERATIONS, true)) {
             throw new SafeFailure('invalid_operation');
@@ -62,9 +84,9 @@ final class Configuration
             throw new SafeFailure('invalid_client_config');
         }
         $matches = array_values(array_filter($client['client'], static fn ($entry): bool => is_array($entry)
-            && ($entry['client_info']['android_client_info']['package_name'] ?? null) === self::PACKAGE));
+            && ($entry['client_info']['android_client_info']['package_name'] ?? null) === $package));
         if (count($matches) !== 1) {
-            throw new SafeFailure('trial_client_missing');
+            throw new SafeFailure($package === self::PACKAGE ? 'trial_client_missing' : 'public_client_missing');
         }
         $appId = $matches[0]['client_info']['mobilesdk_app_id'] ?? null;
         $apiKeys = $matches[0]['api_key'] ?? null;
@@ -77,7 +99,7 @@ final class Configuration
             throw new SafeFailure('invalid_client_config');
         }
         $token = null;
-        if (in_array($operation, ['validate', 'send'], true)) {
+        if ($package === self::PACKAGE && in_array($operation, ['validate', 'send'], true)) {
             if ($tokenPath === null || $tokenPath === '' || $tokenPath === '-') {
                 throw new SafeFailure('registration_token_required');
             }
@@ -95,7 +117,7 @@ final class Configuration
         if (isset($allowedCredentials['private_key_id']) && !is_string($allowedCredentials['private_key_id'])) {
             throw new SafeFailure('invalid_credentials');
         }
-        return new self($operation, $project, $allowedCredentials, $token);
+        return new self($operation, $project, $allowedCredentials, $token, $package);
     }
 
     private static function decode(#[\SensitiveParameter] string $input): array

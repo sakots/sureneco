@@ -46,6 +46,14 @@ class ReceiptPolicyTest {
         assertEquals(ReceiptPolicy.Reason.MALFORMED, ReceiptPolicy.evaluate(wrongKind, now, true, emptySet()).reason)
     }
 
+    @Test fun recruitmentToleratesSmallSenderClockLeadWithoutExtendingExpiry() {
+        val notice = payload() + mapOf("type" to "recruitment", "sentAt" to (now + 5).toString(), "expiresAt" to (now + 20).toString())
+        assertEquals(ReceiptPolicy.Reason.ACCEPTED, ReceiptPolicy.evaluate(notice, now, true, emptySet()).reason)
+        assertEquals(ReceiptPolicy.Reason.EXPIRED, ReceiptPolicy.evaluate(notice, now + 20, true, emptySet()).reason)
+        val tooFarAhead = notice + ("sentAt" to (now + 6).toString())
+        assertEquals(ReceiptPolicy.Reason.MALFORMED, ReceiptPolicy.evaluate(tooFarAhead, now, true, emptySet()).reason)
+    }
+
     @Test fun rejectsWrongKindIdsTimestampsAndUnexpectedFields() {
         val changes = listOf(
             mapOf("type" to "notification"), mapOf("eventId" to id.uppercase()),

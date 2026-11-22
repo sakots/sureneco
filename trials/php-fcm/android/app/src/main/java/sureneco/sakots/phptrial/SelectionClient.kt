@@ -26,12 +26,15 @@ internal data class MonitoringSnapshot(
     val threads: List<SelectionThread>,
     val recruitments: List<TrialRecruitment>,
     val settings: MonitoringSettings,
+    val serverEnabled: Boolean? = null,
 )
 
 internal class SelectionHttpError(val status: Int) : IOException()
 
 internal object SelectionClient {
-    private val endpoint = URI("https://oekakibbs.moe/sureneco-php/selection.php").toURL()
+    private val endpoint = URI(if (BuildConfig.PUBLIC_SERVICE)
+        "https://oekakibbs.moe/sureneco-php-public/service.php"
+    else "https://oekakibbs.moe/sureneco-php/selection.php").toURL()
     private val tokenPattern = Regex("[0-9a-f]{64}")
     private val threadIdPattern = Regex("[0-9]{9,11}")
     private val roomIdPattern = Regex("[0-9]{5}")
@@ -75,6 +78,29 @@ internal object SelectionClient {
         val snapshot = parseSnapshot(request(bearer, body.toString()))
         if (snapshot.settings != settings) throw IOException()
         return snapshot
+    }
+
+    fun beginRegistration(registrationToken: String, bearer: String): String {
+        val body = JSONObject().put("action", "begin").put("registrationToken", registrationToken).put("bearer", bearer)
+        val id = request(null, body.toString()).opt("challengeId") as? String ?: throw IOException()
+        return id.takeIf(RegistrationChallenge.idPattern::matches) ?: throw IOException()
+    }
+
+    fun finishRegistration(bearer: String, challenge: RegistrationChallenge) {
+        val body = JSONObject().put("action", "finish").put("challengeId", challenge.id)
+            .put("code", challenge.code).put("bearer", bearer)
+        if (request(null, body.toString()).opt("registered") != true) throw IOException()
+    }
+
+    fun changeRegistration(bearer: String, action: PublicRegistration.Action) {
+        val body = JSONObject().put("action", action.wire)
+        val response = request(bearer, body.toString())
+        val confirmed = when (action) {
+            PublicRegistration.Action.DELETE -> response.opt("deleted") == true
+            PublicRegistration.Action.PAUSE -> response.opt("enabled") == false
+            PublicRegistration.Action.RESUME -> response.opt("enabled") == true
+        }
+        if (!confirmed) throw IOException()
     }
 
     private fun request(bearer: String?, body: String?): JSONObject {
@@ -133,7 +159,8 @@ internal object SelectionClient {
         val refresh = settings.get("thread_refresh_sec") as? Int ?: throw IOException()
         val filter = settings.get("recruitment_filter") as? String ?: throw IOException()
         if (refresh !in MonitoringSettings.refreshRange || filter !in MonitoringSettings.filters) throw IOException()
-        return MonitoringSnapshot(parsedThreads, parsedRecruitments, MonitoringSettings(refresh, filter))
+        val enabled = if (BuildConfig.PUBLIC_SERVICE) document.get("enabled") as? Boolean ?: throw IOException() else null
+        return MonitoringSnapshot(parsedThreads, parsedRecruitments, MonitoringSettings(refresh, filter), enabled)
     }
 
     private fun JSONObject.getThreadId(key: String): String =

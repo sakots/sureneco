@@ -197,6 +197,39 @@ try {
     $assert($result['status'] === 'validated' && $result['sent'] === false && $result['deviceDeliveryVerified'] === false,
         'FCM validation never claims delivery');
 
+    $formalClient = $client;
+    $formalClient['client'][0]['client_info']['android_client_info']['package_name'] = Configuration::PUBLIC_PACKAGE;
+    $formalPath = $put('formal-client.json', json_encode($formalClient, JSON_THROW_ON_ERROR));
+    $failure(fn () => Configuration::loadPublic($credentialPath, $clientPath), 'public_client_missing');
+    $failure(fn () => Configuration::load('send', $credentialPath, $formalPath, $tokenPath), 'trial_client_missing');
+    $formal = Configuration::loadPublic($credentialPath, $formalPath);
+    $history = [];
+    $stack = HandlerStack::create(new MockHandler([$oauth(), $accepted(), $accepted()]));
+    $stack->push(Middleware::history($history));
+    $sender = new Sender(new Client(['handler' => $stack]));
+    $challenge = ['type' => 'registration_challenge', 'challengeId' => str_repeat('a', 32),
+        'code' => str_repeat('b', 64), 'expiresAt' => (string) (time() + 120)];
+    $failure(fn () => $sender->sendPublicChallenge($load(), 'formal-device-only', $challenge['challengeId'],
+        $challenge['code'], (int) $challenge['expiresAt']), 'invalid_operation');
+    $failure(fn () => $sender->run($formal), 'invalid_operation');
+    $sender->sendPublicChallenge($formal, 'formal-device-only', $challenge['challengeId'], $challenge['code'], (int) $challenge['expiresAt']);
+    $sent = $sender->sendPublicRecruitment($formal, 'rotated-formal-device', '1795262711', 11, ['24328'], (time() + 45) * 1000);
+    $assert(count($history) === 3, 'Public cycle reuses a limited-lifetime OAuth credential');
+    foreach ([1 => 'formal-device-only', 2 => 'rotated-formal-device'] as $index => $destination) {
+        $request = json_decode((string) $history[$index]['request']->getBody(), true, 16, JSON_THROW_ON_ERROR);
+        $publicMessage = $request['message'];
+        $assert($request['validate_only'] === false && $publicMessage['token'] === $destination
+            && !isset($publicMessage['topic'], $publicMessage['notification'])
+            && $publicMessage['android']['restricted_package_name'] === Configuration::PUBLIC_PACKAGE
+            && $history[$index]['options']['timeout'] === 5.0, 'Formal sends are bounded, data-only and package restricted');
+        if ($index === 1) {
+            $assert($publicMessage['data'] === $challenge && (int) $publicMessage['android']['ttl'] <= 120,
+                'Only the intended registration FCM message contains the challenge code, with a bounded TTL');
+        }
+    }
+    $assert(!str_contains(json_encode($sent), 'rotated-formal-device') && !str_contains(json_encode($sent), 'secret-access-token'),
+        'Public send result contains no tokens');
+
     echo json_encode(['ok' => true, 'assertions' => $assertions], JSON_THROW_ON_ERROR) . PHP_EOL;
 } finally {
     foreach (glob($directory . '/*') as $path) {

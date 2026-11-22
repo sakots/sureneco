@@ -107,7 +107,9 @@ internal class TrialDashboard(
     init {
         buildHeader()
         ui.add(root, noticeText, 10)
-        ui.add(pages[Page.THREADS.ordinal], section("雀魂スレッド", "通知を受け取りたいスレッドを選んでください。", threadReload), 12)
+        val threadHelp = if (BuildConfig.PUBLIC_SERVICE) "通知を受け取りたいスレッドを最大3件選んでください。"
+            else "通知を受け取りたいスレッドを選んでください。"
+        ui.add(pages[Page.THREADS.ordinal], section("雀魂スレッド", threadHelp, threadReload), 12)
         ui.add(pages[Page.THREADS.ordinal], threads, 12)
         ui.add(pages[Page.THREADS.ordinal], threadAvailability.root)
         ui.add(pages[Page.RECRUITMENTS.ordinal], section("友人戦募集", "監視開始後に見つかった募集を表示します。", recruitmentReload), 12)
@@ -238,7 +240,8 @@ internal class TrialDashboard(
             else -> title
         }
         view.help.text = when {
-            !session.registered -> "設定で通知試験を開始するか、登録トークンを再取得してください。"
+            !session.registered -> if (BuildConfig.PUBLIC_SERVICE) "設定でこの端末の通知を登録してください。"
+                else "設定で通知試験を開始するか、登録トークンを再取得してください。"
             session.snapshot == null -> "接続や登録状態を確認し、「今すぐ更新」をお試しください。"
             else -> help
         }
@@ -314,8 +317,9 @@ internal class TrialDashboard(
         if (snapshot?.settings != previous?.settings) renderSettings(snapshot?.settings, previous?.settings)
         displayed = snapshot
         val enabled = snapshot?.threads?.count { it.enabled } ?: 0
-        statusDot.isActivated = enabled > 0
+        statusDot.isActivated = enabled > 0 && snapshot?.serverEnabled != false
         statusText.text = when {
+            snapshot?.serverEnabled == false -> "サーバーの監視は停止中"
             enabled > 0 -> "${enabled}スレッドを監視中"
             !session.registered -> "端末の通知登録が必要です"
             snapshot != null -> "監視するスレッドを選択"
@@ -328,13 +332,16 @@ internal class TrialDashboard(
         settingsReload.isEnabled = threadReload.isEnabled
         settingsReload.visibility = if (session.registered) View.VISIBLE else View.GONE
         val canWrite = session.canWrite
-        switches.forEach { it.isEnabled = canWrite }
+        switches.forEach {
+            it.isEnabled = canWrite && (!BuildConfig.PUBLIC_SERVICE || enabled < 3 || it.isChecked)
+        }
         seconds.isEnabled = snapshot != null
         filter.isEnabled = snapshot != null
         save.isEnabled = canWrite
         settingsStatus.text = when {
             snapshot != null -> "スレッド候補の更新間隔と募集の検出方法を保存します。"
-            !session.registered -> "下の「端末の通知」で通知試験を開始するか、登録トークンを再取得してください。"
+            !session.registered -> if (BuildConfig.PUBLIC_SERVICE) "下の「端末の通知」で登録または再試行してください。"
+                else "下の「端末の通知」で通知試験を開始するか、登録トークンを再取得してください。"
             session.busy -> "保存済みの設定を読み込んでいます。"
             else -> "保存済みの設定が読み込めていません。"
         }

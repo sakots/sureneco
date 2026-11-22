@@ -7,7 +7,7 @@ import java.io.IOException
 import java.util.concurrent.Executors
 
 /** Holds the authenticated state and in-flight request across Activity recreation. */
-internal class SelectionSession(private val state: TrialState) {
+internal class SelectionSession(private val state: TrialState, private val publicRegistration: PublicRegistration? = null) {
     data class Notice(val text: String, val error: Boolean = false)
 
     private data class Response(val bearer: String, val snapshot: MonitoringSnapshot, val saved: Boolean)
@@ -37,6 +37,7 @@ internal class SelectionSession(private val state: TrialState) {
     val canWrite get() = snapshot != null && bearer != null && !busy && notice?.error != true
 
     private fun currentRegistration(): String? {
+        if (publicRegistration != null) return publicRegistration.selectionBearer
         val current = state.snapshot()
         return current.token.takeIf { current.enabled && it.isNotBlank() }
     }
@@ -87,7 +88,7 @@ internal class SelectionSession(private val state: TrialState) {
                 }
                 fun exchangeAndLoad(): Response {
                     requireRegistration()
-                    val refreshed = SelectionClient.exchange(registeredToken)
+                    val refreshed = if (publicRegistration != null) registeredToken else SelectionClient.exchange(registeredToken)
                     requireRegistration()
                     return Response(refreshed, SelectionClient.load(refreshed), false)
                 }
@@ -98,7 +99,7 @@ internal class SelectionSession(private val state: TrialState) {
                         val updated = if (write == null) SelectionClient.load(knownBearer) else write(knownBearer)
                         Response(knownBearer, updated, write != null)
                     } catch (error: SelectionHttpError) {
-                        if (error.status != 401) throw error
+                        if (error.status != 401 || publicRegistration != null) throw error
                         // Recover by reading the current state; never replay a write.
                         exchangeAndLoad()
                     }
@@ -120,6 +121,7 @@ internal class SelectionSession(private val state: TrialState) {
                             write != null -> Notice("認証が切れたため保存しませんでした。最新の状態を読み込んだので、必要なら操作をやり直してください。")
                             else -> null
                         }
+                        response.snapshot.serverEnabled?.let { publicRegistration?.syncServerEnabled(it) }
                     }, { error ->
                         showFailure(error, write != null)
                     })
@@ -140,7 +142,12 @@ internal class SelectionSession(private val state: TrialState) {
                 bearer = null
                 snapshot = null
                 needsManualReload = true
-                "サーバーの通知先が端末の現在の登録トークンと一致していることを確認し、再読み込みしてください。"
+                if (publicRegistration != null) {
+                    if (status == 401) publicRegistration.requireProof()
+                    "端末の通知設定から登録を再試行してください。"
+                } else {
+                    "サーバーの通知先が端末の現在の登録トークンと一致していることを確認し、再読み込みしてください。"
+                }
             }
             409, 503 -> "サーバーの処理が完了してから再読み込みしてください。"
             else -> if (error is RegistrationChanged) "端末の登録情報が変わりました。再読み込みしてください。"

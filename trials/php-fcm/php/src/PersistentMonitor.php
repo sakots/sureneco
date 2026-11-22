@@ -9,6 +9,7 @@ use PDO;
 
 final class PersistentMonitor
 {
+    public const MAX_DEVICE_THREADS = 3;
     private const BUDGET_NS = 90_000_000_000;
     private const STALE_MS = 180_000;
     private const MAX_CANDIDATES = 1000;
@@ -30,8 +31,12 @@ final class PersistentMonitor
     private readonly string $root;
     private readonly RecruitmentMonitor $monitor;
 
-    public function __construct(string $root, ?RecruitmentMonitor $monitor = null, private readonly ?Closure $send = null)
-    {
+    public function __construct(
+        string $root,
+        ?RecruitmentMonitor $monitor = null,
+        private readonly ?Closure $send = null,
+        private readonly bool $publicDevice = false,
+    ) {
         if (!str_starts_with($root, '/') || str_contains($root, "\0") || $root === '/') {
             throw new SafeFailure('invalid_state_path');
         }
@@ -46,7 +51,7 @@ final class PersistentMonitor
         $this->checkDirectories();
     }
 
-    public function tick(): array
+    public function tick(int|float|null $cycleDeadline = null): array
     {
         $this->checkDirectories();
         $lock = $this->openLock();
@@ -56,7 +61,7 @@ final class PersistentMonitor
         }
         $mask = umask(0077);
         try {
-            $deadline = hrtime(true) + self::BUDGET_NS;
+            $deadline = $cycleDeadline ?? hrtime(true) + self::BUDGET_NS;
             $config = $this->configuration();
             $this->normalizeConfiguration($config);
             $runtime = $this->runtime();
@@ -183,6 +188,20 @@ final class PersistentMonitor
         if (!hash_equals($expected, $token)) {
             throw new SafeFailure('selection_unauthorized');
         }
+        return $this->selection($id, $enabled, $settings);
+    }
+
+    /** The public service calls this only while holding the authenticated device slot. */
+    public function deviceSelection(?string $id = null, ?bool $enabled = null, ?array $settings = null): array
+    {
+        if (!$this->publicDevice) {
+            throw new SafeFailure('selection_unavailable');
+        }
+        return $this->selection($id, $enabled, $settings);
+    }
+
+    private function selection(?string $id, ?bool $enabled, ?array $settings): array
+    {
         $lock = $this->openLock();
         try {
             if (!flock($lock, LOCK_EX | LOCK_NB)) {
@@ -209,17 +228,30 @@ final class PersistentMonitor
                 }
                 if ($enabled !== isset($selected[$id])) {
                     if ($enabled) {
-                        // Commit the fresh cursor and discard its queue before cron can see the thread enabled.
-                        $this->checkDatabaseFiles();
-                        $this->monitor->baseline($id, $this->root . '/state/monitor.sqlite', $config['filter']);
+                        if ($this->publicDevice) {
+                            if (count($selected) >= self::MAX_DEVICE_THREADS) {
+                                throw new SafeFailure('selection_limit');
+                            }
+                            // The next successful cron scan takes a fresh baseline without doing board IO in the API.
+                            $this->pruneDeviceDatabase($runtime['selected']);
+                        } else {
+                            // Commit the fresh cursor and discard its queue before cron can see the thread enabled.
+                            $this->checkDatabaseFiles();
+                            $this->monitor->baseline($id, $this->root . '/state/monitor.sqlite', $config['filter']);
+                        }
                         $selected[$id] = true;
                     } else {
-                        $db = $this->historyDatabase();
-                        $db?->prepare('DELETE FROM recruitment_history WHERE thread_id = ?')->execute([$id]);
+                        if (!$this->publicDevice) {
+                            $db = $this->historyDatabase();
+                            $db?->prepare('DELETE FROM recruitment_history WHERE thread_id = ?')->execute([$id]);
+                        }
                         unset($selected[$id]);
                     }
                     $runtime['selected'] = array_map(strval(...), array_keys($selected));
                     $this->atomicJson($this->root . '/state/runtime.json', $runtime);
+                    if ($this->publicDevice && !$enabled) {
+                        $this->pruneDeviceDatabase($runtime['selected']);
+                    }
                 }
             }
             $threads = [];
@@ -231,8 +263,12 @@ final class PersistentMonitor
             if ($settings !== null) {
                 $this->atomicJson($this->root . '/config.json', $config);
             }
-            return ['threads' => $threads, 'recruitments' => $recruitments,
+            $snapshot = ['threads' => $threads, 'recruitments' => $recruitments,
                 'settings' => ['thread_refresh_sec' => $config['thread_refresh_sec'], 'recruitment_filter' => $config['filter']]];
+            if ($this->publicDevice) {
+                $snapshot['enabled'] = $config['enabled'];
+            }
+            return $snapshot;
         } finally {
             fclose($lock);
         }
@@ -270,6 +306,26 @@ final class PersistentMonitor
         $removed = array_values(array_diff($read->fetchAll(PDO::FETCH_COLUMN), $active));
         $inactive = $removed === [] ? '' : ' OR thread_id IN (' . implode(', ', array_fill(0, count($removed), '?')) . ')';
         $db->prepare('DELETE FROM recruitment_history WHERE expires_at <= ?' . $inactive)->execute([$now, ...$removed]);
+    }
+
+    private function pruneDeviceDatabase(array $active): void
+    {
+        // All three tables are initialized together before a public device can have persisted scan rows.
+        $db = $this->historyDatabase();
+        if ($db === null) {
+            return;
+        }
+        $where = $active === [] ? '' : ' WHERE thread_id NOT IN (' . implode(', ', array_fill(0, count($active), '?')) . ')';
+        $db->beginTransaction();
+        try {
+            foreach (['cursors', 'detected_recruitments', 'recruitment_history'] as $table) {
+                $db->prepare("DELETE FROM $table$where")->execute($active);
+            }
+            $db->commit();
+        } catch (\Throwable $error) {
+            $db->rollBack();
+            throw $error;
+        }
     }
 
     private function selectionToken(): ?string
@@ -315,6 +371,9 @@ final class PersistentMonitor
                 $candidateIds = array_column($candidates, 'id');
                 $active = isset($runtime['selected']) ? array_values(array_intersect($runtime['selected'], $candidateIds)) : $candidateIds;
                 $this->pruneRecruitmentHistory($active);
+                if ($this->publicDevice) {
+                    $this->pruneDeviceDatabase($active);
+                }
                 $runtime['candidates'] = array_values($candidates);
                 if (isset($runtime['selected'])) {
                     $runtime['selected'] = $active;
@@ -470,8 +529,9 @@ final class PersistentMonitor
     {
         $runtime = $this->readJson($this->root . '/state/runtime.json', 1024 * 1024);
         if ($runtime === null) {
-            return ['version' => 1, 'candidates' => [], 'nextThreadId' => null,
+            $default = ['version' => 1, 'candidates' => [], 'nextThreadId' => null,
                 'list' => ['attemptedAt' => null, 'succeededAt' => null, 'error' => null]];
+            return $this->publicDevice ? $default + ['selected' => []] : $default;
         }
         if (($runtime['version'] ?? null) !== 1 || !is_array($runtime['candidates'] ?? null)
             || !array_is_list($runtime['candidates']) || count($runtime['candidates']) > self::MAX_CANDIDATES
@@ -490,7 +550,8 @@ final class PersistentMonitor
         }
         if (array_key_exists('selected', $runtime)) {
             $selected = $runtime['selected'];
-            if (!is_array($selected) || !array_is_list($selected) || count($selected) > count($seen)) {
+            if (!is_array($selected) || !array_is_list($selected) || count($selected) > count($seen)
+                || ($this->publicDevice && count($selected) > self::MAX_DEVICE_THREADS)) {
                 throw new SafeFailure('invalid_state_file');
             }
             foreach ($selected as $id) {
@@ -499,6 +560,9 @@ final class PersistentMonitor
                 }
                 unset($seen[$id]);
             }
+        }
+        if ($this->publicDevice && !isset($runtime['selected'])) {
+            throw new SafeFailure('invalid_state_file');
         }
         return $runtime;
     }

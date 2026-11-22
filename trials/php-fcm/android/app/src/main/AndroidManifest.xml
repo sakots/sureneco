@@ -9,7 +9,7 @@
         android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:usesCleartextTraffic="false"
-        android:label="スレネコ PHP・FCM試験"
+        android:label="${appLabel}"
         android:icon="@drawable/ic_trial_notification"
         android:theme="@style/TrialTheme">
         <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />

@@ -11,13 +11,16 @@ import android.content.pm.PackageManager
 import android.os.Build
 
 object TrialNotifications {
-    private const val CHANNEL_ID = "php_fcm_connectivity_trial"
+    private val CHANNEL_ID = if (BuildConfig.PUBLIC_SERVICE) "recruitment" else "php_fcm_connectivity_trial"
     private fun manager(context: Context) = context.getSystemService(NotificationManager::class.java)
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= 26) manager(context).createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "PHP・FCM 接続試験", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "試験用の接続確認と友人戦募集を表示します"
+            NotificationChannel(CHANNEL_ID,
+                if (BuildConfig.PUBLIC_SERVICE) "友人戦募集" else "PHP・FCM 接続試験",
+                NotificationManager.IMPORTANCE_HIGH).apply {
+                description = if (BuildConfig.PUBLIC_SERVICE) "選択したスレッドの友人戦募集を表示します"
+                    else "試験用の接続確認と友人戦募集を表示します"
                 lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             }
         )

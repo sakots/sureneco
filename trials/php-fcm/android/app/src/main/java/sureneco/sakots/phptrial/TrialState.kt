@@ -31,13 +31,15 @@ class TrialState(context: Context) {
             .putString("registration", "トークン取得失敗。通信・Google Play 開発者サービス・Firebase 設定を確認して再取得してください。").commit()
     }
 
-    @Synchronized fun receive(data: Map<String, String>, now: Long, canNotify: Boolean, deliver: (ReceiptPolicy.Payload) -> Delivery) {
+    @Synchronized fun receive(data: Map<String, String>, now: Long, canNotify: Boolean,
+                              publicEnabled: Boolean? = null, deliver: (ReceiptPolicy.Payload) -> Delivery) {
         val activeHistory = prefs.getStringSet("seen", emptySet()).orEmpty().mapNotNull { entry ->
             val parts = entry.split(':', limit = 2)
             val expiry = parts.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null
             if (expiry > now) parts[0] to expiry else null
         }.toMap()
-        val decision = ReceiptPolicy.evaluate(data, now, prefs.getBoolean("enabled", false) && canNotify, activeHistory.keys)
+        val enabled = publicEnabled ?: prefs.getBoolean("enabled", false)
+        val decision = ReceiptPolicy.evaluate(data, now, enabled && canNotify, activeHistory.keys)
         val payload = decision.payload
         if (payload == null) {
             val reason = when (decision.reason) {

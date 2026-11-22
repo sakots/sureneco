@@ -111,6 +111,14 @@ PHP版Androidも「スレッド」「友人戦募集」「設定」の3画面を
 
 募集一覧・監視設定APIを `c6fb253b6b` でエックスサーバーへ配備しました。既存のURL・認証・スレッド選択・設定値・crontabを保持。認証付き一覧取得、設定の既存値での保存と不正値の拒否、cron再開後の募集履歴テーブル作成を確認しました。配備直後の募集一覧は0件で、次回以降の実検出から表示します。三画面対応の試験APKは `release/sureneco_php_fcm_trial_dashboard_debug.apk` です。
 
+### PHP版の一般公開に向けた構成
+
+正式版のAndroidアプリIDは `sureneco.sakots.php` とし、デバッグ署名の試験版とは別に配布します。通知の利用は招待不要とし、通知許可と利用者の同意を得た端末が、FCMで届く一度限りの短命な確認値を返して登録します。登録後はFCM宛先とは別の端末資格情報で認証し、監視対象・設定・取得位置・通知キューを端末ごとに分離します。停止・削除は当該端末にだけ作用します。
+
+登録試行に上限を設け、最大16端末・各端末3スレッドとします。同一監視回の候補・DAT取得は共有します。エックスサーバーの `https://oekakibbs.moe/sureneco-php-public/service.php` と専用DB・毎分cronに配備しました。Pixel 7 ProとAndroidエミュレーターの登録、隔離DATによる監視対象の分離と選択端末へのFCM実配送を確認しました。既存の試験版とVPS版は変更していません。
+
+正式APKの更新には同じ署名鍵が必要です。署名用の `android-release.p12` とパスワードファイル `android-release.pass` は `.secrets/php-fcm/` に保管し、署名鍵のバックアップは別の安全な場所へ保存してください。Firebaseの `google-services-release.json` は正式アプリ用のクライアント設定であり、FCMサービスアカウント秘密鍵は端末に配布しません。
+
 ### 試験の実行順序
 
 プロジェクトのルートで実行します。ComposerとPHP 8.2以上、AndroidビルドにはJava 21・Android SDKが必要です。
