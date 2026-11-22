@@ -13,7 +13,7 @@ class TrialApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Upgrades must discard the old selection bearer even if Selection is never opened.
+        // Upgrades must discard the old on-disk selection bearer before any requests.
         deleteSharedPreferences("thread_selection")
         state = TrialState(this)
         TrialNotifications.createChannel(this)

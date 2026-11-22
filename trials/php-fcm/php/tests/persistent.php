@@ -56,7 +56,8 @@ $remove = static function (string $path) use (&$remove): void {
 $id = (string) (time() - 600);
 $nextId = (string) (time() - 500);
 $endedId = (string) (time() - 400);
-$date = (new DateTimeImmutable('now', new DateTimeZone('Asia/Tokyo')))->format('Y/m/d(D) H:i:s') . '.00';
+$postTime = new DateTimeImmutable('now', new DateTimeZone('Asia/Tokyo'));
+$date = $postTime->format('Y/m/d(D) H:i:s') . '.00';
 $line = static fn (string $body, string $author = 'host'): string => "名無し<>sage<>$date ID:$author<>$body<>雀魂";
 $subject = "$id.dat<>【雀魂】友人戦 (2)\n$endedId.dat<>【雀魂】完走 (1000)\n";
 $dat = [$id => [$line('四南 12345')]];
@@ -273,13 +274,30 @@ try {
     }
     $update = static fn (string $thread, bool $enabled): array => $request('POST', $authorization,
         json_encode(['id' => $thread, 'enabled' => $enabled], JSON_THROW_ON_ERROR));
-    $initial = ['threads' => [['id' => $id, 'title' => $id, 'enabled' => true]]];
+    $initial = ['threads' => [['id' => $id, 'title' => $id, 'enabled' => true]], 'recruitments' => [],
+        'settings' => ['thread_refresh_sec' => 300, 'recruitment_filter' => 'loose']];
     $assert($request('GET', $authorization) === [200, $initial], 'Snapshot legacy runtime without needing network');
+    $settings = static fn (mixed $seconds, mixed $filter, ?string $bearer): array => $request('POST', $bearer,
+        json_encode(['settings' => ['thread_refresh_sec' => $seconds, 'recruitment_filter' => $filter]], JSON_THROW_ON_ERROR));
+    foreach ([[59, 'regex'], [86401, 'loose'], [60.5, 'regex'], ['60', 'regex'], [60, 'REGEX'], [60, null]] as [$seconds, $filter]) {
+        $assert($settings($seconds, $filter, $authorization) === $invalid, 'Reject out-of-range and non-exact settings');
+    }
+    $assert($settings(60, 'regex', null) === $unauthorized, 'Settings require authorization');
+    $assert($settings(60, 'regex', 'Bearer ' . str_repeat('0', 64)) === $unauthorized, 'Incorrect bearer cannot save settings');
+    $assert($settings(86400, 'regex', $authorization) === [200, array_replace($initial, ['settings' => [
+        'thread_refresh_sec' => 86400, 'recruitment_filter' => 'regex',
+    ]])], 'Save upper-bound refresh interval and return the updated snapshot');
+    $restarted = new PersistentMonitor($root, $monitor, $send);
+    $assert($restarted->status()['threadRefreshSec'] === 86400 && $restarted->status()['filter'] === 'regex',
+        'Settings persist for the restarted scheduler');
+    $initial['settings']['thread_refresh_sec'] = 60;
+    $assert($settings(60, 'loose', $authorization) === [200, $initial], 'Save the lower bound and restore loose detection');
     $assert($update($endedId, true)[0] === 404, 'Reject an unknown candidate');
     $lock = fopen($root . '/state/run.lock', 'r+b');
     flock($lock, LOCK_EX);
     try {
         $assert($request('GET', $authorization)[0] === 409 && $update($id, false)[0] === 409, 'API is nonblocking on the cron lock');
+        $assert($settings(86400, 'regex', $authorization)[0] === 409, 'Settings save does not race a cron tick');
     } finally {
         fclose($lock);
     }
@@ -292,10 +310,17 @@ try {
     $both = ['threads' => [
         ['id' => $id, 'title' => '【雀魂】既存の友人戦', 'enabled' => true],
         ['id' => $nextId, 'title' => '【雀魂】新しい友人戦', 'enabled' => false],
-    ]];
+    ], 'recruitments' => [], 'settings' => $initial['settings']];
     $snapshot = $request('GET', $authorization);
+    $postedAt = $postTime->getTimestamp() * 1000;
+    $both['recruitments'] = [['threadId' => $id, 'number' => 2, 'body' => '3人半荘 13589', 'roomIds' => ['13589'],
+        'postedAt' => $postedAt, 'expiresAt' => $snapshot[1]['recruitments'][0]['expiresAt'] ?? null]];
+    $assert(is_int($both['recruitments'][0]['expiresAt']) && $both['recruitments'][0]['expiresAt'] > end($attempts)[3],
+        'A delivered recruitment has a real expiration');
     $assert($snapshot === [200, $both], 'Refresh keeps existing selection and persists new titles with new candidates off: '
         . json_encode(['snapshot' => $snapshot, 'list' => $refreshed['list']], JSON_UNESCAPED_UNICODE));
+    $assert(SelectionEndpoint::dispatch(new PersistentMonitor($root), 'GET', $authorization, null, '') === $snapshot,
+        'The delivered recruitment survives scheduler reconstruction without board access');
     $assert(count($attempts) === $beforeSends + 1 && end($attempts)[0] === $id && end($attempts)[1] === 2, 'Provisioning preserves the selected cursor');
     $assert(array_slice($fetches, $beforeFetches) === ['subject.txt', "dat/$id.dat"], 'Skip DAT for a disabled candidate');
     $broken[$nextId] = true;
@@ -309,6 +334,9 @@ try {
     $reject = true;
     $assert($scheduler->tick()['counts']['pending'] === 1 && end($attempts)[0] === $nextId && end($attempts)[1] === 2,
         'A post after the successful baseline stays eligible, including after an ON retry');
+    $pending = $request('GET', $authorization)[1]['recruitments'];
+    $assert(count($pending) === 2 && in_array($nextId, array_column($pending, 'threadId'), true),
+        'Delivery rejection does not erase a genuine detection');
     $reject = false;
     $both['threads'][1]['enabled'] = false;
     $assert($update($nextId, false) === [200, $both], 'Turn a currently selected candidate off');
@@ -327,8 +355,29 @@ try {
     $scheduler->tick();
     $assert(count($attempts) === $beforeSends + 1 && end($attempts)[0] === $nextId && end($attempts)[1] === 4,
         'Posts after re-enable are delivered normally');
+    $dat[$nextId][] = $line('&gt;&gt;4 満員', 'after-re-enable');
+    $scheduler->tick();
+    $assert($request('GET', $authorization) === [200, $both], 'A later close removes the already delivered recruitment');
     $scheduler->provisionSelection();
     $assert($request('GET', $authorization) === [200, $both], 'Reprovisioning does not reset credentials or selection');
+    $subject = "$nextId.dat<>【雀魂】新しい友人戦 (5)\n";
+    $refresh($root);
+    $scheduler->tick();
+    $hidden = $request('GET', $authorization);
+    $assert($hidden === [200, ['threads' => [$both['threads'][1]], 'recruitments' => [], 'settings' => $both['settings']]],
+        'Removed candidates and their recruitment history are no longer visible');
+    $state = new PDO('sqlite:' . $root . '/state/monitor.sqlite');
+    $assert((int) $state->query('SELECT COUNT(*) FROM recruitment_history')->fetchColumn() === 0,
+        'Removed candidates are purged from stored recruitment history');
+    $settings(60, 'regex', $authorization);
+    $dat[$nextId][] = $line('3人 半荘 12345', 'regex-test');
+    $assert($scheduler->tick()['counts']['sent'] === 0 && $request('GET', $authorization)[1]['recruitments'] === [],
+        'The saved regex setting governs future detection, not just the settings snapshot');
+    $settings(60, 'loose', $authorization);
+    $dat[$nextId][] = $line('3人 半荘 23456', 'loose-test');
+    $assert($scheduler->tick()['counts']['sent'] === 1
+        && array_column($request('GET', $authorization)[1]['recruitments'], 'roomIds') === [['23456']],
+        'The saved loose setting detects the next post without replaying the prior cursor');
 
     $unsafe = $makeRoot('unsafe');
     chmod($unsafe . '/config.json', 0644);

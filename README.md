@@ -77,6 +77,7 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 - PHP試験アプリに、認証付き設定APIを使って通知対象スレッドを選択する機能を追加。
 - PHP版の設定APIをエックスサーバーへ配備。[Androidの接続手順](docs/operation-cost.md#androidからの監視スレッド選択)を追加。
 - PHP試験アプリの選択トークンを登録済み端末で自動取得する機能を追加し、設定APIを `oekakibbs.moe` へ移設。
+- PHP試験版のAndroid UIをVPS版に合わせ、「スレッド」「友人戦募集」「設定」の3画面に変更。
 
 ### [2026/11/18] v0.13.3（Android版のみ）
 

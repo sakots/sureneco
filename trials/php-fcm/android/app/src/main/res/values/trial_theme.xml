@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="TrialTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">@color/trial_accent</item>
+        <item name="android:windowBackground">@color/trial_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+    <color name="trial_background">#f5f6f8</color>
+    <color name="trial_panel">#ffffff</color>
+    <color name="trial_text">#202d38</color>
+    <color name="trial_muted">#526574</color>
+    <color name="trial_border">#d7dfe4</color>
+    <color name="trial_accent">#24654c</color>
+    <color name="trial_on_accent">#ffffff</color>
+    <color name="trial_soft">#e8f3ed</color>
+    <color name="trial_error_bg">#fff1ef</color>
+    <color name="trial_error_text">#992c23</color>
+    <color name="trial_focus">#2667bd</color>
+</resources>

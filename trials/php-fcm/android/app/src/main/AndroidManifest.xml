@@ -11,19 +11,18 @@
         android:usesCleartextTraffic="false"
         android:label="スレネコ PHP・FCM試験"
         android:icon="@drawable/ic_trial_notification"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/TrialTheme">
         <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
         <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
         <meta-data android:name="firebase_messaging_notification_delegation_enabled" android:value="false" />
         <provider android:name="com.google.firebase.provider.FirebaseInitProvider"
             android:authorities="${applicationId}.firebaseinitprovider" tools:node="remove" />
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".SelectionActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <service android:name=".TrialMessagingService" android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />

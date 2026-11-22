@@ -8,12 +8,33 @@ import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 
 internal data class SelectionThread(val id: String, val title: String, val enabled: Boolean)
+internal data class TrialRecruitment(
+    val threadId: String,
+    val number: Int,
+    val body: String,
+    val roomIds: List<String>,
+    val postedAt: Long,
+    val expiresAt: Long,
+)
+internal data class MonitoringSettings(val threadRefreshSec: Int, val filter: String) {
+    companion object {
+        val refreshRange = 60..86_400
+        val filters = listOf("regex", "loose")
+    }
+}
+internal data class MonitoringSnapshot(
+    val threads: List<SelectionThread>,
+    val recruitments: List<TrialRecruitment>,
+    val settings: MonitoringSettings,
+)
 
 internal class SelectionHttpError(val status: Int) : IOException()
 
 internal object SelectionClient {
     private val endpoint = URI("https://oekakibbs.moe/sureneco-php/selection.php").toURL()
     private val tokenPattern = Regex("[0-9a-f]{64}")
+    private val threadIdPattern = Regex("[0-9]{9,11}")
+    private val roomIdPattern = Regex("[0-9]{5}")
     private val proofDomain = "sureneco-php-selection-v1:".toByteArray(Charsets.UTF_8)
     private const val HEX = "0123456789abcdef"
 
@@ -37,12 +58,22 @@ internal object SelectionClient {
     fun exchange(registrationToken: String): String =
         parseBearer(request(null, exchangeBody(registrationToken)).opt("token")) ?: throw IOException()
 
-    fun load(bearer: String): List<SelectionThread> = parseThreads(request(bearer, null))
+    fun load(bearer: String): MonitoringSnapshot = parseSnapshot(request(bearer, null))
 
-    fun save(bearer: String, id: String, enabled: Boolean): List<SelectionThread> {
-        val body = JSONObject().put("id", id).put("enabled", enabled).toString()
-        val snapshot = parseThreads(request(bearer, body))
-        if (snapshot.none { it.id == id && it.enabled == enabled }) throw IOException()
+    fun save(bearer: String, id: String, enabled: Boolean): MonitoringSnapshot {
+        val body = JSONObject().put("id", id).put("enabled", enabled)
+        val snapshot = parseSnapshot(request(bearer, body.toString()))
+        if (snapshot.threads.none { it.id == id && it.enabled == enabled }) throw IOException()
+        return snapshot
+    }
+
+    fun saveSettings(bearer: String, settings: MonitoringSettings): MonitoringSnapshot {
+        val values = JSONObject()
+            .put("thread_refresh_sec", settings.threadRefreshSec)
+            .put("recruitment_filter", settings.filter)
+        val body = JSONObject().put("settings", values)
+        val snapshot = parseSnapshot(request(bearer, body.toString()))
+        if (snapshot.settings != settings) throw IOException()
         return snapshot
     }
 
@@ -71,16 +102,46 @@ internal object SelectionClient {
         }
     }
 
-    private fun parseThreads(document: JSONObject): List<SelectionThread> {
+    private fun parseSnapshot(document: JSONObject): MonitoringSnapshot {
         val threads = document.getJSONArray("threads")
         val ids = HashSet<String>()
-        return List(threads.length()) { index ->
+        val parsedThreads = List(threads.length()) { index ->
             val thread = threads.getJSONObject(index)
-            val id = thread.get("id") as? String ?: throw IOException()
+            val id = thread.getThreadId("id")
             val title = thread.get("title") as? String ?: throw IOException()
             val enabled = thread.get("enabled") as? Boolean ?: throw IOException()
-            if (id.isEmpty() || !ids.add(id)) throw IOException()
+            if (!ids.add(id)) throw IOException()
             SelectionThread(id, title, enabled)
         }
+        val recruitments = document.getJSONArray("recruitments")
+        val parsedRecruitments = List(recruitments.length()) { index ->
+            val item = recruitments.getJSONObject(index)
+            val rooms = item.getJSONArray("roomIds")
+            val roomIds = List(rooms.length()) { roomIndex ->
+                (rooms.get(roomIndex) as? String)?.takeIf(roomIdPattern::matches) ?: throw IOException()
+            }
+            TrialRecruitment(
+                item.getThreadId("threadId"),
+                (item.get("number") as? Int)?.takeIf { it > 0 } ?: throw IOException(),
+                item.get("body") as? String ?: throw IOException(),
+                roomIds,
+                item.getTimestamp("postedAt"),
+                item.getTimestamp("expiresAt"),
+            )
+        }
+        val settings = document.getJSONObject("settings")
+        val refresh = settings.get("thread_refresh_sec") as? Int ?: throw IOException()
+        val filter = settings.get("recruitment_filter") as? String ?: throw IOException()
+        if (refresh !in MonitoringSettings.refreshRange || filter !in MonitoringSettings.filters) throw IOException()
+        return MonitoringSnapshot(parsedThreads, parsedRecruitments, MonitoringSettings(refresh, filter))
+    }
+
+    private fun JSONObject.getThreadId(key: String): String =
+        (get(key) as? String)?.takeIf(threadIdPattern::matches) ?: throw IOException()
+
+    private fun JSONObject.getTimestamp(key: String): Long = when (val value = get(key)) {
+        is Long -> value
+        is Int -> value.toLong()
+        else -> throw IOException()
     }
 }

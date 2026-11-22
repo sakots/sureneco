@@ -9,6 +9,7 @@ use PDO;
 
 final class RecruitmentMonitor
 {
+    private const MAX_HISTORY = 200;
     private readonly Closure $fetch;
 
     public function __construct(?Closure $fetch = null)
@@ -86,6 +87,9 @@ final class RecruitmentMonitor
         $db->exec('CREATE TABLE IF NOT EXISTS detected_recruitments (
             thread_id TEXT NOT NULL, post_number INTEGER NOT NULL, expires_at INTEGER NOT NULL,
             payload_json TEXT NOT NULL, PRIMARY KEY (thread_id, post_number))');
+        $db->exec('CREATE TABLE IF NOT EXISTS recruitment_history (
+            thread_id TEXT NOT NULL, post_number INTEGER NOT NULL, posted_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL, payload_json TEXT NOT NULL, PRIMARY KEY (thread_id, post_number))');
         $read = $db->prepare('SELECT last_post FROM cursors WHERE thread_id = ?');
         $read->execute([$threadId]);
         $last = $read->fetchColumn();
@@ -96,8 +100,17 @@ final class RecruitmentMonitor
         $now ??= self::now();
         $previous = [];
         if (!$baseline) {
-            $saved = $db->prepare('SELECT payload_json, expires_at FROM detected_recruitments WHERE thread_id = ? AND expires_at > ?');
-            $saved->execute([$threadId, $now]);
+            // Recheck active history even after delivery. Include queued items outside the history cap
+            // (including those from before this table existed) so delivery continues to honor closes.
+            $saved = $db->prepare('SELECT payload_json, expires_at FROM recruitment_history
+                WHERE thread_id = ? AND expires_at > ?
+                UNION ALL
+                SELECT queue.payload_json, queue.expires_at FROM detected_recruitments AS queue
+                WHERE queue.thread_id = ? AND queue.expires_at > ? AND NOT EXISTS (
+                    SELECT 1 FROM recruitment_history AS history WHERE history.thread_id = queue.thread_id
+                    AND history.post_number = queue.post_number AND history.expires_at > ?
+                )');
+            $saved->execute([$threadId, $now, $threadId, $now, $now]);
             while (($row = $saved->fetch(PDO::FETCH_ASSOC)) !== false) {
                 $item = json_decode($row['payload_json'], true, 64, JSON_THROW_ON_ERROR);
                 $item['expiresAt'] = (int) $row['expires_at'];
@@ -120,26 +133,39 @@ final class RecruitmentMonitor
             $write->execute([$threadId, $detected['lastPost']]);
             if ($baseline) {
                 $db->prepare('DELETE FROM detected_recruitments WHERE thread_id = ?')->execute([$threadId]);
+                $db->prepare('DELETE FROM recruitment_history WHERE thread_id = ?')->execute([$threadId]);
                 $db->commit();
                 return ['threadId' => $threadId, 'baseline' => true, 'lastPost' => $detected['lastPost']];
             }
-            $db->prepare('DELETE FROM detected_recruitments WHERE expires_at <= ?')->execute([$now]);
-            $remove = $db->prepare('DELETE FROM detected_recruitments WHERE thread_id = ? AND post_number = ?');
-            foreach ($detected['closed'] as $number) {
-                $remove->execute([$threadId, $number]);
-            }
-            $shorten = $db->prepare('UPDATE detected_recruitments SET expires_at = ?
-                WHERE thread_id = ? AND post_number = ? AND expires_at > ?');
-            foreach ($detected['shortened'] as [$number, $expiresAt]) {
-                $shorten->execute([$expiresAt, $threadId, $number, $expiresAt]);
+            foreach (['detected_recruitments', 'recruitment_history'] as $table) {
+                $remove = $db->prepare("DELETE FROM $table WHERE thread_id = ? AND post_number = ?");
+                foreach ($detected['closed'] as $number) {
+                    $remove->execute([$threadId, $number]);
+                }
+                $shorten = $db->prepare("UPDATE $table SET expires_at = ?
+                    WHERE thread_id = ? AND post_number = ? AND expires_at > ?");
+                foreach ($detected['shortened'] as [$number, $expiresAt]) {
+                    $shorten->execute([$expiresAt, $threadId, $number, $expiresAt]);
+                }
+                $db->prepare("DELETE FROM $table WHERE expires_at <= ?")->execute([$now]);
             }
             $insert = $db->prepare('INSERT INTO detected_recruitments
                 (thread_id, post_number, expires_at, payload_json) VALUES (?, ?, ?, ?)
                 ON CONFLICT(thread_id, post_number) DO NOTHING');
+            $remember = $db->prepare('INSERT INTO recruitment_history
+                (thread_id, post_number, posted_at, expires_at, payload_json) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(thread_id, post_number) DO NOTHING');
             foreach ($detected['recruitments'] as $item) {
                 if ($item['expiresAt'] > $now) {
-                    $insert->execute([$threadId, $item['number'], $item['expiresAt'], json_encode($item, JSON_THROW_ON_ERROR)]);
+                    $payload = json_encode($item, JSON_THROW_ON_ERROR);
+                    $insert->execute([$threadId, $item['number'], $item['expiresAt'], $payload]);
+                    $remember->execute([$threadId, $item['number'], $item['postedAt'], $item['expiresAt'], $payload]);
                 }
+            }
+            if ($detected['recruitments'] !== []) {
+                $db->exec('DELETE FROM recruitment_history WHERE rowid IN (
+                    SELECT rowid FROM recruitment_history ORDER BY posted_at DESC, thread_id DESC, post_number DESC
+                    LIMIT -1 OFFSET ' . self::MAX_HISTORY . ')');
             }
             $db->commit();
         } catch (\Throwable $failure) {

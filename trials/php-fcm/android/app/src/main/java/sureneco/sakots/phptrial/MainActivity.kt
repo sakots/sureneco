@@ -10,13 +10,13 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PersistableBundle
 import android.provider.Settings
-import android.view.WindowInsets
+import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailabilityLight
@@ -24,6 +24,16 @@ import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : Activity() {
     private val app get() = application as TrialApplication
+    private lateinit var selection: SelectionSession
+    private lateinit var dashboard: TrialDashboard
+    private val handler = Handler(Looper.getMainLooper())
+    private val expiryTick = Runnable { renderExpirations() }
+    private val refreshTick = object : Runnable {
+        override fun run() {
+            selection.refresh()
+            handler.postDelayed(this, 60_000L)
+        }
+    }
     private lateinit var consent: CheckBox
     private lateinit var status: TextView
     private lateinit var tokenStatus: TextView
@@ -34,51 +44,34 @@ class MainActivity : Activity() {
     private lateinit var stopButton: Button
     private lateinit var copyButton: Button
     private var pendingStart = false
-    private val stateListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> render() }
+    private val stateListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        render()
+        selection.refresh()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingStart = savedInstanceState?.getBoolean("pendingStart") ?: false
-        val padding = (16 * resources.displayMetrics.density).toInt()
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(padding, padding, padding, padding)
+        @Suppress("DEPRECATION")
+        val retained = lastNonConfigurationInstance as? SelectionSession
+        selection = retained ?: SelectionSession(app.state)
+        val ui = TrialWidgets(this)
+        val card = ui.card("端末の通知")
+        fun text(value: String, size: Float = 13f) = ui.label(value, size, ui.muted).also {
+            ui.add(card, it, 6)
         }
-        val scroll = ScrollView(this).apply { addView(layout) }
-        scroll.setOnApplyWindowInsetsListener { view, insets ->
-            if (Build.VERSION.SDK_INT >= 30) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            } else {
-                @Suppress("DEPRECATION")
-                view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
-            }
-            insets
-        }
-        setContentView(scroll)
-        scroll.requestApplyInsets()
-        fun text(value: String, size: Float = 16f): TextView = TextView(this).apply {
-            text = value
-            textSize = size
-            setPadding(0, padding / 2, 0, padding / 2)
-            layout.addView(this)
-        }
-        fun button(label: String, action: () -> Unit): Button = Button(this).apply {
-            text = label
-            isAllCaps = false
-            setOnClickListener { action() }
-            layout.addView(this)
-        }
-        text("スレネコ PHP・FCM試験", 22f)
-        text("本体とは別の接続試験アプリです。5ch の監視や既存 API への接続は行いません。")
-        text("Firebase プロジェクト: ${BuildConfig.FCM_PROJECT_ID}\nパッケージ: $packageName")
-        text("開始すると Google / Firebase に端末の登録情報を送信します。登録トークンはこの試験への通知を送れる機密情報です。端末内にのみ保存し、ログやバックアップに残しません。サーバーへは自動送信しません。")
+        fun button(label: String, primary: Boolean = false, action: () -> Unit) =
+            ui.button(label, primary = primary, action = action).also { ui.add(card, it, 8) }
+        text("PHP・FCM試験版は本体と別のアプリです。通知には試験サーバーの送信先登録が必要です。")
+        text("Firebase プロジェクト: ${BuildConfig.FCM_PROJECT_ID}\nパッケージ: $packageName", 12f)
+        text("開始すると Google / Firebase に端末の登録情報を送信します。登録トークンは機密情報として端末に保存し、監視サーバーへの照合にはトークンそのものではなく照合用の証明値を送信します。")
         consent = CheckBox(this).apply {
             text = "上記に同意し、この端末で接続試験の通知を受け取ります"
+            setTextColor(ui.text)
             isChecked = savedInstanceState?.getBoolean("consent") ?: app.state.snapshot().enabled
-            layout.addView(this)
         }
-        startButton = button("同意して通知試験を開始") { requestStart() }
+        ui.add(card, consent, 8)
+        startButton = button("同意して通知試験を開始", primary = true) { requestStart() }
         retryButton = button("登録トークンを再取得") {
             if (checkRegistrationRequirements() && app.state.snapshot().enabled) fetchToken()
         }
@@ -88,12 +81,14 @@ class MainActivity : Activity() {
         copyButton = button("登録トークンを機密クリップボードにコピー") { copyToken() }
         text("コピーした完全なトークンは、信頼できる送信担当者にだけ渡してください。他のアプリへの貼り付け・クリップボード同期に注意し、使用後は消去してください。画面には末尾だけ表示します。")
         button("Android の通知設定を開く") { openNotificationSettings() }
-        button("通知対象スレッドを選択") { startActivity(Intent(this, SelectionActivity::class.java)) }
-        text("端末の最終受信", 19f)
+        feedback = text(savedInstanceState?.getString("notificationFeedback").orEmpty()).apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        ui.add(card, ui.heading("端末の最終受信", 15f), 14)
         receipt = text("")
         text("FCM の送信受理だけでは端末の受信成功になりません。eventId と受信記録を照合してください。接続試験の有効期限は300秒、募集通知は募集期限までの最大300秒です。端末時計を正しく設定してください。停止後も既存の FCM 登録自体は残りますが、このアプリは受信通知を表示しません。")
-        feedback = text("")
         if (!app.firebaseReady) feedback.text = "Firebase の初期化に失敗しました。試験用のクライアント設定で APK を作り直してください。"
+        dashboard = TrialDashboard(this, ui, selection, card, savedInstanceState)
         render()
     }
 
@@ -104,10 +99,17 @@ class MainActivity : Activity() {
             stopTrial(false)
             feedback.text = "通知が許可されていないため試験を停止しました。Android の設定を確認し、再度同意して開始してください。"
         }
+        selection.onChanged = ::renderSelection
+        selection.refresh()
+        renderSelection()
+        handler.postDelayed(refreshTick, 60_000L)
         render()
     }
 
     override fun onPause() {
+        selection.onChanged = null
+        handler.removeCallbacks(refreshTick)
+        handler.removeCallbacks(expiryTick)
         app.state.unobserve(stateListener)
         super.onPause()
     }
@@ -115,7 +117,25 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("pendingStart", pendingStart)
         outState.putBoolean("consent", consent.isChecked)
+        outState.putString("notificationFeedback", feedback.text.toString())
+        dashboard.saveState(outState)
         super.onSaveInstanceState(outState)
+    }
+
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun onRetainNonConfigurationInstance(): Any = selection
+
+    private fun renderSelection() {
+        dashboard.render()
+        renderExpirations()
+    }
+
+    private fun renderExpirations() {
+        handler.removeCallbacks(expiryTick)
+        val now = System.currentTimeMillis()
+        dashboard.renderExpirations(now)?.let { deadline ->
+            handler.postDelayed(expiryTick, (deadline - now).coerceIn(1L, 60_000L))
+        }
     }
 
     private fun render() {

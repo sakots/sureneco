@@ -26,25 +26,29 @@ final class SelectionEndpoint
         if ($authorization === null || preg_match('/\A(?i:Bearer) ([a-f0-9]{64})\z/', $authorization, $match) !== 1) {
             return [401, ['error' => 'unauthorized']];
         }
-        $id = $enabled = null;
+        $id = $enabled = $settings = null;
         if ($method === 'POST') {
             if (!$isJson) {
                 return [415, ['error' => 'unsupported_media_type']];
             }
             $change = strlen($body) <= self::MAX_BODY_BYTES ? json_decode($body, true, 4) : null;
-            if (!is_array($change) || count($change) !== 2 || !is_string($change['id'] ?? null)
-                || preg_match('/\A[0-9]{9,11}\z/', $change['id']) !== 1 || !is_bool($change['enabled'] ?? null)) {
+            if (is_array($change) && count($change) === 1 && is_array($change['settings'] ?? null)) {
+                $settings = $change['settings'];
+            } elseif (is_array($change) && count($change) === 2 && is_string($change['id'] ?? null)
+                && preg_match('/\A[0-9]{9,11}\z/', $change['id']) === 1 && is_bool($change['enabled'] ?? null)) {
+                $id = $change['id'];
+                $enabled = $change['enabled'];
+            } else {
                 return [400, ['error' => 'invalid_request']];
             }
-            $id = $change['id'];
-            $enabled = $change['enabled'];
         }
 
         try {
-            return [200, $monitor->threadSelection($match[1], $id, $enabled)];
+            return [200, $monitor->threadSelection($match[1], $id, $enabled, $settings)];
         } catch (SafeFailure $error) {
             return match ($error->reason) {
                 'selection_unauthorized' => [401, ['error' => 'unauthorized']],
+                'invalid_request' => [400, ['error' => 'invalid_request']],
                 'unknown_thread' => [404, ['error' => 'unknown_thread']],
                 'monitor_busy' => [409, ['error' => 'busy']],
                 default => [503, ['error' => 'unavailable']],

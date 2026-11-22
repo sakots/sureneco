@@ -173,8 +173,12 @@ final class PersistentMonitor
         return $this->selectionToken() ?? throw new SafeFailure('selection_unavailable');
     }
 
-    public function threadSelection(#[\SensitiveParameter] string $token, ?string $id = null, ?bool $enabled = null): array
-    {
+    public function threadSelection(
+        #[\SensitiveParameter] string $token,
+        ?string $id = null,
+        ?bool $enabled = null,
+        ?array $settings = null,
+    ): array {
         $expected = $this->selectionToken() ?? throw new SafeFailure('selection_unavailable');
         if (!hash_equals($expected, $token)) {
             throw new SafeFailure('selection_unauthorized');
@@ -188,6 +192,16 @@ final class PersistentMonitor
             if (!isset($runtime['selected'])) {
                 throw new SafeFailure('selection_unavailable');
             }
+            $config = $this->configuration();
+            if ($settings !== null) {
+                $refresh = $settings['thread_refresh_sec'] ?? null;
+                $filter = $settings['recruitment_filter'] ?? null;
+                if (count($settings) !== 2 || !self::validSettings($refresh, $filter)) {
+                    throw new SafeFailure('invalid_request');
+                }
+                $config['thread_refresh_sec'] = $refresh;
+                $config['filter'] = $filter;
+            }
             $selected = array_fill_keys($runtime['selected'], true);
             if ($id !== null && $enabled !== null) {
                 if (!in_array($id, array_column($runtime['candidates'], 'id'), true)) {
@@ -197,9 +211,11 @@ final class PersistentMonitor
                     if ($enabled) {
                         // Commit the fresh cursor and discard its queue before cron can see the thread enabled.
                         $this->checkDatabaseFiles();
-                        $this->monitor->baseline($id, $this->root . '/state/monitor.sqlite', $this->configuration()['filter']);
+                        $this->monitor->baseline($id, $this->root . '/state/monitor.sqlite', $config['filter']);
                         $selected[$id] = true;
                     } else {
+                        $db = $this->historyDatabase();
+                        $db?->prepare('DELETE FROM recruitment_history WHERE thread_id = ?')->execute([$id]);
                         unset($selected[$id]);
                     }
                     $runtime['selected'] = array_map(strval(...), array_keys($selected));
@@ -211,10 +227,49 @@ final class PersistentMonitor
                 $threads[] = ['id' => $candidate['id'], 'title' => $candidate['title'] ?? $candidate['id'],
                     'enabled' => isset($selected[$candidate['id']])];
             }
-            return ['threads' => $threads];
+            $recruitments = $this->recruitmentSnapshot($selected);
+            if ($settings !== null) {
+                $this->atomicJson($this->root . '/config.json', $config);
+            }
+            return ['threads' => $threads, 'recruitments' => $recruitments,
+                'settings' => ['thread_refresh_sec' => $config['thread_refresh_sec'], 'recruitment_filter' => $config['filter']]];
         } finally {
             fclose($lock);
         }
+    }
+
+    private function recruitmentSnapshot(array $selected): array
+    {
+        $db = $selected === [] ? null : $this->historyDatabase();
+        if ($db === null) {
+            return [];
+        }
+        $read = $db->prepare('SELECT thread_id, post_number, posted_at, expires_at, payload_json FROM recruitment_history
+            WHERE expires_at > ? ORDER BY posted_at DESC, thread_id DESC, post_number DESC');
+        $read->execute([self::now()]);
+        $recruitments = [];
+        while (($row = $read->fetch(PDO::FETCH_ASSOC)) !== false) {
+            if (isset($selected[$row['thread_id']])) {
+                $item = json_decode($row['payload_json'], true, 64, JSON_THROW_ON_ERROR);
+                $recruitments[] = ['threadId' => $row['thread_id'], 'number' => (int) $row['post_number'],
+                    'body' => $item['body'], 'roomIds' => $item['roomIds'],
+                    'postedAt' => (int) $row['posted_at'], 'expiresAt' => (int) $row['expires_at']];
+            }
+        }
+        return $recruitments;
+    }
+
+    private function pruneRecruitmentHistory(array $active): void
+    {
+        $db = $this->historyDatabase();
+        if ($db === null) {
+            return;
+        }
+        $now = self::now();
+        $read = $db->query('SELECT DISTINCT thread_id FROM recruitment_history');
+        $removed = array_values(array_diff($read->fetchAll(PDO::FETCH_COLUMN), $active));
+        $inactive = $removed === [] ? '' : ' OR thread_id IN (' . implode(', ', array_fill(0, count($removed), '?')) . ')';
+        $db->prepare('DELETE FROM recruitment_history WHERE expires_at <= ?' . $inactive)->execute([$now, ...$removed]);
     }
 
     private function selectionToken(): ?string
@@ -257,9 +312,12 @@ final class PersistentMonitor
                         $candidates[$thread['id']] = $candidate;
                     }
                 }
+                $candidateIds = array_column($candidates, 'id');
+                $active = isset($runtime['selected']) ? array_values(array_intersect($runtime['selected'], $candidateIds)) : $candidateIds;
+                $this->pruneRecruitmentHistory($active);
                 $runtime['candidates'] = array_values($candidates);
                 if (isset($runtime['selected'])) {
-                    $runtime['selected'] = array_values(array_intersect($runtime['selected'], array_column($runtime['candidates'], 'id')));
+                    $runtime['selected'] = $active;
                 }
                 $runtime['list']['succeededAt'] = self::now();
                 $runtime['list']['error'] = null;
@@ -390,11 +448,15 @@ final class PersistentMonitor
         $filter = $raw['filter'] ?? 'loose';
         $filter = is_string($filter) ? strtolower(trim($filter)) : null;
         $refresh = $raw['thread_refresh_sec'] ?? 300;
-        if (!is_bool($raw['enabled'] ?? null) || !in_array($filter, ['regex', 'loose'], true)
-            || !is_int($refresh) || $refresh < 60 || $refresh > 86400) {
+        if (!is_bool($raw['enabled'] ?? null) || !self::validSettings($refresh, $filter)) {
             throw new SafeFailure('invalid_config');
         }
         return ['enabled' => $raw['enabled'], 'filter' => $filter, 'thread_refresh_sec' => $refresh];
+    }
+
+    private static function validSettings(mixed $refresh, mixed $filter): bool
+    {
+        return is_int($refresh) && $refresh >= 60 && $refresh <= 86400 && in_array($filter, ['regex', 'loose'], true);
     }
 
     private function normalizeConfiguration(array $config): void
@@ -667,6 +729,13 @@ final class PersistentMonitor
             return null;
         }
         return new PDO('sqlite:' . $this->root . '/state/monitor.sqlite', null, null, [PDO::ATTR_TIMEOUT => 1]);
+    }
+
+    private function historyDatabase(): ?PDO
+    {
+        $db = $this->database();
+        return $db !== null && $db->query("SELECT 1 FROM sqlite_master
+            WHERE type = 'table' AND name = 'recruitment_history'")->fetchColumn() !== false ? $db : null;
     }
 
     private function readPrivateText(string $path, int $limit, bool $optional = true): ?string

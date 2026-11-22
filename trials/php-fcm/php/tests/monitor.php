@@ -88,6 +88,8 @@ try {
     $assert($state->query('SELECT post_number FROM detected_recruitments ORDER BY post_number')->fetchAll(PDO::FETCH_COLUMN) === [3, 8], 'Keep each detection once across scans');
     $monitor->scan($id, $db, 'loose', $now + 240_000);
     $assert($state->query('SELECT post_number FROM detected_recruitments')->fetchAll(PDO::FETCH_COLUMN) === [8], 'Remove detections at expiry');
+    $assert($state->query('SELECT post_number FROM recruitment_history')->fetchAll(PDO::FETCH_COLUMN) === [8],
+        'Expiry removes the history row at the same detection deadline');
     $dat[] = $line('&gt;&gt;8 あと1人', 'followup');
     $dat[] = $line('&gt;&gt;9 満員', 'followup');
     $monitor->scan($id, $db, 'loose', $now + 241_000);
@@ -113,6 +115,8 @@ try {
     $dat[] = $line('&gt;&gt;12 満員', 'send2');
     $assert($monitor->deliver($id, $db, 'loose', $send, $now + 245_000)['delivery']['status'] === 'idle'
         && count($attempts) === 2, 'Do not resend accepted recruitment or send newly closed pending recruitment');
+    $assert($state->query('SELECT post_number FROM recruitment_history')->fetchAll(PDO::FETCH_COLUMN) === [11],
+        'Acceptance keeps the recruitment visible, while a close removes a pending room from both stores');
     $dat[] = $line('四南 89012', 'send3');
     $reject = static function (): never {
         throw new SafeFailure('fcm_network_failed');
@@ -120,6 +124,16 @@ try {
     $fails(fn () => $monitor->deliver($id, $db, 'loose', $reject, $now + 246_000), 'fcm_network_failed');
     $assert($monitor->deliver($id, $db, 'loose', $send, $now + 546_000)['delivery']['status'] === 'idle'
         && count($attempts) === 2, 'Ambiguous events expire at the first attempt window even if the room is open');
+    $assert($state->query('SELECT post_number FROM recruitment_history ORDER BY post_number')->fetchAll(PDO::FETCH_COLUMN) === [11, 14],
+        'Notification retry cutoff does not shorten either real recruitment deadline');
+    for ($i = 0; $i < 201; ++$i) {
+        $dat[] = $line('四南 90123', 'bulk');
+    }
+    $monitor->scan($id, $db, 'loose', $now + 547_000);
+    $assert($state->query('SELECT post_number FROM recruitment_history ORDER BY post_number')->fetchAll(PDO::FETCH_COLUMN) === range(16, 215),
+        'Retain at most the 200 newest recruitment detections');
+    $assert((int) $state->query('SELECT COUNT(*) FROM detected_recruitments')->fetchColumn() === 201,
+        'The history size limit must not drop undelivered notifications');
 } finally {
     foreach (glob($directory . '/*') as $file) {
         unlink($file);
