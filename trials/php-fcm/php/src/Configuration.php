@@ -8,7 +8,7 @@ final class Configuration
 {
     public const PACKAGE = 'sureneco.sakots.phptrial';
     public const OAUTH_ENDPOINT = 'https://oauth2.googleapis.com/token';
-    public const OPERATIONS = ['auth', 'validate', 'validate-topic', 'send'];
+    public const OPERATIONS = ['auth', 'validate', 'validate-topic', 'validate-recruitment', 'send'];
     private const JSON_LIMIT = 65536;
 
     private function __construct(

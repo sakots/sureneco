@@ -25,6 +25,10 @@ final class Sender
 
     public function run(#[\SensitiveParameter] Configuration $configuration): array
     {
+        if ($configuration->operation === 'validate-recruitment') {
+            return $this->execute($configuration, static fn (int $now): array =>
+                self::recruitmentData($now, '1000000000', 1, ['12345'], ($now + 60) * 1000));
+        }
         return $this->execute($configuration);
     }
 
@@ -38,20 +42,24 @@ final class Sender
         if ($configuration->operation !== 'send') {
             throw new SafeFailure('invalid_operation');
         }
-        return $this->execute($configuration, static function (int $now) use ($threadId, $postNumber, $roomIds, $expiresAtMs): array {
-            $expiresAt = min($now + 300, intdiv($expiresAtMs, 1000));
-            if ($expiresAt <= $now) {
-                throw new SafeFailure('recruitment_expired');
-            }
-            return [
-                'type' => 'recruitment',
-                'eventId' => substr(hash('sha256', "recruitment:$threadId:$postNumber"), 0, 32),
-                'sentAt' => (string) $now,
-                'expiresAt' => (string) $expiresAt,
-                'title' => 'スレネコ PHP試験：友人戦募集',
-                'body' => 'レス #' . $postNumber . ' ／ 部屋ID: ' . implode('、', array_slice($roomIds, 0, 5)),
-            ];
-        });
+        return $this->execute($configuration, static fn (int $now): array =>
+            self::recruitmentData($now, $threadId, $postNumber, $roomIds, $expiresAtMs));
+    }
+
+    private static function recruitmentData(int $now, string $threadId, int $postNumber, array $roomIds, int $expiresAtMs): array
+    {
+        $expiresAt = min($now + 300, intdiv($expiresAtMs, 1000));
+        if ($expiresAt <= $now) {
+            throw new SafeFailure('recruitment_expired');
+        }
+        return [
+            'type' => 'recruitment',
+            'eventId' => substr(hash('sha256', "recruitment:$threadId:$postNumber"), 0, 32),
+            'sentAt' => (string) $now,
+            'expiresAt' => (string) $expiresAt,
+            'title' => 'スレネコ PHP試験：友人戦募集',
+            'body' => 'レス #' . $postNumber . ' ／ 部屋ID: ' . implode('、', array_slice($roomIds, 0, 5)),
+        ];
     }
 
     private function execute(#[\SensitiveParameter] Configuration $configuration, ?\Closure $recruitment = null): array
@@ -102,7 +110,7 @@ final class Sender
                 'restricted_package_name' => Configuration::PACKAGE,
             ],
         ];
-        if ($configuration->operation === 'validate-topic') {
+        if (in_array($configuration->operation, ['validate-topic', 'validate-recruitment'], true)) {
             // This explicit operation can validate authorization without a registered device; it never sends.
             $message['topic'] = 'sureneco-trial-' . bin2hex(random_bytes(16));
         } else {

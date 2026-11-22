@@ -180,6 +180,23 @@ try {
     $failure(fn () => $sender->sendRecruitment($load(), '1795262711', 12, ['34567'], (time() - 1) * 1000), 'recruitment_expired');
     $assert(count($history) === 5, 'No FCM request for expired recruitment');
 
+    $failure(fn () => Configuration::load('validate-recruitment', $credentialPath, $clientPath, $tokenPath), 'unexpected_registration_token');
+    $history = [];
+    $stack = HandlerStack::create(new MockHandler([$oauth(), $accepted()]));
+    $stack->push(Middleware::history($history));
+    $result = (new Sender(new Client(['handler' => $stack])))->run(
+        Configuration::load('validate-recruitment', $credentialPath, $clientPath, null),
+    );
+    $request = json_decode((string) $history[1]['request']->getBody(), true, 16, JSON_THROW_ON_ERROR);
+    $validation = $request['message'];
+    $assert($request['validate_only'] === true && !isset($validation['token'])
+        && preg_match('/^sureneco-trial-[a-f0-9]{32}$/D', $validation['topic']) === 1, 'Recruitment validation cannot target a device');
+    $assert($validation['data']['type'] === 'recruitment' && str_contains($validation['data']['body'], '12345')
+        && $validation['android'] === ['priority' => 'high', 'ttl' => '60s', 'restricted_package_name' => Configuration::PACKAGE],
+        'Validate the same recruitment format with a short deadline');
+    $assert($result['status'] === 'validated' && $result['sent'] === false && $result['deviceDeliveryVerified'] === false,
+        'FCM validation never claims delivery');
+
     echo json_encode(['ok' => true, 'assertions' => $assertions], JSON_THROW_ON_ERROR) . PHP_EOL;
 } finally {
     foreach (glob($directory . '/*') as $path) {

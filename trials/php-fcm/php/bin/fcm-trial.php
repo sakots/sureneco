@@ -30,7 +30,7 @@ try {
     }
     require $autoload;
 
-    $usage = 'php trials/php-fcm/php/bin/fcm-trial.php auth|validate|validate-topic|send '
+    $usage = 'php trials/php-fcm/php/bin/fcm-trial.php auth|validate|validate-topic|validate-recruitment|send '
         . '--credentials=/private/path/or/- --client-config=/path/google-services.json '
         . '[--registration-token-file=/private/path]';
     if (count($argv) === 2 && $argv[1] === '--help') {
@@ -41,6 +41,7 @@ try {
                 'auth' => 'Real Google OAuth authentication only; no FCM request.',
                 'validate' => 'Real FCM validate_only with the required private receiver token file; no delivery.',
                 'validate-topic' => 'Real FCM validate_only with a fresh unsubscribed random topic; no token file, no delivery.',
+                'validate-recruitment' => 'Real FCM validate_only for a synthetic recruitment on a random topic; no token file, no delivery.',
                 'send' => 'One real FCM request to the required private receiver token file; acceptance is not device receipt.',
             ],
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . PHP_EOL;
