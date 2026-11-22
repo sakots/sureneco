@@ -74,6 +74,25 @@ export function run(json: string): string {
     const lastPost = posts.length;
     if (!lastPost) return failure("invalid_dat");
     const settings = { ...defaults, recruitment_filter: filter } as const;
+    if (!("previous" in input) || !Array.isArray(input.previous))
+      return failure("invalid_request");
+    const previous = input.previous;
+    const closed: number[] = [];
+    // scanPosts caps its returned history at 200 items.
+    for (let offset = 0; offset < previous.length; offset += 200) {
+      const { items } = scanPosts(
+        threadId,
+        [],
+        previous.slice(offset, offset + 200),
+        settings,
+        now,
+        posts,
+      );
+      for (const item of items) {
+        if (item.closed || recruitmentExpiresAt(item, settings) <= now)
+          closed.push(item.number);
+      }
+    }
     const recruitments =
       after === null || after >= lastPost
         ? []
@@ -88,7 +107,10 @@ export function run(json: string): string {
             ...item,
             expiresAt: recruitmentExpiresAt(item, settings),
           }));
-    return JSON.stringify({ ok: true, result: { lastPost, recruitments } });
+    return JSON.stringify({
+      ok: true,
+      result: { lastPost, recruitments, closed },
+    });
   } catch (error) {
     return failure(
       isExecutionLimit(error)

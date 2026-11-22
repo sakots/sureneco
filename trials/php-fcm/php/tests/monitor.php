@@ -88,6 +88,10 @@ try {
     $assert($state->query('SELECT post_number FROM detected_recruitments ORDER BY post_number')->fetchAll(PDO::FETCH_COLUMN) === [3, 8], 'Keep each detection once across scans');
     $monitor->scan($id, $db, 'loose', $now + 240_000);
     $assert($state->query('SELECT post_number FROM detected_recruitments')->fetchAll(PDO::FETCH_COLUMN) === [8], 'Remove detections at expiry');
+    $dat[] = $line('&gt;&gt;8 あと1人', 'followup');
+    $dat[] = $line('&gt;&gt;9 満員', 'followup');
+    $monitor->scan($id, $db, 'loose', $now + 241_000);
+    $assert($state->query('SELECT post_number FROM detected_recruitments')->fetchAll(PDO::FETCH_COLUMN) === [], 'Closing a later reply removes the saved original');
 } finally {
     foreach (glob($directory . '/*') as $file) {
         unlink($file);

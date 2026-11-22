@@ -72,9 +72,17 @@ final class RecruitmentMonitor
         $after = $last === false ? null : (int) $last;
         $text = ($this->fetch)("dat/$threadId.dat");
         $now ??= self::now();
+        $saved = $db->prepare('SELECT payload_json FROM detected_recruitments WHERE thread_id = ? AND expires_at > ?');
+        $saved->execute([$threadId, $now]);
+        $previous = [];
+        while (($payload = $saved->fetchColumn()) !== false) {
+            $previous[] = json_decode($payload, true, 64, JSON_THROW_ON_ERROR);
+        }
+        $saved->closeCursor();
         $detected = MonitorIo::detect([
             'operation' => 'scan', 'text' => $text, 'threadId' => $threadId,
             'after' => $after, 'filter' => $filter, 'now' => $now,
+            'previous' => $previous,
         ]);
         if ($after !== null && $detected['lastPost'] < $after) {
             throw new SafeFailure('dat_regressed');
@@ -85,6 +93,10 @@ final class RecruitmentMonitor
                 ON CONFLICT(thread_id) DO UPDATE SET last_post = excluded.last_post');
             $write->execute([$threadId, $detected['lastPost']]);
             $db->prepare('DELETE FROM detected_recruitments WHERE expires_at <= ?')->execute([$now]);
+            $remove = $db->prepare('DELETE FROM detected_recruitments WHERE thread_id = ? AND post_number = ?');
+            foreach ($detected['closed'] as $number) {
+                $remove->execute([$threadId, $number]);
+            }
             $insert = $db->prepare('INSERT INTO detected_recruitments
                 (thread_id, post_number, expires_at, payload_json) VALUES (?, ?, ?, ?)
                 ON CONFLICT(thread_id, post_number) DO NOTHING');
@@ -98,6 +110,7 @@ final class RecruitmentMonitor
             $db->rollBack();
             throw $failure;
         }
+        unset($detected['closed']);
         return ['threadId' => $threadId, 'baseline' => $after === null] + $detected;
     }
 

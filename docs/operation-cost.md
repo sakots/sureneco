@@ -109,6 +109,8 @@ php trials/php-fcm/php/bin/monitor.php scan THREAD_ID /absolute/private/monitor.
 
 `list`は`threads`、`scan`は`threadId`・`baseline`・`lastPost`・`recruitments`を返します。募集の`expiresAt`はUnixミリ秒です。壊れたDATや前回より短いDATは失敗として扱い、取得位置を維持します。新着の検出結果は、標準出力を受け取れなくても失われないよう、取得位置と同じSQLiteトランザクションで`detected_recruitments`に保存します。スレッドIDとレス番号で重複を防ぎ、成功した監視回で期限切れを削除します。この記録は検出時点の結果であり、後から締まった募集を含み得るため、そのまま配送には使いません。
 
+次回の正常な取得時には、保存済み募集も最新DATで再判定し、元募集や追記の締めを確認したものを削除します。取得に失敗した回の記録を配送可能とは見なしません。FCM送信はまだ接続していません。
+
 ローカルでは`php trials/php-fcm/php/tests/monitor.php`で、実際の判定プロセスと一時SQLiteを使用して初回基準、新着の半荘募集、締め・期限切れと取得失敗からの復旧を確認しました。実際の5ch取得でも候補3件と指定スレッドのDAT 758レスを読み込み、初回に募集を出力しないことを確認しました。
 
 このCLIは候補と募集の検出結果を返すためのものです。公開設定API・端末登録・FCM配送には接続せず、FCM鍵やトークンも読みません。Playプロテクトの解除・再審査結果は未確認です。試験APKの再配布・再インストール、本番のNode.js版の切替は行いません。

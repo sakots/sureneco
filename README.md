@@ -65,6 +65,7 @@ Androidの少人数・招待制ベータは[実施方法](docs/android-beta.md)�
 
 - PHP＋FCM試験構成に、現行版と同じ判定で5chの候補と新着募集を確認できる[PHP監視CLI](docs/operation-cost.md#phpcronの募集監視試作20261122)を追加。
 - PHP監視で検出した新着募集を、取得位置と同時にSQLiteへ保存する機能を追加。
+- PHP監視で、後から締まった保存済み募集を次回取得時に除外する機能を追加。
 
 ### [2026/11/18] v0.13.3（Android版のみ）
 
