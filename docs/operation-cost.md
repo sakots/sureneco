@@ -128,7 +128,17 @@ php trials/php-fcm/php/bin/monitor.php deliver THREAD_ID /absolute/private/deliv
 
 通知は試験アプリIDに限定し、FCMのTTLと端末が受信を受け入れる期限は募集の期限を超えない最大300秒です。募集通知を受信するには対応した試験アプリが必要です。既存の疎通試験メッセージは従来の300秒のままです。FCM受理と実機の受信は別に扱います。Playプロテクトの解除・再審査結果は未確認のため、今回はAPK再配布・実端末送信・cron登録・本番切替を行いません。
 
-ローカルでは実判定ワーカーと一時SQLiteで、最新DATを取得できない回の送信抑止、締め済みの除外、受理済みの再送防止、失敗後の再試行とその打ち切りを確認しました。FCM HTTP v1の要求本文は隔離HTTPテストで、募集通知の期限と重複抑止はAndroidのJVMテストで確認しました。実際のFCMへの送信と端末表示は未確認です。
+ローカルでは実判定ワーカーと一時SQLiteで、最新DATを取得できない回の送信抑止、締め済みの除外、受理済みの再送防止、失敗後の再試行とその打ち切りを確認しました。FCM HTTP v1の要求本文は隔離HTTPテストで、募集通知の期限と重複抑止はAndroidのJVMテストで確認しました。
+
+端末の準備を待たずに、募集通知と同じ形式を実際のFCMに検証させるには、以下を使います。架空の募集、ランダムな試験トピックと`validate_only`を使用します。端末トークンの指定は拒否し、監視DB・5chの投稿は参照しません。`validated`はFCMがリクエストを受理したことだけを示し、通知送信や端末表示は示しません。
+
+```sh
+php trials/php-fcm/php/bin/fcm-trial.php validate-recruitment \
+  --credentials=.secrets/php-fcm/service-account.json \
+  --client-config=.secrets/php-fcm/google-services.json
+```
+
+エックスサーバーのPHP 8.4.27から、実際のOAuth認証と募集通知形式の`validate_only`に成功しました（`validated: true`、`sent: false`）。鍵はSSHの標準入力で渡し、試験コードは公開領域外の一時ディレクトリーから撤去しました。端末への送信・表示、継続的なcron運用は未検証です。
 
 
 ## 1分程度の通知と負荷
