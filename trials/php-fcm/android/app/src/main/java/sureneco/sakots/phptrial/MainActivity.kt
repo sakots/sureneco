@@ -88,6 +88,7 @@ class MainActivity : Activity() {
         copyButton = button("登録トークンを機密クリップボードにコピー") { copyToken() }
         text("コピーした完全なトークンは、信頼できる送信担当者にだけ渡してください。他のアプリへの貼り付け・クリップボード同期に注意し、使用後は消去してください。画面には末尾だけ表示します。")
         button("Android の通知設定を開く") { openNotificationSettings() }
+        button("通知対象スレッドを選択") { startActivity(Intent(this, SelectionActivity::class.java)) }
         text("端末の最終受信", 19f)
         receipt = text("")
         text("FCM の送信受理だけでは端末の受信成功になりません。eventId と受信記録を照合してください。接続試験の有効期限は300秒、募集通知は募集期限までの最大300秒です。端末時計を正しく設定してください。停止後も既存の FCM 登録自体は残りますが、このアプリは受信通知を表示しません。")

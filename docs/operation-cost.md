@@ -64,11 +64,45 @@ Node.js・SQLite・ntfy・HTTPSプロキシを同じ小規模VPSにまとめま�
 
 - 利用者から、Playプロテクトを有効にしたままブロックが解消して導入できたとの報告を受けました。Googleの審査結果・分類理由をこちらで確認したという意味ではありません。
 - USBデバッグを承認したPixel 7 Proで、試験アプリ`sureneco.sakots.phptrial`の導入・起動・利用同意・FCM登録とOS通知権限を確認しました。既存PHP送信CLIから、アプリ表示中とホーム画面へ戻した状態で疎通通知を各1件送信し、FCM受理・端末受信記録・OS通知のeventId一致と、実画面の「通知を表示しました」を確認しました。本体のアプリ・通知先・本番サーバーは変更していません。
-- WindowsではWSLのUbuntu-26.04とPHP CLIを使用し、既存のUnix秘密ファイル権限チェックを維持しました。秘密鍵は標準入力、宛先は同意済みのデバッグアプリからメモリー上で読み取り、Linuxの所有者限定一時ファイル（0600）を経由して試験後に削除しました。トークンをホストのファイル・チャット・Gitへ残していません。非秘密の証跡は`release/php-fcm-device-debug/2026-11-22.json`です。自然放置による長時間のDoze・実5ch新着募集からの配送・cron運用は未確認です。
+- WindowsではWSLのUbuntu-26.04とPHP CLIを使用し、既存のUnix秘密ファイル権限チェックを維持しました。秘密鍵は標準入力、宛先は同意済みのデバッグアプリからメモリー上で読み取り、Linuxの所有者限定一時ファイル（0600）を経由して試験後に削除しました。トークンをホストのファイル・チャット・Gitへ残していません。非秘密の証跡は`release/php-fcm-device-debug/2026-11-22.json`です。自然放置による長時間のDoze・実5ch新着募集からの配送・常設cronの長期運用は未確認です。
 - 追加の消灯試験では、USB給電中に常時表示（AOD）を一時抑止し、送信直前・受信後ともDisplayの`mScreenState=OFF`を確認しました。PHPから疎通通知を1件送信し、端末の受信記録とOS通知のeventIdが一致し、「通知を表示しました」と記録されたことを確認しました。Powerのwakefulnessは`Dozing`ですが、device-idleは`ACTIVE`／`mLightState=ACTIVE`で、長時間放置によるDozeの検証ではありません。一時抑止を解除して画面の復帰を確認し、非秘密の証跡を`release/php-fcm-device-debug/2026-11-22-screen-off.json`へ保存しました。
 - Deep Dozeの追加試験では、USB接続は維持したまま`cmd battery unplug`で未給電を模擬し、画面をオフにして`cmd deviceidle force-idle deep`を実行しました。試験アプリは恒久的な省電力除外に登録されておらず、除外設定も変更していません。送信前・受信後とも`mState=IDLE`・`mScreenOn=false`・`mCharging=false`のまま、PHP疎通通知1件の端末受信とOS通知のeventId一致を確認しました。試験後に`unforce`と`battery reset`を実行し、強制状態false・通常状態ACTIVE・実際の給電状態への復帰を確認しました。証跡は`release/php-fcm-device-debug/2026-11-22-deep-doze.json`です。これは開発コマンドで強制したDeep Dozeの検証で、自然放置による長時間試験とは区別します。
 - 実5chの2スレッドを専用DB・緩めフィルタ・60秒間隔で15分間監視しました。初回は通知せず、取得エラーなしで30レスの増加を確認しましたが、対象の新着募集がなく実配送には到達しませんでした。履歴の取得位置や投稿時刻は改変せず、試験用の5ch投稿も行っていません。証跡は`release/php-fcm-device-debug/2026-11-22-live-delivery.json`です。
 - 利用者の了承により、入力だけを隔離した試験DATへ置き換え、実際のRecruitmentMonitor・判定ワーカー・SQLite・Sender・FCM・Pixel 7 Proを接続しました。初回の基準レスで送信0件、次の「3人半荘 13589」でレス2の検出・送信前のキュー保存・実FCM送信1件・端末受信・OS通知のeventId／レス番号／部屋ID一致を確認しました。受理後のキューは0件、同じDATの再取得も送信0件でした。入力は架空で、本物の新着取得とは区別します。秘密情報と専用DBは試験後に削除し、非秘密の証跡を`release/php-fcm-device-debug/2026-11-22-recruitment-fixture.json`へ保存しました。本体・本番サーバー・cronは変更していません。
+
+### エックスサーバーの一時cron試験（2026/11/22）
+
+- 利用者の承認により、実際のエックスサーバーのcronで募集配送経路を確認しました。PHP 8.4.28とcurl・OpenSSL・mbstring・PDO SQLite・`proc_open`を確認し、glibc 2.28のホストへx86_64 Linux static musl判定ワーカーを配備しました。配備先で実際の5ch候補4件の取得・判定にも成功しました。サーバー上にNode.jsやRustのビルド環境は追加していません。
+- 公開領域外の所有者限定ディレクトリー（0700）、FCM鍵・宛先（0600）と専用DBを使い、実cronの60秒間隔3回で、初回基準の送信抑止・架空の新着募集1件の実FCM配送・同じDATの再取得時の再送抑止を確認しました。配送前のSQLite保存、受理後の待ち行削除、Pixel 7 Proの受信記録とOS通知のeventId／レス番号／部屋ID一致を確認しています。入力は隔離した試験DATで、本物の新着取得とは区別します。
+- cron実行はPHP・判定ワーカーを絶対パスで指定し、`umask 077`・限定PATH・`flock`・45秒の実行上限を使用しました。試験用cronは期限付きとし、終了後に自分の1行と鍵・宛先・DBを含む一時領域を撤去して、試験前後のcrontabの存在状態・SHA-256一致を確認しました。常設cron・長期運用・再起動後の復旧は未確認で、既存Node.js本番は変更していません。証跡は`release/php-fcm-device-debug/2026-11-22-cron-verification.json`です。
+
+### PHP監視の常設構成（2026/11/22）
+
+- 利用者の指定により、雀魂スレッド候補を自動追跡し、緩めフィルタでこの端末のPHP試験アプリへ配送します。候補一覧は300秒間隔、cronは毎分実行します。新しいスレッドは初回の履歴を基準とし、過去レスを一括送信しません。既存Node.js版は変更せず、両方で監視すれば二重通知になり得ます。
+- コード・FCM鍵・端末宛先・DB・状態ファイルは公開領域外の所有者限定領域に常設します。実行排他と実行時間上限、候補・取得位置の永続化、通知失敗後の再判定、秘密情報を含まない状態確認、一時停止・再開を備えます。停止・再開は取得位置を消しません。トークンが変わった場合は宛先ファイルの更新が必要で、端末の自動再登録APIは追加しません。
+- 常設先はエックスサーバーとし、専用のcron行だけを追加します。既存cronとNode.jsのDB・設定・通知先には触れません。無関係なcronの上書きや常設データの自動削除は行いません。
+- エックスサーバーの常設先へ配備し、実データの候補2件で取得・判定が正常完了しました。実cronで一時停止中のハートビート・取得0件・送信0件とDB取得位置の不変を確認し、再開後も取得位置を保持して正常な監視回が完了しました。専用cron行は有効なまま残し、既存行の保持も確認しました。試験DATや試験用の自動撤去処理は常設先へ配置していません。
+- 永続監視の回帰35アサーションとCLIの終了コード・秘密情報抑止・再開成功の回帰ケースが成功しました。配備したコードは`7cc675255ad171ac29ae13171dc0599623680222`、非秘密の配備証跡は`release/php-fcm-device-debug/2026-11-22-permanent-deployed.json`です。確認時点では送信待ち・監視エラーとも0件ですが、本物の新着募集の到着、長期安定性やホスト再起動後の復旧を確認したという意味ではありません。
+- 常設監視で使うAndroid試験APKを`release/sureneco_php_fcm_trial_20261122_debug.apk`へ生成しました（1.0-trial／versionCode 1、デバッグ署名）。受信ポリシーの7テスト、APK署名、ZIPの16KB整列、サービスアカウント秘密情報の非同梱を確認しました。接続端末の既存APKと署名証明書が一致しています。今回は端末へのインストールやGitHub／Google Play公開は行っていません。SHA-256は`9078526e5210fc79f78eb52d724c5d26a951103fbdd875473f1e924b4d29eb81`です。上書き導入で既存データを保持し、削除・再インストールなどでFCMトークンが変わった場合は常設サーバー側も更新してください。
+
+接続先のシェルでは、常設ディレクトリーを`ROOT`に指定して操作します。
+
+```sh
+ROOT=/home/ACCOUNT/.sureneco-php
+/usr/bin/php8.4 "$ROOT/php/bin/service.php" status "$ROOT"
+/usr/bin/php8.4 "$ROOT/php/bin/service.php" pause "$ROOT"
+/usr/bin/php8.4 "$ROOT/php/bin/service.php" resume "$ROOT"
+```
+
+`pause`は進行中の監視が終わるまで同じ実行ロックを待ち、停止完了後の新たな取得・送信を抑止します。cron行とDBは残り、再開時は取得位置を継続します。鍵や宛先を更新するときも一時停止し、所有者限定の一時ファイルから原子的に差し替えて再開してください。端末の再インストール・FCMトークン変更時は`ROOT/secrets/registration-token.txt`の更新が必要です。公開HTTPの管理画面や端末の自動登録APIはありません。
+
+### Androidからの監視スレッド選択
+
+PHP試験アプリで候補一覧を表示し、通知対象をスレッドごとに切り替えます。設定APIはHTTPSと専用のBearer認証を必須とし、FCM送信用鍵とは分離します。既存の監視対象を初期選択として保持し、その後に見つかった候補はオフで追加します。オンにしたスレッドは既存のレスを基準にし、過去分を送信しません。VPS版には影響しません。
+
+配備時は新コードの初回cron実行より前に `/usr/bin/php8.4 "$ROOT/php/bin/service.php" provision-selection "$ROOT"` を実行します。公開領域に置くのは `trials/php-fcm/php/public/selection.php` だけです。Web側のPHPはcronと同じアカウントで実行し、サーバー側で `HTTPS`、`HTTP_AUTHORIZATION`（または `REDIRECT_HTTP_AUTHORIZATION`）、`SURENECO_PHP_WORKER_BIN=$ROOT/bin/sureneco-php-worker` が利用できるようにします。非公開の `ROOT` はWeb側の `SURENECO_PHP_ROOT` で明示できます（既定は `$HOME/.sureneco-php`）。
+
+Androidの「通知対象スレッドを選択」で、公開したAPIのHTTPS URLと、非公開の `ROOT/secrets/selection-auth.json` の `token` を入力します。トークンはログ・チャット・Gitに残さないでください。オン操作は最新DATの取得に成功してから保存し、取得失敗時はオフのままです。監視と競合した場合は監視回終了後に再読み込みして操作してください。一覧から外れたスレッドは、再出現してもオフです。
 
 ### 試験の実行順序
 
