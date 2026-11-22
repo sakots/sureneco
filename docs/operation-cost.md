@@ -37,7 +37,7 @@ Node.js・SQLite・ntfy・HTTPSプロキシを同じ小規模VPSにまとめま�
 ## PHP＋FCMの分離した疎通試験（2026/11/11）
 
 - エックスサーバーのPHP 8.4.27でcurl・OpenSSL・mbstring・PDO SQLite／MySQLを確認。`egg.5ch.io`のsubject.txtはHTTP 200で641スレッド、datはHTTP 200で925レスを解析しました。`.net`はHTTP 308のため試験では追従していません。一時cronのPHP実行と、試験行の削除・既存crontabの保持も確認済みです。これらは測定時点の結果で、継続取得の保証ではありません。
-- `trials/php-fcm/`に送信CLIと独立したAndroid試験アプリを置きます。これは募集判定・設定APIを備えたPHP版アプリではなく、認証と通知配送を確認するための実行可能な試験構成です。本番のTauri／Rust／UnifiedPushには組み込みません。
+- `trials/php-fcm/`に送信CLIと独立したAndroid試験アプリを置きます。この時点では認証と通知配送の疎通試験に限定しており、募集判定は下記のPHP監視試作で追加します。本番のTauri／Rust／UnifiedPushには組み込みません。
 - 試験アプリIDは`sureneco.sakots.phptrial`。利用者の同意・OS通知許可を確認してFCM登録トークンを取得し、明示操作でコピーできます。受信した`connectivity_test`のイベントID・期限を確認して通知と受信記録を表示します。Google Play開発者サービスを利用できる端末が必要です。
 - PHP CLIはGoogle AuthライブラリーでサービスアカウントのOAuth認証を行い、FCM HTTP v1 APIの認証確認・`validate_only`・試験通知送信を区別します。端末なしの`validate-topic`は一時トピックへの検証要求だけを送り、通知は配送しません。宛先トークン・認証トークン・秘密鍵をログや引数に出さず、認証成功・FCM受付成功・端末受信成功は別々に記録します。試験通知は有効期限5分、受信対象は別アプリIDに限定します。
 - `.secrets/php-fcm/service-account.json`はサーバー用秘密鍵（0600）、`google-services.json`は試験用クライアント設定です。プロジェクトIDとアプリIDを照合し、秘密鍵はAPKに含めません。エックスサーバーのPHP試験では鍵をSSH標準入力で渡し、公開領域やcronへ保存しません。試験用受信トークンは`.secrets/php-fcm/registration-token.txt`へ保存し、チャット・Gitへ貼りません。
@@ -92,6 +92,26 @@ php trials/php-fcm/php/bin/fcm-trial.php send \
 ```
 
 送信後はアプリの受信記録とOS通知を確認します。FCM側の受付成功だけで「端末に届いた」と判断しません。試験停止時はアプリ側も停止し、不要になった受信トークンのファイルを削除します。
+
+## PHP＋cronの募集監視試作（2026/11/22）
+
+端末導入の再開条件は維持し、先にサーバー側を分離して進めます。PHP CLIが5ch麻雀板の候補一覧と指定スレッドのDATを取得し、現行版と同じTypeScript判定を専用QuickJSプロセスで実行します。Node.jsとRustはビルド時だけ必要です。配備先ではPHPとLinux用の判定バイナリーを使います。共有ホスティングへの配置と実行可否はこのローカル検証と区別します。
+
+試作CLIにはPHP 8.2以上、curl・mbstring・PDO SQLiteと`proc_open`が必要です。ComposerとFCMの設定は不要です。判定バイナリーを既定の`trials/php-fcm/worker/target/release/`から移す場合は、実行ファイルの絶対パスを`SURENECO_PHP_WORKER_BIN`に指定してください。
+
+```sh
+node scripts/build-php-worker.mjs
+php trials/php-fcm/php/bin/monitor.php list
+php trials/php-fcm/php/bin/monitor.php scan THREAD_ID /absolute/private/monitor.sqlite loose
+```
+
+`scan`のモードは省略時`regex`（通常）、`loose`で緩めです。保存先には公開領域外の既存の所有者専用ディレクトリー（0700）を用い、DBと実行ロックは同じディレクトリーに0600で配置します。初回取得は履歴を基準として記録するだけで、次回以降は基準より後の募集をJSONで返します。参照を含め全DATを判定し、締め済み・期限切れの募集は除外します。失敗時は取得位置を進めず、同じDBを使う実行の重複は拒否します。毎分cronから呼び出す場合も、同じDBを継続使用してください。
+
+`list`は`threads`、`scan`は`threadId`・`baseline`・`lastPost`・`recruitments`を返します。募集の`expiresAt`はUnixミリ秒です。壊れたDATや前回より短いDATは失敗として扱い、取得位置を維持します。JSONはその実行の検出結果であり、送信待ちキューではありません。
+
+ローカルでは`php trials/php-fcm/php/tests/monitor.php`で、実際の判定プロセスと一時SQLiteを使用して初回基準、新着の半荘募集、締め・期限切れと取得失敗からの復旧を確認しました。実際の5ch取得でも候補3件と指定スレッドのDAT 758レスを読み込み、初回に募集を出力しないことを確認しました。
+
+このCLIは候補と募集の検出結果を返すためのものです。公開設定API・端末登録・FCM配送には接続せず、FCM鍵やトークンも読みません。Playプロテクトの解除・再審査結果は未確認です。試験APKの再配布・再インストール、本番のNode.js版の切替は行いません。
 
 
 ## 1分程度の通知と負荷
