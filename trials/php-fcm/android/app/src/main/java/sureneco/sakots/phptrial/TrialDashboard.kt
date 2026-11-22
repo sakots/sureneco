@@ -372,9 +372,12 @@ internal class TrialDashboard(
                 minWidth = ui.dp(48)
                 switchMinWidth = ui.dp(44)
                 splitTrack = false
-                val states = arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf(android.R.attr.state_checked), intArrayOf())
-                trackTintList = ColorStateList(states, intArrayOf(ui.border, ui.accent, ui.muted))
-                thumbTintList = ColorStateList(states, intArrayOf(ui.panel, ui.onAccent, ui.panel))
+                val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+                trackTintList = ColorStateList(states, intArrayOf(ui.accent, ui.muted))
+                thumbTintList = ColorStateList(states, intArrayOf(ui.onAccent, ui.panel))
+                text = if (item.enabled) "オン" else "オフ"
+                setTextColor(if (item.enabled) ui.accent else ui.text)
+                switchPadding = ui.dp(8)
                 setOnClickListener {
                     val requested = isChecked
                     isChecked = item.enabled
