@@ -62,22 +62,42 @@ final class RecruitmentMonitor
     {
         $db = new PDO('sqlite:' . $path, null, null, [PDO::ATTR_TIMEOUT => 1]);
         $db->exec('CREATE TABLE IF NOT EXISTS cursors (thread_id TEXT PRIMARY KEY, last_post INTEGER NOT NULL)');
+        $db->exec('CREATE TABLE IF NOT EXISTS detected_recruitments (
+            thread_id TEXT NOT NULL, post_number INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+            payload_json TEXT NOT NULL, PRIMARY KEY (thread_id, post_number))');
         $read = $db->prepare('SELECT last_post FROM cursors WHERE thread_id = ?');
         $read->execute([$threadId]);
         $last = $read->fetchColumn();
         $read->closeCursor();
         $after = $last === false ? null : (int) $last;
         $text = ($this->fetch)("dat/$threadId.dat");
+        $now ??= self::now();
         $detected = MonitorIo::detect([
             'operation' => 'scan', 'text' => $text, 'threadId' => $threadId,
-            'after' => $after, 'filter' => $filter, 'now' => $now ?? self::now(),
+            'after' => $after, 'filter' => $filter, 'now' => $now,
         ]);
         if ($after !== null && $detected['lastPost'] < $after) {
             throw new SafeFailure('dat_regressed');
         }
-        $write = $db->prepare('INSERT INTO cursors (thread_id, last_post) VALUES (?, ?)
-            ON CONFLICT(thread_id) DO UPDATE SET last_post = excluded.last_post');
-        $write->execute([$threadId, $detected['lastPost']]);
+        $db->beginTransaction();
+        try {
+            $write = $db->prepare('INSERT INTO cursors (thread_id, last_post) VALUES (?, ?)
+                ON CONFLICT(thread_id) DO UPDATE SET last_post = excluded.last_post');
+            $write->execute([$threadId, $detected['lastPost']]);
+            $db->prepare('DELETE FROM detected_recruitments WHERE expires_at <= ?')->execute([$now]);
+            $insert = $db->prepare('INSERT INTO detected_recruitments
+                (thread_id, post_number, expires_at, payload_json) VALUES (?, ?, ?, ?)
+                ON CONFLICT(thread_id, post_number) DO NOTHING');
+            foreach ($detected['recruitments'] as $item) {
+                if ($item['expiresAt'] > $now) {
+                    $insert->execute([$threadId, $item['number'], $item['expiresAt'], json_encode($item, JSON_THROW_ON_ERROR)]);
+                }
+            }
+            $db->commit();
+        } catch (\Throwable $failure) {
+            $db->rollBack();
+            throw $failure;
+        }
         return ['threadId' => $threadId, 'baseline' => $after === null] + $detected;
     }
 
