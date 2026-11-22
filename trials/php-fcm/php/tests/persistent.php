@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Sureneco\FcmTrial\PersistentMonitor;
 use Sureneco\FcmTrial\RecruitmentMonitor;
 use Sureneco\FcmTrial\SafeFailure;
+use Sureneco\FcmTrial\SelectionEndpoint;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -191,6 +192,90 @@ try {
             proc_close($process);
         }
     }
+
+    $root = $makeRoot('selection');
+    mkdir($root . '/secrets', 0700);
+    $subject = "$id.dat<>【雀魂】既存の友人戦 (1)\n";
+    $dat[$id] = [$line('四南 12345', 'baseline')];
+    $dat[$nextId] = [$line('3人半荘 24680', 'older')];
+    $scheduler = new PersistentMonitor($root, $monitor, $send);
+    $scheduler->tick();
+    $legacy = json_decode(file_get_contents($root . '/state/runtime.json'), true, 64, JSON_THROW_ON_ERROR);
+    unset($legacy['candidates'][0]['title']);
+    $writeJson($root . '/state/runtime.json', $legacy);
+    $request = static function (string $method, ?string $authorization, string $body = '', ?string $type = 'application/json') use ($scheduler): array {
+        return SelectionEndpoint::dispatch($scheduler, $method, $authorization, $type, $body);
+    };
+    $assert($request('GET', 'Bearer ' . str_repeat('a', 64))[0] === 503, 'API unavailable before explicit provisioning');
+    $scheduler->provisionSelection();
+    $authPath = $root . '/secrets/selection-auth.json';
+    $token = json_decode(file_get_contents($authPath), true, 64, JSON_THROW_ON_ERROR)['token'];
+    $authorization = 'Bearer ' . $token;
+    $assert(preg_match('/\A[a-f0-9]{64}\z/', $token) === 1 && (fileperms($authPath) & 0777) === 0600, 'Provision a private dedicated token');
+    $assert($request('GET', null)[0] === 401 && $request('GET', 'Bearer ' . str_repeat('0', 64))[0] === 401, 'Reject missing and incorrect credentials');
+    $assert($request('DELETE', $authorization)[0] === 405 && $request('POST', $authorization, '', 'text/plain')[0] === 415, 'Only allow supported methods and JSON mutations');
+    foreach (['[]', '{', '{"id":123,"enabled":true}', '{"id":"' . $id . '","enabled":"true"}',
+        '{"id":"' . $id . '","enabled":true,"extra":1}', str_repeat(' ', 1025)] as $bad) {
+        $assert($request('POST', $authorization, $bad)[0] === 400, 'Reject malformed or oversized update');
+    }
+    $update = static fn (string $thread, bool $enabled): array => $request('POST', $authorization,
+        json_encode(['id' => $thread, 'enabled' => $enabled], JSON_THROW_ON_ERROR));
+    $initial = ['threads' => [['id' => $id, 'title' => $id, 'enabled' => true]]];
+    $assert($request('GET', $authorization) === [200, $initial], 'Snapshot legacy runtime without needing network');
+    $assert($update($endedId, true)[0] === 404, 'Reject an unknown candidate');
+    $lock = fopen($root . '/state/run.lock', 'r+b');
+    flock($lock, LOCK_EX);
+    try {
+        $assert($request('GET', $authorization)[0] === 409 && $update($id, false)[0] === 409, 'API is nonblocking on the cron lock');
+    } finally {
+        fclose($lock);
+    }
+
+    $subject .= "$nextId.dat<>【雀魂】新しい友人戦 (1)\n";
+    $dat[$id][] = $line('3人半荘 13589', 'existing-after-provision');
+    $beforeSends = count($attempts);
+    $beforeFetches = count($fetches);
+    $refreshed = $scheduler->tick();
+    $both = ['threads' => [
+        ['id' => $id, 'title' => '【雀魂】既存の友人戦', 'enabled' => true],
+        ['id' => $nextId, 'title' => '【雀魂】新しい友人戦', 'enabled' => false],
+    ]];
+    $snapshot = $request('GET', $authorization);
+    $assert($snapshot === [200, $both], 'Refresh keeps existing selection and persists new titles with new candidates off: '
+        . json_encode(['snapshot' => $snapshot, 'list' => $refreshed['list']], JSON_UNESCAPED_UNICODE));
+    $assert(count($attempts) === $beforeSends + 1 && end($attempts)[0] === $id && end($attempts)[1] === 2, 'Provisioning preserves the selected cursor');
+    $assert(array_slice($fetches, $beforeFetches) === ['subject.txt', "dat/$id.dat"], 'Skip DAT for a disabled candidate');
+    $broken[$nextId] = true;
+    $assert($update($nextId, true)[0] === 503 && $request('GET', $authorization) === [200, $both], 'Failed enabling baseline leaves selection off');
+    unset($broken[$nextId]);
+    $both['threads'][1]['enabled'] = true;
+    $assert($update($nextId, true) === [200, $both], 'Enable only after a successful baseline');
+    $assert($scheduler->tick()['counts']['sent'] === 0, 'First enable does not replay old DAT');
+    $dat[$nextId][] = $line('3人半荘 35791', 'already-enabled');
+    $assert($update($nextId, true) === [200, $both], 'Repeated ON is idempotent');
+    $reject = true;
+    $assert($scheduler->tick()['counts']['pending'] === 1 && end($attempts)[0] === $nextId && end($attempts)[1] === 2,
+        'A post after the successful baseline stays eligible, including after an ON retry');
+    $reject = false;
+    $both['threads'][1]['enabled'] = false;
+    $assert($update($nextId, false) === [200, $both], 'Turn a currently selected candidate off');
+    $dat[$nextId][] = $line('3人半荘 46802', 'while-disabled');
+    $beforeSends = count($attempts);
+    $scheduler->tick();
+    $assert(count($attempts) === $beforeSends, 'While off neither queued nor newer posts are sent');
+    $latest = array_splice($dat[$nextId], 1);
+    $assert($update($nextId, true)[0] === 503 && $request('GET', $authorization) === [200, $both],
+        'A truncated DAT must not rewind a prior cursor or enable prematurely');
+    array_push($dat[$nextId], ...$latest);
+    $both['threads'][1]['enabled'] = true;
+    $assert($update($nextId, true) === [200, $both], 'Re-enable refreshes the DAT baseline');
+    $assert($scheduler->tick()['counts']['pending'] === 0 && count($attempts) === $beforeSends, 'Re-enable discards queued and while-off posts');
+    $dat[$nextId][] = $line('3人半荘 57913', 'after-re-enable');
+    $scheduler->tick();
+    $assert(count($attempts) === $beforeSends + 1 && end($attempts)[0] === $nextId && end($attempts)[1] === 4,
+        'Posts after re-enable are delivered normally');
+    $scheduler->provisionSelection();
+    $assert($request('GET', $authorization) === [200, $both], 'Reprovisioning does not reset credentials or selection');
 
     $unsafe = $makeRoot('unsafe');
     chmod($unsafe . '/config.json', 0644);

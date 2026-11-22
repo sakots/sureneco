@@ -96,6 +96,14 @@ ROOT=/home/ACCOUNT/.sureneco-php
 
 `pause`は進行中の監視が終わるまで同じ実行ロックを待ち、停止完了後の新たな取得・送信を抑止します。cron行とDBは残り、再開時は取得位置を継続します。鍵や宛先を更新するときも一時停止し、所有者限定の一時ファイルから原子的に差し替えて再開してください。端末の再インストール・FCMトークン変更時は`ROOT/secrets/registration-token.txt`の更新が必要です。公開HTTPの管理画面や端末の自動登録APIはありません。
 
+### Androidからの監視スレッド選択
+
+PHP試験アプリで候補一覧を表示し、通知対象をスレッドごとに切り替えます。設定APIはHTTPSと専用のBearer認証を必須とし、FCM送信用鍵とは分離します。既存の監視対象を初期選択として保持し、その後に見つかった候補はオフで追加します。オンにしたスレッドは既存のレスを基準にし、過去分を送信しません。VPS版には影響しません。
+
+配備時は新コードの初回cron実行より前に `/usr/bin/php8.4 "$ROOT/php/bin/service.php" provision-selection "$ROOT"` を実行します。公開領域に置くのは `trials/php-fcm/php/public/selection.php` だけです。Web側のPHPはcronと同じアカウントで実行し、サーバー側で `HTTPS`、`HTTP_AUTHORIZATION`（または `REDIRECT_HTTP_AUTHORIZATION`）、`SURENECO_PHP_WORKER_BIN=$ROOT/bin/sureneco-php-worker` が利用できるようにします。非公開の `ROOT` はWeb側の `SURENECO_PHP_ROOT` で明示できます（既定は `$HOME/.sureneco-php`）。
+
+Androidの「通知対象スレッドを選択」で、公開したAPIのHTTPS URLと、非公開の `ROOT/secrets/selection-auth.json` の `token` を入力します。トークンはログ・チャット・Gitに残さないでください。オン操作は最新DATの取得に成功してから保存し、取得失敗時はオフのままです。監視と競合した場合は監視回終了後に再読み込みして操作してください。一覧から外れたスレッドは、再出現してもオフです。
+
 ### 試験の実行順序
 
 プロジェクトのルートで実行します。ComposerとPHP 8.2以上、AndroidビルドにはJava 21・Android SDKが必要です。

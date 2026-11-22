@@ -13,6 +13,7 @@ final class PersistentMonitor
     private const STALE_MS = 180_000;
     private const MAX_CANDIDATES = 1000;
     private const STATUS_THREADS = 32;
+    private const SELECTION_TOKEN = '/secrets/selection-auth.json';
     private const ERRORS = [
         'list_failed', 'thread_failed', 'delivery_failed', 'invalid_candidates', 'budget_exhausted',
         'invalid_resource', 'fetch_failed', 'decoding_failed', 'invalid_request', 'invalid_dat',
@@ -124,6 +125,87 @@ final class PersistentMonitor
         return $this->status();
     }
 
+    public function provisionSelection(): array
+    {
+        $lock = $this->openLock();
+        try {
+            if (!flock($lock, LOCK_EX)) {
+                throw new SafeFailure('state_unavailable');
+            }
+            $this->configuration();
+            $runtime = $this->runtime();
+            if ($this->selectionToken() === null) {
+                $this->atomicJson($this->root . self::SELECTION_TOKEN, ['token' => bin2hex(random_bytes(32))]);
+            }
+            if (!isset($runtime['selected'])) {
+                $runtime['selected'] = array_column($runtime['candidates'], 'id');
+                // Snapshot the running set before making a fresh list eligible for polling.
+                $runtime['list']['attemptedAt'] = null;
+                $this->atomicJson($this->root . '/state/runtime.json', $runtime);
+            }
+            return ['status' => 'provisioned'];
+        } finally {
+            fclose($lock);
+        }
+    }
+
+    public function threadSelection(#[\SensitiveParameter] string $token, ?string $id = null, ?bool $enabled = null): array
+    {
+        $expected = $this->selectionToken() ?? throw new SafeFailure('selection_unavailable');
+        if (!hash_equals($expected, $token)) {
+            throw new SafeFailure('selection_unauthorized');
+        }
+        $lock = $this->openLock();
+        try {
+            if (!flock($lock, LOCK_EX | LOCK_NB)) {
+                throw new SafeFailure('monitor_busy');
+            }
+            $runtime = $this->runtime();
+            if (!isset($runtime['selected'])) {
+                throw new SafeFailure('selection_unavailable');
+            }
+            $selected = array_fill_keys($runtime['selected'], true);
+            if ($id !== null && $enabled !== null) {
+                if (!in_array($id, array_column($runtime['candidates'], 'id'), true)) {
+                    throw new SafeFailure('unknown_thread');
+                }
+                if ($enabled !== isset($selected[$id])) {
+                    if ($enabled) {
+                        // Commit the fresh cursor and discard its queue before cron can see the thread enabled.
+                        $this->checkDatabaseFiles();
+                        $this->monitor->baseline($id, $this->root . '/state/monitor.sqlite', $this->configuration()['filter']);
+                        $selected[$id] = true;
+                    } else {
+                        unset($selected[$id]);
+                    }
+                    $runtime['selected'] = array_map(strval(...), array_keys($selected));
+                    $this->atomicJson($this->root . '/state/runtime.json', $runtime);
+                }
+            }
+            $threads = [];
+            foreach ($runtime['candidates'] as $candidate) {
+                $threads[] = ['id' => $candidate['id'], 'title' => $candidate['title'] ?? $candidate['id'],
+                    'enabled' => isset($selected[$candidate['id']])];
+            }
+            return ['threads' => $threads];
+        } finally {
+            fclose($lock);
+        }
+    }
+
+    private function selectionToken(): ?string
+    {
+        $this->privateDirectory($this->root . '/secrets');
+        $auth = $this->readJson($this->root . self::SELECTION_TOKEN, 256);
+        if ($auth === null) {
+            return null;
+        }
+        if (!is_string($auth['token'] ?? null) || preg_match('/\A[a-f0-9]{64}\z/', $auth['token']) !== 1) {
+            throw new SafeFailure('invalid_state_file');
+        }
+        return $auth['token'];
+    }
+
     private function runTick(array &$runtime, array &$status, array $config, int|float $deadline): void
     {
         $now = self::now();
@@ -147,10 +229,14 @@ final class PersistentMonitor
                     if ($thread['count'] < 1000) {
                         $candidate = $previous[$thread['id']] ?? self::candidate($thread['id'], $thread['count']);
                         $candidate['count'] = $thread['count'];
+                        $candidate['title'] = self::candidateTitle($thread['title'] ?? null);
                         $candidates[$thread['id']] = $candidate;
                     }
                 }
                 $runtime['candidates'] = array_values($candidates);
+                if (isset($runtime['selected'])) {
+                    $runtime['selected'] = array_values(array_intersect($runtime['selected'], array_column($runtime['candidates'], 'id')));
+                }
                 $runtime['list']['succeededAt'] = self::now();
                 $runtime['list']['error'] = null;
             } catch (\Throwable $error) {
@@ -158,10 +244,16 @@ final class PersistentMonitor
             }
             $this->atomicJson($this->root . '/state/runtime.json', $runtime);
         }
-        $count = count($runtime['candidates']);
-        $status['counts']['candidates'] = $count;
+        $selected = isset($runtime['selected']) ? array_fill_keys($runtime['selected'], true) : null;
+        $ids = $indexes = [];
+        foreach ($runtime['candidates'] as $index => $candidate) {
+            if ($selected === null || isset($selected[$candidate['id']])) {
+                $indexes[] = $index;
+                $ids[] = $candidate['id'];
+            }
+        }
+        $count = count($indexes);
         $status['counts']['remaining'] = $count;
-        $ids = array_column($runtime['candidates'], 'id');
         $start = array_search($runtime['nextThreadId'], $ids, true);
         $start = $start === false ? 0 : $start;
         $configuration = null;
@@ -183,14 +275,14 @@ final class PersistentMonitor
                 $status['errors'][] = 'budget_exhausted';
                 break;
             }
-            $index = ($start + $offset) % $count;
-            $candidate = &$runtime['candidates'][$index];
+            $position = ($start + $offset) % $count;
+            $candidate = &$runtime['candidates'][$indexes[$position]];
             $candidate['fetch'] = 'running';
             $candidate['delivery'] = 'not_attempted';
             $candidate['error'] = null;
             $candidate['updatedAt'] = self::now();
             // Advance before IO: a hard timeout must not repeatedly starve the tail.
-            $runtime['nextThreadId'] = $ids[($index + 1) % $count];
+            $runtime['nextThreadId'] = $ids[($position + 1) % $count];
             $this->atomicJson($this->root . '/state/runtime.json', $runtime);
             $this->saveStatus($status, $runtime, $config);
             ++$status['counts']['attempted'];
@@ -258,9 +350,10 @@ final class PersistentMonitor
         if ($runtime['list']['error'] !== null) {
             $status['errors'][] = $runtime['list']['error'];
         }
-        foreach ($runtime['candidates'] as $candidate) {
-            if ($candidate['error'] !== null) {
-                $status['errors'][] = $candidate['error'];
+        foreach ($indexes as $index) {
+            $error = $runtime['candidates'][$index]['error'];
+            if ($error !== null) {
+                $status['errors'][] = $error;
             }
         }
         $status['errors'] = array_values(array_unique($status['errors']));
@@ -308,6 +401,18 @@ final class PersistentMonitor
                 throw new SafeFailure('invalid_state_file');
             }
             $seen[$candidate['id']] = true;
+        }
+        if (array_key_exists('selected', $runtime)) {
+            $selected = $runtime['selected'];
+            if (!is_array($selected) || !array_is_list($selected) || count($selected) > count($seen)) {
+                throw new SafeFailure('invalid_state_file');
+            }
+            foreach ($selected as $id) {
+                if (!self::validId($id) || !isset($seen[$id])) {
+                    throw new SafeFailure('invalid_state_file');
+                }
+                unset($seen[$id]);
+            }
         }
         return $runtime;
     }
@@ -361,7 +466,11 @@ final class PersistentMonitor
         $status['threadRefreshSec'] = $config['thread_refresh_sec'];
         $status['list'] = $runtime['list'];
         $status['counts']['candidates'] = count($runtime['candidates']);
-        $status['threads'] = array_slice($runtime['candidates'], 0, self::STATUS_THREADS);
+        $status['threads'] = [];
+        foreach (array_slice($runtime['candidates'], 0, self::STATUS_THREADS) as $candidate) {
+            unset($candidate['title']);
+            $status['threads'][] = $candidate;
+        }
         $status['nextThreadId'] = $runtime['nextThreadId'];
         $this->atomicJson($this->root . '/state/status.json', $status);
     }
@@ -372,9 +481,21 @@ final class PersistentMonitor
             'fetch' => 'pending', 'delivery' => 'not_attempted', 'error' => null, 'updatedAt' => null];
     }
 
+    private static function candidateTitle(mixed $title): string
+    {
+        if (!is_string($title) || preg_match('/\A.{1,160}/us', $title, $match) !== 1) {
+            throw new SafeFailure('invalid_candidates');
+        }
+        return preg_replace('/[\x00-\x1f\x7f\x{2028}\x{2029}]/u', ' ', $match[0]);
+    }
+
     private static function validateCandidate(mixed $candidate): void
     {
-        if (!is_array($candidate) || array_keys($candidate) !== array_keys(self::candidate('', 0))
+        $keys = array_keys(self::candidate('', 0));
+        if (!is_array($candidate)
+            || (array_keys($candidate) !== $keys && array_keys($candidate) !== [...$keys, 'title'])
+            || (array_key_exists('title', $candidate) && (!is_string($candidate['title'])
+                || preg_match('/\A[^\x00-\x1f\x7f\x{2028}\x{2029}]{1,160}\z/u', $candidate['title']) !== 1))
             || !self::validId($candidate['id']) || !is_int($candidate['count']) || $candidate['count'] < 0 || $candidate['count'] >= 1000
             || ($candidate['lastPost'] !== null && (!is_int($candidate['lastPost']) || $candidate['lastPost'] < 0))
             || ($candidate['baseline'] !== null && !is_bool($candidate['baseline']))
@@ -572,7 +693,7 @@ final class PersistentMonitor
                 throw new SafeFailure('state_unavailable');
             }
             $created = true;
-            $json = json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . "\n";
+            $json = json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
             for ($offset = 0, $length = strlen($json); $offset < $length; $offset += $written) {
                 $written = fwrite($stream, substr($json, $offset));
                 if ($written === false || $written === 0) {

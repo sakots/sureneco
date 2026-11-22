@@ -33,7 +33,12 @@ final class RecruitmentMonitor
         return $this->run($threadId, $path, $filter, $now, $send);
     }
 
-    private function run(string $threadId, string $path, string $filter, ?int $now, ?Closure $send): array
+    public function baseline(string $threadId, string $path, string $filter): void
+    {
+        $this->run($threadId, $path, $filter, null, null, true);
+    }
+
+    private function run(string $threadId, string $path, string $filter, ?int $now, ?Closure $send, bool $baseline = false): array
     {
         if (preg_match('/\A[0-9]{9,11}\z/', $threadId) !== 1 || !in_array($filter, ['regex', 'loose'], true)) {
             throw new SafeFailure('invalid_arguments');
@@ -61,7 +66,7 @@ final class RecruitmentMonitor
                 }
                 self::requirePrivateFileIfPresent($path);
                 $db = new PDO('sqlite:' . $path, null, null, [PDO::ATTR_TIMEOUT => 1]);
-                $scan = $this->scanLocked($threadId, $db, $filter, $now);
+                $scan = $this->scanLocked($threadId, $db, $filter, $now, $baseline);
                 if ($send !== null) {
                     unset($scan['recruitments']);
                     $scan['delivery'] = $this->deliverLocked($db, $threadId, $now ?? self::now(), $send);
@@ -75,7 +80,7 @@ final class RecruitmentMonitor
         }
     }
 
-    private function scanLocked(string $threadId, PDO $db, string $filter, ?int $now): array
+    private function scanLocked(string $threadId, PDO $db, string $filter, ?int $now, bool $baseline): array
     {
         $db->exec('CREATE TABLE IF NOT EXISTS cursors (thread_id TEXT PRIMARY KEY, last_post INTEGER NOT NULL)');
         $db->exec('CREATE TABLE IF NOT EXISTS detected_recruitments (
@@ -85,24 +90,27 @@ final class RecruitmentMonitor
         $read->execute([$threadId]);
         $last = $read->fetchColumn();
         $read->closeCursor();
-        $after = $last === false ? null : (int) $last;
+        $cursor = $last === false ? null : (int) $last;
+        $after = $baseline ? null : $cursor;
         $text = ($this->fetch)("dat/$threadId.dat");
         $now ??= self::now();
-        $saved = $db->prepare('SELECT payload_json, expires_at FROM detected_recruitments WHERE thread_id = ? AND expires_at > ?');
-        $saved->execute([$threadId, $now]);
         $previous = [];
-        while (($row = $saved->fetch(PDO::FETCH_ASSOC)) !== false) {
-            $item = json_decode($row['payload_json'], true, 64, JSON_THROW_ON_ERROR);
-            $item['expiresAt'] = (int) $row['expires_at'];
-            $previous[] = $item;
+        if (!$baseline) {
+            $saved = $db->prepare('SELECT payload_json, expires_at FROM detected_recruitments WHERE thread_id = ? AND expires_at > ?');
+            $saved->execute([$threadId, $now]);
+            while (($row = $saved->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $item = json_decode($row['payload_json'], true, 64, JSON_THROW_ON_ERROR);
+                $item['expiresAt'] = (int) $row['expires_at'];
+                $previous[] = $item;
+            }
+            $saved->closeCursor();
         }
-        $saved->closeCursor();
         $detected = MonitorIo::detect([
             'operation' => 'scan', 'text' => $text, 'threadId' => $threadId,
             'after' => $after, 'filter' => $filter, 'now' => $now,
             'previous' => $previous,
         ]);
-        if ($after !== null && $detected['lastPost'] < $after) {
+        if ($cursor !== null && $detected['lastPost'] < $cursor) {
             throw new SafeFailure('dat_regressed');
         }
         $db->beginTransaction();
@@ -110,6 +118,11 @@ final class RecruitmentMonitor
             $write = $db->prepare('INSERT INTO cursors (thread_id, last_post) VALUES (?, ?)
                 ON CONFLICT(thread_id) DO UPDATE SET last_post = excluded.last_post');
             $write->execute([$threadId, $detected['lastPost']]);
+            if ($baseline) {
+                $db->prepare('DELETE FROM detected_recruitments WHERE thread_id = ?')->execute([$threadId]);
+                $db->commit();
+                return ['threadId' => $threadId, 'baseline' => true, 'lastPost' => $detected['lastPost']];
+            }
             $db->prepare('DELETE FROM detected_recruitments WHERE expires_at <= ?')->execute([$now]);
             $remove = $db->prepare('DELETE FROM detected_recruitments WHERE thread_id = ? AND post_number = ?');
             foreach ($detected['closed'] as $number) {

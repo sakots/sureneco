@@ -13,9 +13,9 @@ mkdir($directory . '/php', 0700);
 mkdir($directory . '/php/bin', 0700);
 mkdir($directory . '/php/vendor', 0700);
 copy(dirname(__DIR__) . '/bin/service.php', $directory . '/php/bin/service.php');
-$run = static function (array $arguments) use ($directory, $assert): array {
+$run = static function (array $arguments, ?string $source = null) use ($directory, $assert): array {
     $process = proc_open(
-        [PHP_BINARY, $directory . '/php/bin/service.php', ...$arguments],
+        $source === null ? [PHP_BINARY, $directory . '/php/bin/service.php', ...$arguments] : [PHP_BINARY, '-r', $source],
         [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
         $pipes,
         $directory,
@@ -94,6 +94,30 @@ PHP);
     $resumed = $json(['resume', $directory], 0);
     $assert($resumed['enabled'] && $resumed['status'] === 'stale', 'Resume succeeds while waiting for its first cron cycle');
     $json(['status', $directory], 1);
+    mkdir($directory . '/secrets', 0700);
+    $provisioned = $json(['provision-selection', $directory], 0);
+    $auth = $directory . '/secrets/selection-auth.json';
+    $secret = json_decode(file_get_contents($auth), true, 8, JSON_THROW_ON_ERROR)['token'];
+    $assert($provisioned === ['ok' => true, 'operation' => 'provision-selection', 'status' => 'provisioned']
+        && !str_contains(json_encode($provisioned), $secret), 'Provisioning never outputs the generated token');
+    $front = dirname(__DIR__) . '/public/selection.php';
+    $web = static function (array $server) use ($run, $directory, $front, $assert): array {
+        $server += ['DOCUMENT_ROOT' => $directory . '/php/bin', 'REQUEST_METHOD' => 'GET'];
+        $code = '$_SERVER = ' . var_export($server, true) . '; putenv(' . var_export('SURENECO_PHP_ROOT=' . $directory, true) . ');'
+            . 'register_shutdown_function(static function (): void { echo "\n", http_response_code(); });'
+            . 'require ' . var_export($front, true) . ';';
+        [$exit, $output] = $run([], $code);
+        $assert($exit === 0, 'Public script exits without leaking a runtime failure');
+        [$body, $status] = explode("\n", $output, 2);
+        return [(int) $status, json_decode($body, true, 8, JSON_THROW_ON_ERROR)];
+    };
+    $assert($web(['HTTP_X_FORWARDED_PROTO' => 'https']) === [403, ['error' => 'https_required']],
+        'Client-supplied forwarding headers cannot authorize plaintext HTTP');
+    $assert($web(['HTTPS' => 'on']) === [401, ['error' => 'unauthorized']], 'HTTPS still requires bearer authentication');
+    $request = ['HTTPS' => 'on', 'HTTP_AUTHORIZATION' => 'Bearer ' . $secret];
+    $assert($web($request) === [200, ['threads' => []]], 'Public script can use a private root configured by the web environment');
+    $assert($web($request + ['DOCUMENT_ROOT' => dirname($directory)]) === [503, ['error' => 'unavailable']],
+        'Public script rejects a root within the document root');
     echo "Service CLI consumer tests passed\n";
 } finally {
     unlink($directory . '/php/bin/service.php');
@@ -105,6 +129,10 @@ PHP);
     rmdir($directory . '/php');
     foreach (glob($directory . '/state/*') ?: [] as $file) unlink($file);
     if (is_dir($directory . '/state')) rmdir($directory . '/state');
+    if (is_dir($directory . '/secrets')) {
+        foreach (glob($directory . '/secrets/*') ?: [] as $file) unlink($file);
+        rmdir($directory . '/secrets');
+    }
     if (is_file($directory . '/config.json')) unlink($directory . '/config.json');
     rmdir($directory);
 }

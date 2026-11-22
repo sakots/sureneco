@@ -17,12 +17,12 @@ ini_set('log_errors', '0');
 $operation = null;
 try {
     if ($argc === 2 && $argv[1] === '--help') {
-        echo "php service.php tick|status|pause|resume ROOT\n"
+        echo "php service.php tick|status|pause|resume|provision-selection ROOT\n"
             . "ROOT is the explicitly supplied private deployment directory.\n"
             . "Exit 0: successful control operation, healthy or paused; exit 1: invalid arguments, degraded, stale or error health.\n";
         exit(0);
     }
-    if ($argc !== 3 || !in_array($argv[1], ['tick', 'status', 'pause', 'resume'], true)
+    if ($argc !== 3 || !in_array($argv[1], ['tick', 'status', 'pause', 'resume', 'provision-selection'], true)
         || $argv[2] === '' || str_contains($argv[2], "\0")) {
         $result = ['status' => 'error', 'error' => 'invalid_arguments'];
     } else {
@@ -38,6 +38,7 @@ try {
                 'status' => $monitor->status(),
                 'pause' => $monitor->setEnabled(false),
                 'resume' => $monitor->setEnabled(true),
+                'provision-selection' => $monitor->provisionSelection(),
             };
         }
     }
