@@ -149,6 +149,30 @@ final class PersistentMonitor
         }
     }
 
+    public function exchangeSelectionToken(#[\SensitiveParameter] string $registrationProof): string
+    {
+        $this->checkDirectories();
+        $this->privateDirectory($this->root . '/secrets');
+        $text = $this->readPrivateText($this->root . '/secrets/registration-token.txt', 8192);
+        if ($text === null) {
+            throw new SafeFailure('selection_unauthorized');
+        }
+        $registration = rtrim($text, "\r\n");
+        if (preg_match('/\A[a-zA-Z0-9_:\-]+\z/', $registration) !== 1) {
+            throw new SafeFailure('invalid_registration_token');
+        }
+        if (!hash_equals(hash('sha256', 'sureneco-php-selection-v1:' . $registration), $registrationProof)) {
+            throw new SafeFailure('selection_unauthorized');
+        }
+
+        $this->configuration();
+        $runtime = $this->runtime();
+        if (!isset($runtime['selected'])) {
+            throw new SafeFailure('selection_unavailable');
+        }
+        return $this->selectionToken() ?? throw new SafeFailure('selection_unavailable');
+    }
+
     public function threadSelection(#[\SensitiveParameter] string $token, ?string $id = null, ?bool $enabled = null): array
     {
         $expected = $this->selectionToken() ?? throw new SafeFailure('selection_unavailable');
@@ -645,7 +669,7 @@ final class PersistentMonitor
         return new PDO('sqlite:' . $this->root . '/state/monitor.sqlite', null, null, [PDO::ATTR_TIMEOUT => 1]);
     }
 
-    private function readJson(string $path, int $limit, bool $optional = true): ?array
+    private function readPrivateText(string $path, int $limit, bool $optional = true): ?string
     {
         $stat = $this->privateFile($path, $optional);
         if ($stat === null) {
@@ -664,16 +688,27 @@ final class PersistentMonitor
             if ($text === false || strlen($text) > $limit) {
                 throw new SafeFailure('invalid_state_file');
             }
-            $value = json_decode($text, true, 64, JSON_THROW_ON_ERROR);
-            if (!is_array($value) || array_is_list($value)) {
-                throw new SafeFailure('invalid_state_file');
-            }
-            return $value;
-        } catch (\JsonException) {
-            throw new SafeFailure('invalid_state_file');
+            return $text;
         } finally {
             fclose($stream);
         }
+    }
+
+    private function readJson(string $path, int $limit, bool $optional = true): ?array
+    {
+        $text = $this->readPrivateText($path, $limit, $optional);
+        if ($text === null) {
+            return null;
+        }
+        try {
+            $value = json_decode($text, true, 64, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new SafeFailure('invalid_state_file');
+        }
+        if (!is_array($value) || array_is_list($value)) {
+            throw new SafeFailure('invalid_state_file');
+        }
+        return $value;
     }
 
     private function atomicJson(string $path, array $value): void

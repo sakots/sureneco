@@ -13,6 +13,8 @@ class TrialApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Upgrades must discard the old selection bearer even if Selection is never opened.
+        deleteSharedPreferences("thread_selection")
         state = TrialState(this)
         TrialNotifications.createChannel(this)
         if (state.snapshot().enabled && !TrialNotifications.allowed(this)) state.stop()
