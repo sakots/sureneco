@@ -156,7 +156,11 @@ async function validateSettings(input: unknown): Promise<MobileSettings> {
   if (typeof suffix !== "string" || suffix.length > 1000 || !suffix.trim())
     throw new Error();
   value.recruitment_deadline_regex = suffix;
-  await runDetection({ operation: "validate", patterns, deadlineSuffix: suffix });
+  await runDetection({
+    operation: "validate",
+    patterns,
+    deadlineSuffix: suffix,
+  });
   return value as unknown as MobileSettings;
 }
 export function readMobileSettings(json: string): MobileSettings {

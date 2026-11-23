@@ -97,8 +97,8 @@ androidComponents {
         if (formal) {
             variant.applicationId.set(publicPackage)
             variant.outputs.forEach {
-                it.versionName.set("0.14.0")
-                it.versionCode.set(140)
+                it.versionName.set("0.14.1")
+                it.versionCode.set(141)
             }
         }
         // Resolve only the configuration needed by the requested variant; don't package the JSON.
