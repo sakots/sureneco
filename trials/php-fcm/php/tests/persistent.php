@@ -276,7 +276,7 @@ try {
         json_encode(['id' => $thread, 'enabled' => $enabled], JSON_THROW_ON_ERROR));
     $initial = ['threads' => [['id' => $id, 'title' => $id, 'enabled' => true]], 'recruitments' => [],
         'settings' => ['thread_refresh_sec' => 300, 'recruitment_filter' => 'loose',
-            'recruitment_deadline_regex' => 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)']];
+            'recruitment_deadline_regex' => 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽ)']];
     $assert($request('GET', $authorization) === [200, $initial], 'Snapshot legacy runtime without needing network');
     $settings = static fn (mixed $seconds, mixed $filter, ?string $bearer): array => $request('POST', $bearer,
         json_encode(['settings' => ['thread_refresh_sec' => $seconds, 'recruitment_filter' => $filter]], JSON_THROW_ON_ERROR));

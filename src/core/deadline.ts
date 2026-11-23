@@ -4,7 +4,7 @@ const minuteMs = 60_000;
 const hourMs = 60 * minuteMs;
 const dayMs = 24 * hourMs;
 const jstMs = 9 * hourMs;
-export const defaultDeadlineSuffix = String.raw`まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)`;
+export const defaultDeadlineSuffix = String.raw`まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽ)`;
 const timePattern =
   /(?<![0-9０-９.．+＋\-－])(?:(?<hour>[0-9０-９]{1,2})\s*(?:時(?:\s*(?<minute>[0-9０-９]{1,2})\s*分)?|[:：]\s*(?<colonMinute>[0-9０-９]{1,2}))|(?:(?<remaining>あと|残り)\s*)?(?<minuteOnly>[0-9０-９]{1,4})\s*分(?<relative>\s*後)?)\s*/u;
 const timeGroupNames = Object.keys(

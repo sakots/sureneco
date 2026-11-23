@@ -21,7 +21,7 @@ internal data class MonitoringSettings(val threadRefreshSec: Int, val filter: St
         val refreshRange = 60..86_400
         val filters = listOf("regex", "loose")
         const val deadlineRegexMaxLength = 1000
-        const val defaultDeadlineRegex = """まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)"""
+        const val defaultDeadlineRegex = """まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽ)"""
     }
 }
 internal data class MonitoringSnapshot(

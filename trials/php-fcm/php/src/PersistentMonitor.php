@@ -521,7 +521,7 @@ final class PersistentMonitor
         $refresh = $raw['thread_refresh_sec'] ?? 300;
         $suffix = array_key_exists('recruitment_deadline_regex', $raw)
             ? $raw['recruitment_deadline_regex']
-            : 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)';
+            : 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽ)';
         if (!is_bool($raw['enabled'] ?? null) || !self::validSettings($refresh, $filter)
             || !self::validDeadlineSuffix($suffix)) {
             throw new SafeFailure('invalid_config');

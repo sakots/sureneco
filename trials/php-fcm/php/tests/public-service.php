@@ -76,7 +76,7 @@ $b = str_repeat('b', 64);
 $c = str_repeat('c', 64);
 $wrong = str_repeat('0', 64);
 $defaultSettings = ['thread_refresh_sec' => 300, 'recruitment_filter' => 'loose',
-    'recruitment_deadline_regex' => 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)'];
+    'recruitment_deadline_regex' => 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽ)'];
 
 try {
     $service = $make('scope');
