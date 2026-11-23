@@ -23,23 +23,26 @@ final class RecruitmentMonitor
         return MonitorIo::detect(['operation' => 'list', 'text' => $text, 'now' => $now ?? self::now()]);
     }
 
-    public function scan(string $threadId, string $path, string $filter = 'regex', ?int $now = null): array
+    public function scan(string $threadId, string $path, string $filter = 'regex', ?int $now = null,
+        ?string $deadlineRegex = null): array
     {
-        return $this->run($threadId, $path, $filter, $now, null);
+        return $this->run($threadId, $path, $filter, $now, null, deadlineRegex: $deadlineRegex);
     }
 
     /** $send returns an FCM acceptance receipt or throws, leaving the recruitment queued. */
-    public function deliver(string $threadId, string $path, string $filter, Closure $send, ?int $now = null): array
+    public function deliver(string $threadId, string $path, string $filter, Closure $send, ?int $now = null,
+        ?string $deadlineRegex = null): array
     {
-        return $this->run($threadId, $path, $filter, $now, $send);
+        return $this->run($threadId, $path, $filter, $now, $send, deadlineRegex: $deadlineRegex);
     }
 
-    public function baseline(string $threadId, string $path, string $filter): void
+    public function baseline(string $threadId, string $path, string $filter, ?string $deadlineRegex = null): void
     {
-        $this->run($threadId, $path, $filter, null, null, true);
+        $this->run($threadId, $path, $filter, null, null, true, $deadlineRegex);
     }
 
-    private function run(string $threadId, string $path, string $filter, ?int $now, ?Closure $send, bool $baseline = false): array
+    private function run(string $threadId, string $path, string $filter, ?int $now, ?Closure $send,
+        bool $baseline = false, ?string $deadlineRegex = null): array
     {
         if (preg_match('/\A[0-9]{9,11}\z/', $threadId) !== 1 || !in_array($filter, ['regex', 'loose'], true)) {
             throw new SafeFailure('invalid_arguments');
@@ -67,7 +70,7 @@ final class RecruitmentMonitor
                 }
                 self::requirePrivateFileIfPresent($path);
                 $db = new PDO('sqlite:' . $path, null, null, [PDO::ATTR_TIMEOUT => 1]);
-                $scan = $this->scanLocked($threadId, $db, $filter, $now, $baseline);
+                $scan = $this->scanLocked($threadId, $db, $filter, $now, $baseline, $deadlineRegex);
                 if ($send !== null) {
                     unset($scan['recruitments']);
                     $scan['delivery'] = $this->deliverLocked($db, $threadId, $now ?? self::now(), $send);
@@ -81,7 +84,8 @@ final class RecruitmentMonitor
         }
     }
 
-    private function scanLocked(string $threadId, PDO $db, string $filter, ?int $now, bool $baseline): array
+    private function scanLocked(string $threadId, PDO $db, string $filter, ?int $now, bool $baseline,
+        ?string $deadlineRegex): array
     {
         $db->exec('CREATE TABLE IF NOT EXISTS cursors (thread_id TEXT PRIMARY KEY, last_post INTEGER NOT NULL)');
         $db->exec('CREATE TABLE IF NOT EXISTS detected_recruitments (
@@ -118,11 +122,15 @@ final class RecruitmentMonitor
             }
             $saved->closeCursor();
         }
-        $detected = MonitorIo::detect([
+        $request = [
             'operation' => 'scan', 'text' => $text, 'threadId' => $threadId,
             'after' => $after, 'filter' => $filter, 'now' => $now,
             'previous' => $previous,
-        ]);
+        ];
+        if ($deadlineRegex !== null) {
+            $request['recruitment_deadline_regex'] = $deadlineRegex;
+        }
+        $detected = MonitorIo::detect($request);
         if ($cursor !== null && $detected['lastPost'] < $cursor) {
             throw new SafeFailure('dat_regressed');
         }

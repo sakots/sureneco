@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { boardUrl, validThreadId } from "../src/core/settings";
+import { boardUrl, defaults, validThreadId } from "../src/core/settings";
 import type { Settings } from "../src/core/types";
 import { runDetection } from "./detection";
 import { Store } from "./store";
@@ -59,6 +59,7 @@ const keys = [
   "yujinsen_regex",
   "recruitment_filter",
   "closed_yujinsen_regex",
+  "recruitment_deadline_regex",
   "url",
   "ng_words",
   "ng_ids",
@@ -149,9 +150,22 @@ async function validateSettings(input: unknown): Promise<MobileSettings> {
       ...new Set((list as string[]).map((x) => x.trim()).filter(Boolean)),
     ];
   }
-  await runDetection({ operation: "validate", patterns });
+  const suffix = Object.hasOwn(input, "recruitment_deadline_regex")
+    ? input.recruitment_deadline_regex
+    : defaults.recruitment_deadline_regex;
+  if (typeof suffix !== "string" || suffix.length > 1000 || !suffix.trim())
+    throw new Error();
+  value.recruitment_deadline_regex = suffix;
+  await runDetection({ operation: "validate", patterns, deadlineSuffix: suffix });
   return value as unknown as MobileSettings;
 }
+export function readMobileSettings(json: string): MobileSettings {
+  const settings = JSON.parse(json) as MobileSettings;
+  if (!Object.hasOwn(settings, "recruitment_deadline_regex"))
+    settings.recruitment_deadline_regex = defaults.recruitment_deadline_regex;
+  return settings;
+}
+
 function view(db: Store, current: Subscription | undefined): Reply {
   if (!current) return { status: 200, body: { subscription: null } };
   const fetched = db.get<{ success: number | null }>(
@@ -175,7 +189,7 @@ function view(db: Store, current: Subscription | undefined): Reply {
         active: !!current.active,
         channelConfirmed: !!current.confirmed,
         generation: current.generation,
-        settings: JSON.parse(current.settings),
+        settings: readMobileSettings(current.settings),
         watched: JSON.parse(current.watched),
         lastFetchSuccessAt: fetched?.success ?? null,
         error: failed?.error ?? null,
@@ -275,7 +289,8 @@ export async function subscriptions(
       if (
         !current ||
         (!current.active && !current.challenge_hash) ||
-        current.settings !== encoded ||
+        (current.settings !== encoded &&
+          JSON.stringify(readMobileSettings(current.settings)) !== encoded) ||
         current.watched !== targets ||
         current.token !== token
       ) {

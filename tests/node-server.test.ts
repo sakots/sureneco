@@ -187,16 +187,53 @@ it("validates server settings, ownership fields, limits and consent before persi
   const input = registration();
   delete (input.settings as Partial<typeof input.settings>).update_sec;
   delete (input.settings as Partial<typeof input.settings>).recruitment_filter;
+  delete (input.settings as Partial<typeof input.settings>)
+    .recruitment_deadline_regex;
   const saved = await register(db, "defaults", input);
   expect(saved.settings.update_sec).toBe(60);
   expect(saved.settings.thread_update_sec).toBe(300);
   expect(saved.settings.recruitment_filter).toBe("regex");
+  expect(saved.settings.recruitment_deadline_regex).toBe(
+    defaults.recruitment_deadline_regex,
+  );
   expect(JSON.stringify(saved)).not.toContain("token-one");
   for (let i = 0; i < 9; i++)
     await subscriptions(db, "defaults", "PUT", input, now);
   expect((await subscriptions(db, "defaults", "PUT", input, now)).status).toBe(
     429,
   );
+});
+
+it.each([null, " ", "x".repeat(1001), "[", "(?<hour>x)"])(
+  "rejects an invalid recruitment deadline suffix (%s)",
+  async (suffix) => {
+    const db = store();
+    const reply = await subscriptions(
+      db,
+      "invalid",
+      "PUT",
+      registration("one", { recruitment_deadline_regex: suffix }),
+      now,
+      "https://push.example",
+    );
+    expect(reply).toMatchObject({
+      status: 400,
+      body: { error: "invalid_subscription" },
+    });
+  },
+);
+
+it("defaults a legacy stored deadline suffix without revising the subscription", async () => {
+  const db = store();
+  const saved = await register(db);
+  db.run(
+    "UPDATE subscriptions SET settings=json_remove(settings,'$.recruitment_deadline_regex')",
+  );
+  const reply = await subscriptions(db, "one", "GET", null, now);
+  expect(reply.body.subscription?.settings.recruitment_deadline_regex).toBe(
+    defaults.recruitment_deadline_regex,
+  );
+  expect((await register(db)).revision).toBe(saved.revision);
 });
 
 it("preserves the loose filter through registration and uses it in the isolated detector", async () => {
@@ -753,6 +790,38 @@ it("queues relative cutoffs instead of the default lifetime and never sends at t
   await deliver(db, send, { now: cutoff });
   expect(send).not.toHaveBeenCalled();
   expect(db.get("SELECT COUNT(*) AS n FROM outbox")?.n).toBe(0);
+});
+
+it("uses the custom suffix for expiry and distinguishes it from a closing reply", async () => {
+  const db = store();
+  const suffix = "で受付終了";
+  const saved = await register(
+    db,
+    "one",
+    registration("one", {
+      recruitment_deadline_regex: suffix,
+      closed_yujinsen_regex: "受付終了",
+      emphasis_sec: 60,
+    }),
+  );
+  expect(saved.settings.recruitment_deadline_regex).toBe(suffix);
+  const bodies = ["挨拶"];
+  const fetcher = async (url: string) =>
+    url.endsWith("subject.txt") ? `${thread}.dat<>雀魂 (4)` : dat(bodies);
+  await monitor(db, { now, fetcher });
+  bodies.push("友人戦 12345 5分後で受付終了");
+  await monitor(db, { now: now + 60000, fetcher });
+  const pending = () =>
+    db.get(
+      "SELECT expires FROM outbox WHERE json_extract(payload,'$.recruitment.number')=2",
+    );
+  expect(pending()?.expires).toBe(now + 300000);
+  bodies.push(">>2 6分後で受付終了");
+  await monitor(db, { now: now + 120000, fetcher });
+  expect(pending()?.expires).toBe(now + 300000);
+  bodies.push(">>2 受付終了");
+  await monitor(db, { now: now + 180000, fetcher });
+  expect(pending()).toBeUndefined();
 });
 
 it("keeps pending notices for a future closing announcement but honors a separate closing marker", async () => {

@@ -6,7 +6,8 @@ namespace Sureneco\FcmTrial;
 
 final class SelectionEndpoint
 {
-    public const MAX_BODY_BYTES = 1024;
+    public const MAX_BODY_BYTES = 8192;
+    private const MAX_EXCHANGE_BODY_BYTES = 1024;
 
     /** @return array{int, array} HTTP status and JSON document */
     public static function dispatch(
@@ -60,7 +61,7 @@ final class SelectionEndpoint
 
     private static function exchange(PersistentMonitor $monitor, #[\SensitiveParameter] string $body): array
     {
-        $request = strlen($body) <= self::MAX_BODY_BYTES ? json_decode($body, false, 4) : null;
+        $request = strlen($body) <= self::MAX_EXCHANGE_BODY_BYTES ? json_decode($body, false, 4) : null;
         if (!$request instanceof \stdClass) {
             return [400, ['error' => 'invalid_request']];
         }

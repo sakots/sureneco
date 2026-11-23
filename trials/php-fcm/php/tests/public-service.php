@@ -75,6 +75,8 @@ $a = str_repeat('a', 64);
 $b = str_repeat('b', 64);
 $c = str_repeat('c', 64);
 $wrong = str_repeat('0', 64);
+$defaultSettings = ['thread_refresh_sec' => 300, 'recruitment_filter' => 'loose',
+    'recruitment_deadline_regex' => 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)'];
 
 try {
     $service = $make('scope');
@@ -95,8 +97,8 @@ try {
     $check($finish($service, $proofA, $a) === [200, ['registered' => true]], 'Matching bearer and code register');
     $service = $make('scope');
     $check($finish($service, $proofA, $a) === [200, ['registered' => true]], 'Lost finish reply survives restart');
-    $check($call($service, null, $a) === [200, ['threads' => [], 'recruitments' => [], 'settings' => [
-        'thread_refresh_sec' => 300, 'recruitment_filter' => 'loose'], 'enabled' => true]], 'Fresh device has no selections');
+    $check($call($service, null, $a) === [200, ['threads' => [], 'recruitments' => [],
+        'settings' => $defaultSettings, 'enabled' => true]], 'Fresh device has no selections and defaults its expiry suffix');
     $check($begin($service, 'fcm-A', $b)[0] === 200 && $finish($service, $challengeMessages['fcm-A'], $b)[0] === 401,
         'Even a newly proven token cannot overwrite a different bearer');
     $check($begin($service, 'fcm-B', $b)[0] === 200 && $finish($service, $challengeMessages['fcm-B'], $b)[0] === 200,
@@ -105,10 +107,14 @@ try {
     $check($fetches === ['subject.txt'], 'Candidate fetch shared across devices in one cycle');
     $check(count($call($service, null, $a)[1]['threads']) === 4, 'Candidates available after cron');
     $check($call($service, ['action' => 'delete', 'bearer' => $a], $b)[0] === 400, 'Actions do not accept a target bearer');
-    $check($call($service, ['settings' => ['thread_refresh_sec' => 60, 'recruitment_filter' => 'regex']], $b)[0] === 200,
-        'Device settings can change');
-    $check($call($service, null, $a)[1]['settings'] === ['thread_refresh_sec' => 300, 'recruitment_filter' => 'loose'],
-        'Device settings stay isolated');
+    $customSettings = ['thread_refresh_sec' => 60, 'recruitment_filter' => 'regex',
+        'recruitment_deadline_regex' => '\u9000店'];
+    $check($call($service, ['settings' => $customSettings], $b)[1]['settings'] === $customSettings,
+        'Device settings accept real JavaScript syntax, including Unicode escapes');
+    $check($call($service, null, $a)[1]['settings'] === $defaultSettings, 'Device settings stay isolated');
+    $check($call($service, ['settings' => array_replace($customSettings, ['recruitment_deadline_regex' => '(?i)退店'])], $b)
+        === [400, ['error' => 'invalid_request']], 'Invalid JavaScript regex is rejected even when valid PCRE');
+    $check($call($service, null, $b)[1]['settings'] === $customSettings, 'Rejected settings cannot replace the stored suffix');
     foreach (array_slice($ids, 0, 3) as $id) {
         $check($call($service, ['id' => $id, 'enabled' => true], $a)[0] === 200, 'A can select eligible threads');
     }
@@ -121,12 +127,15 @@ try {
     $check(count(array_keys($fetches, "dat/$ids[0].dat", true)) === 1 && $notifications === [],
         'One DAT fetch per cycle and no notification during baseline');
     $check($call($service, ['action' => 'pause'], $a) === [200, ['enabled' => false]], 'Pause succeeds for A');
-    $files["dat/$ids[0].dat"] .= $line('四南 12345') . "\n";
+    $files["dat/$ids[0].dat"] .= $line('四南 12345 あと2分退店') . "\n";
     $service->tick();
     $check(array_column($notifications, 0) === ['fcm-B'], 'Only active B is notified');
     $check($call($service, null, $a)[1]['enabled'] === false && $call($service, null, $a)[1]['recruitments'] === [],
         'B recruitment history is not visible to paused A');
-    $check(count($call($service, null, $b)[1]['recruitments']) === 1, 'B keeps history after notification');
+    $history = $call($service, null, $b)[1]['recruitments'];
+    $check(count($history) === 1 && $history[0]['expiresAt'] - $history[0]['postedAt'] === 120000
+        && $notifications[0][4] === $history[0]['expiresAt'],
+        'B uses its own expiry suffix for its history snapshot and delivered notification');
     $deviceLock = fopen("$root/state/device-1.lock", 'r+b');
     flock($deviceLock, LOCK_EX | LOCK_NB);
     $check($call($service, ['action' => 'resume'], $a) === [409, ['error' => 'busy']]
@@ -141,6 +150,7 @@ try {
     $check($finish($service, $challengeMessages['fcm-B'], $b)[0] === 401, 'Previously completed proof cannot roll back address');
     $check($call($service, null, $b)[1]['threads'][0]['enabled'] && count($call($service, null, $b)[1]['recruitments']) === 2,
         'Rotation retains B selections, cursor, and history');
+    $check($call($service, null, $b)[1]['settings'] === $customSettings, 'Rotation retains the custom expiry suffix');
     $attempt = end($notifications);
     $service->tick();
     $retried = end($notifications);

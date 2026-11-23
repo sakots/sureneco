@@ -6,7 +6,7 @@ namespace Sureneco\FcmTrial;
 
 final class PublicEndpoint
 {
-    public const MAX_BODY_BYTES = 4608;
+    public const MAX_BODY_BYTES = 8192;
 
     /** @return array{int, array} HTTP status and JSON document */
     public static function dispatch(

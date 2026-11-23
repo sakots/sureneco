@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { defaults, validateSettings } from "../core/settings";
 import { isRecent } from "../core/detection";
-import { recruitmentExpiresAt } from "../core/deadline";
 import { extractRoomIds, postReferences, splitRoomIds } from "../core/room-id";
 import type { Api, Settings, Snapshot, UpdateState } from "../core/types";
 import { MobilePushPanel } from "./MobilePushPanel";
@@ -22,6 +21,7 @@ const labels: Record<keyof Settings, string> = {
   recruitment_filter: "募集フィルタ",
   yujinsen_regex: "募集レスの正規表現",
   closed_yujinsen_regex: "締めレスの正規表現",
+  recruitment_deadline_regex: "募集期限の正規表現（末尾表現）",
   url: "5chの板URL",
   ng_words: "NG本文",
   ng_ids: "NG ID",
@@ -44,6 +44,7 @@ const patterns = [
   "ng_thread_title_regex",
   "yujinsen_regex",
   "closed_yujinsen_regex",
+  "recruitment_deadline_regex",
 ] as const;
 const ng = ["ng_words", "ng_ids", "ng_watchois"] as const;
 const lists = [...ng, "allowed_watchois", "launcher_args"] as const;
@@ -112,10 +113,7 @@ export function App({ api }: { api: Api }) {
           item.deadlineAt !== undefined &&
           item.deadlineAt > now
         ) {
-          delay = Math.min(
-            delay,
-            recruitmentExpiresAt(item, snapshot.settings) - now,
-          );
+          delay = Math.min(delay, item.deadlineAt - now);
         }
       }
     }
@@ -641,6 +639,11 @@ function SettingsForm({
       ) : (
         <input
           id={key}
+          aria-describedby={
+            key === "recruitment_deadline_regex"
+              ? "deadline-regex-help"
+              : undefined
+          }
           type={
             numeric.includes(key as (typeof numeric)[number])
               ? "number"
@@ -808,6 +811,10 @@ function SettingsForm({
           </p>
         )}
         {patterns.map(field)}
+        <p id="deadline-regex-help" className="help">
+          「10分で締切」や「23時まで」のうち、「で締切」や「まで」に当たる部分だけを指定します。
+          時刻や分数の書き方は変更できません。
+        </p>
       </section>
       <section className="settings-card">
         <h3>通知する投稿者</h3>

@@ -269,13 +269,14 @@ try {
     $assert($request('GET', null)[0] === 401 && $request('GET', 'Bearer ' . str_repeat('0', 64))[0] === 401, 'Reject missing and incorrect credentials');
     $assert($request('DELETE', $authorization)[0] === 405 && $request('POST', $authorization, '', 'text/plain')[0] === 415, 'Only allow supported methods and JSON mutations');
     foreach (['[]', '{', '{"id":123,"enabled":true}', '{"id":"' . $id . '","enabled":"true"}',
-        '{"id":"' . $id . '","enabled":true,"extra":1}', str_repeat(' ', 1025)] as $bad) {
+        '{"id":"' . $id . '","enabled":true,"extra":1}', str_repeat(' ', SelectionEndpoint::MAX_BODY_BYTES + 1)] as $bad) {
         $assert($request('POST', $authorization, $bad)[0] === 400, 'Reject malformed or oversized update');
     }
     $update = static fn (string $thread, bool $enabled): array => $request('POST', $authorization,
         json_encode(['id' => $thread, 'enabled' => $enabled], JSON_THROW_ON_ERROR));
     $initial = ['threads' => [['id' => $id, 'title' => $id, 'enabled' => true]], 'recruitments' => [],
-        'settings' => ['thread_refresh_sec' => 300, 'recruitment_filter' => 'loose']];
+        'settings' => ['thread_refresh_sec' => 300, 'recruitment_filter' => 'loose',
+            'recruitment_deadline_regex' => 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)']];
     $assert($request('GET', $authorization) === [200, $initial], 'Snapshot legacy runtime without needing network');
     $settings = static fn (mixed $seconds, mixed $filter, ?string $bearer): array => $request('POST', $bearer,
         json_encode(['settings' => ['thread_refresh_sec' => $seconds, 'recruitment_filter' => $filter]], JSON_THROW_ON_ERROR));
@@ -284,14 +285,25 @@ try {
     }
     $assert($settings(60, 'regex', null) === $unauthorized, 'Settings require authorization');
     $assert($settings(60, 'regex', 'Bearer ' . str_repeat('0', 64)) === $unauthorized, 'Incorrect bearer cannot save settings');
-    $assert($settings(86400, 'regex', $authorization) === [200, array_replace($initial, ['settings' => [
-        'thread_refresh_sec' => 86400, 'recruitment_filter' => 'regex',
-    ]])], 'Save upper-bound refresh interval and return the updated snapshot');
+    $customSettings = ['thread_refresh_sec' => 86400, 'recruitment_filter' => 'regex',
+        'recruitment_deadline_regex' => '退店'];
+    $saveDeadline = static fn (mixed $suffix): array => $request('POST', $authorization,
+        json_encode(['settings' => array_replace($customSettings, ['recruitment_deadline_regex' => $suffix])], JSON_THROW_ON_ERROR));
+    foreach ([null, '', '　', '(', '(?<hour>退店)', str_repeat('あ', 1001)] as $suffix) {
+        $assert($saveDeadline($suffix) === $invalid, 'Reject invalid, blank, overlong and conflicting JS suffixes');
+    }
+    $maxSuffix = str_repeat('あ', 1000);
+    $assert($saveDeadline($maxSuffix)[1]['settings']['recruitment_deadline_regex'] === $maxSuffix,
+        'Accept a maximum-length regex even when JSON escaping makes the body much larger');
+    $assert($saveDeadline('退店') === [200, array_replace($initial, ['settings' => $customSettings])],
+        'Save upper-bound refresh interval and return the custom expiry suffix');
     $restarted = new PersistentMonitor($root, $monitor, $send);
     $assert($restarted->status()['threadRefreshSec'] === 86400 && $restarted->status()['filter'] === 'regex',
         'Settings persist for the restarted scheduler');
     $initial['settings']['thread_refresh_sec'] = 60;
-    $assert($settings(60, 'loose', $authorization) === [200, $initial], 'Save the lower bound and restore loose detection');
+    $initial['settings']['recruitment_deadline_regex'] = '退店';
+    $assert($settings(60, 'loose', $authorization) === [200, $initial],
+        'An older settings client can update refresh and filtering without losing the custom expiry suffix');
     $assert($update($endedId, true)[0] === 404, 'Reject an unknown candidate');
     $lock = fopen($root . '/state/run.lock', 'r+b');
     flock($lock, LOCK_EX);

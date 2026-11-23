@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import type { Post, Recruitment, Thread } from "../src/core/types";
-import { recruitmentExpiresAt } from "../src/core/deadline";
 import { Store } from "./store";
-import type { MobileSettings, Subscription } from "./subscriptions";
+import { readMobileSettings, type Subscription } from "./subscriptions";
 import { runDetection } from "./detection";
 import { fetchBoard } from "./http";
+import type { PendingDetection } from "./worker";
 interface EventPayload {
   eventId: string;
   generation?: string;
@@ -71,7 +71,7 @@ export async function monitor(
     "SELECT s.* FROM subscriptions s WHERE active=1 ORDER BY COALESCE((SELECT MAX(attempted) FROM fetch_state f WHERE f.uid=s.uid),0),s.uid",
   );
   for (const subscription of subscriptions) {
-    const settings = JSON.parse(subscription.settings) as MobileSettings;
+    const settings = readMobileSettings(subscription.settings);
     const watched = JSON.parse(subscription.watched) as string[];
     const board = settings.url;
     const states = new Map(
@@ -109,11 +109,7 @@ export async function monitor(
       let nextThreads: Thread[] | null = null;
       let nextCandidates: Thread[] | null = null;
       let lastPost: number | null = null;
-      let detected: {
-        notifications: Recruitment[];
-        closedPrevious: number[];
-        pendingPrevious: Recruitment[];
-      } | null = null;
+      let detected: PendingDetection | null = null;
       let code: string | null = null;
       try {
         if (!cache.has(url)) {
@@ -273,12 +269,14 @@ export async function monitor(
                 "DELETE FROM outbox WHERE id=?",
                 eventId(subscription.uid, board, thread, number),
               );
-            for (const item of detected.pendingPrevious) {
-              if (item.closed) continue;
+            for (const {
+              item,
+              expires: detectedExpiry,
+            } of detected.pendingPrevious) {
               const id = eventId(subscription.uid, board, thread, item.number);
               const event = db.get<{ expires: number }>(
                 "UPDATE events SET expires=MIN(expires,?) WHERE id=? RETURNING expires",
-                recruitmentExpiresAt(item, settings),
+                detectedExpiry,
                 id,
               );
               if (!event) continue;
@@ -295,8 +293,7 @@ export async function monitor(
                 id,
               );
             }
-            for (const item of detected.notifications) {
-              const expires = recruitmentExpiresAt(item, settings);
+            for (const { item, expires } of detected.notifications) {
               if (expires <= now) continue;
               const id = eventId(subscription.uid, board, thread, item.number);
               const payload: Payload = {

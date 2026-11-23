@@ -41,7 +41,7 @@ internal class TrialDashboard(
     private class Tab(val view: LinearLayout, val label: TextView, val count: TextView?, val indicator: View)
     private class Availability(val root: LinearLayout, val title: TextView, val help: TextView, val settings: View)
     private class RecruitmentCard(val expiresAt: Long, val root: View, val badge: TextView, var active: Boolean? = null)
-    private data class SettingsDraft(val seconds: String, val filter: String)
+    private data class SettingsDraft(val seconds: String, val filter: String, val deadlineRegex: String)
 
     private val root = ui.column().apply { setPadding(ui.dp(14), ui.dp(10), ui.dp(14), 0) }
     private val scroll = ScrollView(activity).apply { isFillViewport = true }
@@ -53,7 +53,8 @@ internal class TrialDashboard(
     private var draftOnRestore = restored?.let { bundle ->
         val interval = bundle.getString("dashboard.interval")
         val filter = bundle.getString("dashboard.filter")
-        if (interval != null && filter != null) SettingsDraft(interval, filter) else null
+        val deadlineRegex = bundle.getString("dashboard.deadlineRegex")
+        if (interval != null && filter != null && deadlineRegex != null) SettingsDraft(interval, filter, deadlineRegex) else null
     }
 
     private val statusText = ui.label(size = 12f, color = ui.muted)
@@ -90,7 +91,22 @@ internal class TrialDashboard(
         setTextColor(ui.text)
         textSize = 16f
         id = View.generateViewId()
-        isSaveEnabled = false // The draft is restored with its filter and server baseline.
+        isSaveEnabled = false // The form draft is restored as a unit.
+        minHeight = ui.dp(48)
+        setPadding(ui.dp(12), 0, ui.dp(12), 0)
+        background = ui.shape(ui.bg, 8, ui.border)
+        onFocusChangeListener = View.OnFocusChangeListener { view, focused ->
+            view.background = ui.shape(ui.bg, 8, if (focused) ui.focus else ui.border)
+        }
+    }
+    private val deadlineRegex = EditText(activity).apply {
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        setSingleLine(true)
+        filters = arrayOf(InputFilter.LengthFilter(MonitoringSettings.deadlineRegexMaxLength))
+        setTextColor(ui.text)
+        textSize = 16f
+        id = View.generateViewId()
+        isSaveEnabled = false
         minHeight = ui.dp(48)
         setPadding(ui.dp(12), 0, ui.dp(12), 0)
         background = ui.shape(ui.bg, 8, ui.border)
@@ -260,6 +276,9 @@ internal class TrialDashboard(
         filter.id = View.generateViewId()
         ui.add(form, ui.label("募集フィルタ", 13f, bold = true).apply { labelFor = filter.id }, 12)
         ui.add(form, filter, 4)
+        ui.add(form, ui.label("募集期限の接尾辞（正規表現）", 13f, bold = true).apply { labelFor = deadlineRegex.id }, 12)
+        ui.add(form, deadlineRegex, 4)
+        ui.add(form, ui.label("「10分まで」の「まで」など、時刻や時間の後ろの表現を JavaScript 正規表現で指定します。", 12f, ui.muted), 4)
         ui.add(form, save, 12)
         ui.add(monitoring, settingsReload, 8)
         ui.add(page, notificationSettings, 12)
@@ -282,11 +301,17 @@ internal class TrialDashboard(
             seconds.requestFocus()
             return
         }
+        val suffix = deadlineRegex.text.toString()
+        if (suffix.isBlank()) {
+            deadlineRegex.error = "募集期限の接尾辞を入力してください。"
+            deadlineRegex.requestFocus()
+            return
+        }
         activity.getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(seconds.windowToken, 0)
-        session.saveSettings(MonitoringSettings(refresh, MonitoringSettings.filters[filterIndex]))
+        session.saveSettings(MonitoringSettings(refresh, MonitoringSettings.filters[filterIndex], suffix))
     }
 
-    private fun draft() = SettingsDraft(seconds.text.toString(), MonitoringSettings.filters[filterIndex])
+    private fun draft() = SettingsDraft(seconds.text.toString(), MonitoringSettings.filters[filterIndex], deadlineRegex.text.toString())
 
     private fun renderSettings(settings: MonitoringSettings?, previous: MonitoringSettings?) {
         form.visibility = if (settings == null) View.GONE else View.VISIBLE
@@ -299,15 +324,17 @@ internal class TrialDashboard(
         val next = if (local != null && !local.matches(previous) && !local.matches(settings)) {
             local
         } else {
-            SettingsDraft(settings.threadRefreshSec.toString(), settings.filter)
+            SettingsDraft(settings.threadRefreshSec.toString(), settings.filter, settings.deadlineRegex)
         }
         if (seconds.text.toString() != next.seconds) seconds.setText(next.seconds)
+        if (deadlineRegex.text.toString() != next.deadlineRegex) deadlineRegex.setText(next.deadlineRegex)
         filterIndex = MonitoringSettings.filters.indexOf(next.filter).coerceAtLeast(0)
         filter.text = filterLabels[filterIndex]
     }
 
     private fun SettingsDraft.matches(settings: MonitoringSettings?): Boolean =
-        settings != null && seconds.toIntOrNull() == settings.threadRefreshSec && filter == settings.filter
+        settings != null && seconds.toIntOrNull() == settings.threadRefreshSec &&
+            filter == settings.filter && deadlineRegex == settings.deadlineRegex
 
     fun render() {
         val snapshot = session.snapshot
@@ -337,9 +364,10 @@ internal class TrialDashboard(
         }
         seconds.isEnabled = snapshot != null
         filter.isEnabled = snapshot != null
+        deadlineRegex.isEnabled = snapshot != null
         save.isEnabled = canWrite
         settingsStatus.text = when {
-            snapshot != null -> "スレッド候補の更新間隔と募集の検出方法を保存します。"
+            snapshot != null -> "スレッド候補の更新間隔、募集の検出方法、募集期限の接尾辞を保存します。"
             !session.registered -> if (BuildConfig.PUBLIC_SERVICE) "下の「端末の通知」で登録または再試行してください。"
                 else "下の「端末の通知」で通知試験を開始するか、登録トークンを再取得してください。"
             session.busy -> "保存済みの設定を読み込んでいます。"
@@ -547,6 +575,7 @@ internal class TrialDashboard(
         if (!draft.matches(settings)) {
             out.putString("dashboard.interval", draft.seconds)
             out.putString("dashboard.filter", draft.filter)
+            out.putString("dashboard.deadlineRegex", draft.deadlineRegex)
         }
     }
 }
