@@ -703,7 +703,7 @@ describe("取得済み返信の状態", () => {
     expect(updated.notifications.map((item) => item.number)).toEqual([3]);
   });
 
-  it.each(["&gt;&gt;1 〆", "〆"])(
+  it.each(["&gt;&gt;1 〆", "〆", "&gt;&gt;1 しまり", "しまり"])(
     "後から取得した締めを既存の返信・連鎖・複数参照・ID再掲へ反映する: %s",
     (body) => {
       const initial = scanPosts(id, source, [], defaults, now);
