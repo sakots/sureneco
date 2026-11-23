@@ -136,6 +136,10 @@ internal class SelectionSession(private val state: TrialState, private val publi
 
     private fun showFailure(error: Throwable, saving: Boolean) {
         val status = (error as? SelectionHttpError)?.status
+        if (saving && status == 400) {
+            notice = Notice("保存できませんでした。入力内容（募集期限の JavaScript 正規表現など）を確認してください。", error = true)
+            return
+        }
         val prefix = if (saving) "保存結果を確認できませんでした。" else "サーバーから読み込めませんでした。"
         val help = when (status) {
             401, 403 -> {

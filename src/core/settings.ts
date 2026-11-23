@@ -1,4 +1,5 @@
 import type { Settings } from "./types";
+import { compileDeadlinePattern, defaultDeadlineSuffix } from "./deadline";
 export const defaults: Settings = {
   update_sec: 20,
   thread_update_sec: 300,
@@ -10,6 +11,7 @@ export const defaults: Settings = {
   yujinsen_regex:
     "友人戦?|友人部屋|(?:募集|部屋)[\\s:：]*[0-9０-９]{5,6}|[0-9０-９]{5,6}[\\s　]*(?:募|＠|@)|四東|四南|三東|三南|三人半荘|四人半[荘莊]|(?<![0-9０-９])[34３４]人半[荘莊]|(?<![0-9０-９IVXLCDMⅠ-Ⅻⅰ-ⅻ])(?:[34３４]|III|IV|Ⅲ|Ⅳ)[東南]",
   closed_yujinsen_regex: "〆|締め|しめ|しまり|締切|締め切|解散|埋まり|満員",
+  recruitment_deadline_regex: defaultDeadlineSuffix,
   url: "https://egg.5ch.io/mj/",
   ng_words: [],
   ng_ids: [],
@@ -76,8 +78,12 @@ export function validateSettings(input: unknown): Settings {
     "ng_thread_title_regex",
     "yujinsen_regex",
     "closed_yujinsen_regex",
+    "recruitment_deadline_regex",
   ] as const) {
-    const pattern = value[key];
+    const pattern =
+      key === "recruitment_deadline_regex" && value[key] === undefined
+        ? defaults[key]
+        : value[key];
     if (
       typeof pattern !== "string" ||
       pattern.length > 1000 ||
@@ -85,7 +91,8 @@ export function validateSettings(input: unknown): Settings {
     )
       throw new Error(`${key}の入力が不正です。`);
     try {
-      new RegExp(pattern, "i");
+      if (key === "recruitment_deadline_regex") compileDeadlinePattern(pattern);
+      else new RegExp(pattern, "i");
     } catch {
       throw new Error(`${key}の正規表現が不正です。`);
     }

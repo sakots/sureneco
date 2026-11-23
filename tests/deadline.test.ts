@@ -25,6 +25,7 @@ describe("募集本文の指定締切", () => {
     ["10分で締め切り", 10],
     ["10分で締切", 10],
     ["5分後爆破", 5],
+    ["5分後ちんぽにゃ", 5],
     ["５分後に爆破します", 5],
     ["5分後に締め切ります", 5],
   ])("予告を即時締めとせず指定時刻で失効する: %s", (phrase, minutes) => {
@@ -40,6 +41,22 @@ describe("募集本文の指定締切", () => {
     expect(
       scanPosts(thread, [candidate], [], defaults, at).notifications,
     ).toEqual([]);
+  });
+
+  it("設定した期限文言を使い、既定の文言を追加で適用しない", () => {
+    const settings = { ...defaults, recruitment_deadline_regex: "終了予定" };
+    const at = posted + 5 * 60_000;
+    const custom = post("友人戦 12345 5分後終了予定");
+    expect(
+      scanPosts(thread, [custom], [], settings, at - 1).items[0].deadlineAt,
+    ).toBe(at);
+    expect(scanPosts(thread, [custom], [], settings, at).notifications).toEqual(
+      [],
+    );
+    expect(
+      scanPosts(thread, [post("友人戦 12345 5分後爆破")], [], settings, at)
+        .notifications,
+    ).toHaveLength(1);
   });
 
   it("既定期間より後の明示時刻も優先し、複数候補なら早い方を使う", () => {

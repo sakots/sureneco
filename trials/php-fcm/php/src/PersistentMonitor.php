@@ -215,8 +215,18 @@ final class PersistentMonitor
             if ($settings !== null) {
                 $refresh = $settings['thread_refresh_sec'] ?? null;
                 $filter = $settings['recruitment_filter'] ?? null;
-                if (count($settings) !== 2 || !self::validSettings($refresh, $filter)) {
+                $hasDeadline = array_key_exists('recruitment_deadline_regex', $settings);
+                if (count($settings) !== ($hasDeadline ? 3 : 2) || !self::validSettings($refresh, $filter)) {
                     throw new SafeFailure('invalid_request');
+                }
+                if ($hasDeadline) {
+                    $suffix = $settings['recruitment_deadline_regex'];
+                    if (!self::validDeadlineSuffix($suffix)) {
+                        throw new SafeFailure('invalid_request');
+                    }
+                    // PHP's regex engine does not validate JavaScript syntax.
+                    MonitorIo::detect(['operation' => 'validate_deadline', 'recruitment_deadline_regex' => $suffix]);
+                    $config['recruitment_deadline_regex'] = $suffix;
                 }
                 $config['thread_refresh_sec'] = $refresh;
                 $config['filter'] = $filter;
@@ -237,7 +247,8 @@ final class PersistentMonitor
                         } else {
                             // Commit the fresh cursor and discard its queue before cron can see the thread enabled.
                             $this->checkDatabaseFiles();
-                            $this->monitor->baseline($id, $this->root . '/state/monitor.sqlite', $config['filter']);
+                            $this->monitor->baseline($id, $this->root . '/state/monitor.sqlite', $config['filter'],
+                                $config['recruitment_deadline_regex']);
                         }
                         $selected[$id] = true;
                     } else {
@@ -264,7 +275,8 @@ final class PersistentMonitor
                 $this->atomicJson($this->root . '/config.json', $config);
             }
             $snapshot = ['threads' => $threads, 'recruitments' => $recruitments,
-                'settings' => ['thread_refresh_sec' => $config['thread_refresh_sec'], 'recruitment_filter' => $config['filter']]];
+                'settings' => ['thread_refresh_sec' => $config['thread_refresh_sec'], 'recruitment_filter' => $config['filter'],
+                    'recruitment_deadline_regex' => $config['recruitment_deadline_regex']]];
             if ($this->publicDevice) {
                 $snapshot['enabled'] = $config['enabled'];
             }
@@ -438,7 +450,7 @@ final class PersistentMonitor
                         $receipt = $send($id, $number, $rooms, $expiry);
                         $accepted = true;
                         return $receipt;
-                    });
+                    }, deadlineRegex: $config['recruitment_deadline_regex']);
                 $candidate['lastPost'] = $result['lastPost'];
                 $candidate['baseline'] = $result['baseline'];
                 $candidate['fetch'] = 'ok';
@@ -507,15 +519,26 @@ final class PersistentMonitor
         $filter = $raw['filter'] ?? 'loose';
         $filter = is_string($filter) ? strtolower(trim($filter)) : null;
         $refresh = $raw['thread_refresh_sec'] ?? 300;
-        if (!is_bool($raw['enabled'] ?? null) || !self::validSettings($refresh, $filter)) {
+        $suffix = array_key_exists('recruitment_deadline_regex', $raw)
+            ? $raw['recruitment_deadline_regex']
+            : 'まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)';
+        if (!is_bool($raw['enabled'] ?? null) || !self::validSettings($refresh, $filter)
+            || !self::validDeadlineSuffix($suffix)) {
             throw new SafeFailure('invalid_config');
         }
-        return ['enabled' => $raw['enabled'], 'filter' => $filter, 'thread_refresh_sec' => $refresh];
+        return ['enabled' => $raw['enabled'], 'filter' => $filter, 'thread_refresh_sec' => $refresh,
+            'recruitment_deadline_regex' => $suffix];
     }
 
     private static function validSettings(mixed $refresh, mixed $filter): bool
     {
         return is_int($refresh) && $refresh >= 60 && $refresh <= 86400 && in_array($filter, ['regex', 'loose'], true);
+    }
+
+    private static function validDeadlineSuffix(mixed $suffix): bool
+    {
+        // JavaScript checks the exact 1000 UTF-16 code-unit limit and whitespace rules.
+        return is_string($suffix) && $suffix !== '' && strlen($suffix) <= 4000;
     }
 
     private function normalizeConfiguration(array $config): void

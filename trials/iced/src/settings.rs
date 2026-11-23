@@ -16,6 +16,7 @@ pub enum Field {
     NgThreadTitleRegex,
     YujinsenRegex,
     ClosedYujinsenRegex,
+    RecruitmentDeadlineRegex,
     Url,
     NgWords,
     NgIds,
@@ -30,7 +31,7 @@ pub enum Field {
 }
 
 impl Field {
-    const ALL: [Self; 19] = [
+    const ALL: [Self; 20] = [
         Self::UpdateSec,
         Self::ThreadUpdateSec,
         Self::ElapsedDays,
@@ -39,6 +40,7 @@ impl Field {
         Self::NgThreadTitleRegex,
         Self::YujinsenRegex,
         Self::ClosedYujinsenRegex,
+        Self::RecruitmentDeadlineRegex,
         Self::Url,
         Self::NgWords,
         Self::NgIds,
@@ -62,6 +64,7 @@ impl Field {
             Self::NgThreadTitleRegex => "ng_thread_title_regex",
             Self::YujinsenRegex => "yujinsen_regex",
             Self::ClosedYujinsenRegex => "closed_yujinsen_regex",
+            Self::RecruitmentDeadlineRegex => "recruitment_deadline_regex",
             Self::Url => "url",
             Self::NgWords => "ng_words",
             Self::NgIds => "ng_ids",
@@ -86,6 +89,7 @@ impl Field {
             Self::NgThreadTitleRegex => "除外するスレッド名の正規表現（空欄可）",
             Self::YujinsenRegex => "募集レスの正規表現",
             Self::ClosedYujinsenRegex => "締め切りレスの正規表現",
+            Self::RecruitmentDeadlineRegex => "募集期限の時刻に続く語句の正規表現",
             Self::Url => "板URL（5ch.io / 5ch.net の HTTPS）",
             Self::NgWords => "NGワード（1行1項目）",
             Self::NgIds => "NG ID（1行1項目）",
@@ -137,6 +141,7 @@ impl Section {
                     | Field::NgThreadTitleRegex
                     | Field::YujinsenRegex
                     | Field::ClosedYujinsenRegex
+                    | Field::RecruitmentDeadlineRegex
                     | Field::RecruitmentFilter
             ),
         }
@@ -308,7 +313,7 @@ impl Draft {
 
 pub struct Form {
     original: Value,
-    fields: [Draft; 19],
+    fields: [Draft; Field::ALL.len()],
     defaults_pending: bool,
 }
 
@@ -432,7 +437,7 @@ impl Form {
         enabled: bool,
         defaults_available: bool,
     ) -> Element<'_, crate::Message> {
-        let [update, thread_update, elapsed, emphasis, thread_title, ng_thread_title, recruitment, closed, url, ng_words, ng_ids, ng_watchois, allowed_watchois, launcher_mode, launcher_path, launcher_args, launcher_profile, launcher_user_data_dir, recruitment_filter] =
+        let [update, thread_update, elapsed, emphasis, thread_title, ng_thread_title, recruitment, closed, deadline, url, ng_words, ng_ids, ng_watchois, allowed_watchois, launcher_mode, launcher_path, launcher_args, launcher_profile, launcher_user_data_dir, recruitment_filter] =
             &self.fields;
         let selected_filter = RecruitmentFilter::ALL
             .into_iter()
@@ -520,6 +525,10 @@ impl Form {
                     ng_thread_title.view(enabled),
                     recruitment.view(enabled && self.recruitment_regex_editable()),
                     closed.view(enabled),
+                    deadline.view(enabled),
+                    crate::label("例: 「23:00まで」の「まで」。時刻の書き方は変更できません。")
+                        .size(13)
+                        .style(appearance::muted),
                 ]
                 .spacing(12),
                 Some(Section::Patterns),
@@ -628,6 +637,7 @@ mod tests {
             "update_sec": 20, "thread_update_sec": 300, "elapsed_days": 14,
             "emphasis_sec": 600, "thread_title_regex": "雀魂", "ng_thread_title_regex": "",
             "yujinsen_regex": "募集", "closed_yujinsen_regex": "〆", "url": "https://egg.5ch.io/mj/",
+            "recruitment_deadline_regex": "まで|〆",
             "ng_words": ["  meaningful  ", "embedded\nnewline"], "ng_ids": [], "ng_watchois": [], "allowed_watchois": [],
             "launcher_mode": "application", "launcher_path": "/opt/mahjong soul",
             "launcher_args": ["--profile", "  untouched  "], "launcher_profile": "Profile 1",
@@ -654,11 +664,16 @@ mod tests {
             Field::ClosedYujinsenRegex,
             "custom close".into(),
         ));
+        form.update(Message::Input(
+            Field::RecruitmentDeadlineRegex,
+            "受付終了".into(),
+        ));
         let candidate = form.candidate().unwrap();
         assert_eq!(candidate["recruitment_filter"], "loose");
         assert_eq!(candidate["yujinsen_regex"], "custom recruitment");
         assert_eq!(candidate["closed_yujinsen_regex"], "custom close");
-        // Rejected saves and periodic snapshots must not clear either draft.
+        assert_eq!(candidate["recruitment_deadline_regex"], "受付終了");
+        // Rejected saves and periodic snapshots must not clear edited drafts.
         form.refresh(&original);
         assert_eq!(form.candidate().unwrap(), candidate);
         form.update(Message::Input(Field::RecruitmentFilter, "regex".into()));
@@ -677,15 +692,24 @@ mod tests {
         let defaults = saved();
         let mut original = saved();
         original["recruitment_filter"] = json!("loose");
+        original["recruitment_deadline_regex"] = json!("受付終了");
         for section in [Section::Patterns, Section::All] {
             let mut form = Form::new();
             form.reset(&original);
             form.restore_defaults(&defaults, Section::Fetch);
             assert_eq!(form.candidate().unwrap()["recruitment_filter"], "loose");
+            assert_eq!(
+                form.candidate().unwrap()["recruitment_deadline_regex"],
+                "受付終了"
+            );
             form.restore_defaults(&defaults, section);
             form.refresh(&original);
             let candidate = form.candidate().unwrap();
             assert_eq!(candidate["recruitment_filter"], "regex");
+            assert_eq!(
+                candidate["recruitment_deadline_regex"],
+                defaults["recruitment_deadline_regex"]
+            );
             assert!(form.recruitment_regex_editable());
             assert!(form.dirty());
             form.reset(&candidate);
@@ -805,6 +829,7 @@ mod tests {
             "ng_thread_title_regex",
             "yujinsen_regex",
             "closed_yujinsen_regex",
+            "recruitment_deadline_regex",
         ] {
             original[key] = json!("custom-pattern");
         }
@@ -822,6 +847,7 @@ mod tests {
             "ng_thread_title_regex",
             "yujinsen_regex",
             "closed_yujinsen_regex",
+            "recruitment_deadline_regex",
         ] {
             expected[key] = defaults[key].clone();
         }

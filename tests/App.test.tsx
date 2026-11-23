@@ -427,12 +427,18 @@ it("区分別復元は別区分と未保存の入力を保持し、保存する�
     recruitment_filter: "loose" as const,
     yujinsen_regex: "custom-recruit",
     closed_yujinsen_regex: "custom-close",
+    recruitment_deadline_regex: "までに集合",
     launcher_path: "/saved/game",
     ng_ids: ["saved-id"],
   };
   const api = setup([], undefined, saved);
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: "設定" }));
+  const deadline = screen.getByRole("textbox", {
+    name: "募集期限の正規表現（末尾表現）",
+  }) as HTMLInputElement;
+  expect(deadline.value).toBe("までに集合");
+  expect(deadline.getAttribute("aria-describedby")).toBe("deadline-regex-help");
   fireEvent.change(screen.getByLabelText("NG ID"), {
     target: { value: "draft-id" },
   });
@@ -448,6 +454,7 @@ it("区分別復元は別区分と未保存の入力を保持し、保存する�
   expect(
     (screen.getByLabelText("募集レスの正規表現") as HTMLInputElement).value,
   ).toBe(defaults.yujinsen_regex);
+  expect(deadline.value).toBe(defaults.recruitment_deadline_regex);
   expect(
     (screen.getByLabelText("友人戦募集の更新間隔（秒）") as HTMLInputElement)
       .value,
@@ -479,6 +486,7 @@ it("区分別復元は別区分と未保存の入力を保持し、保存する�
     recruitment_filter: "regex",
     yujinsen_regex: "new-recruit",
     closed_yujinsen_regex: defaults.closed_yujinsen_regex,
+    recruitment_deadline_regex: defaults.recruitment_deadline_regex,
     ng_ids: ["draft-id"],
   });
 });

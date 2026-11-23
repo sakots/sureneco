@@ -1,6 +1,11 @@
 import type { Post, Recruitment, Settings } from "./types";
 import { extractRoomIds, postReferences } from "./room-id";
-import { isClosingPost, parseDeadline, recruitmentExpiresAt } from "./deadline";
+import {
+  compileDeadlinePattern,
+  isClosingPost,
+  parseDeadline,
+  recruitmentExpiresAt,
+} from "./deadline";
 export function isBlocked(post: Post, settings: Settings): boolean {
   return (
     settings.ng_words.some((x) => post.body.includes(x)) ||
@@ -12,18 +17,24 @@ export function isRecent(
   post: Post | Recruitment,
   settings: Settings,
   now: number,
+  deadlinePattern?: RegExp,
 ): boolean {
   const postedAt =
     "effectivePostedAt" in post ? post.effectivePostedAt : post.postedAt;
   const deadline =
-    ("deadlineAt" in post ? post.deadlineAt : undefined) ??
-    parseDeadline(post)?.deadlineAt;
+    "effectivePostedAt" in post
+      ? post.deadlineAt
+      : parseDeadline(
+          post,
+          deadlinePattern ??
+            compileDeadlinePattern(settings.recruitment_deadline_regex),
+        )?.deadlineAt;
   return (
     postedAt > 0 &&
     now >= post.postedAt &&
     now >= postedAt &&
     (deadline !== undefined
-      ? now < recruitmentExpiresAt(post, settings)
+      ? now < deadline
       : now - postedAt <= settings.emphasis_sec * 1000)
   );
 }
@@ -42,6 +53,9 @@ export function scanPosts(
       ? undefined
       : new RegExp(settings.yujinsen_regex, "i");
   const close = new RegExp(settings.closed_yujinsen_regex, "i");
+  const deadlinePattern = compileDeadlinePattern(
+    settings.recruitment_deadline_regex,
+  );
   const source = new Map(sourcePosts.map((post) => [post.number, post]));
   for (const item of items) {
     if (item.threadId === threadId && !source.has(item.number))
@@ -54,7 +68,7 @@ export function scanPosts(
   );
   // 履歴に残っていない募集にも、取得済みの締めレスを反映する。
   for (const closing of sourcePosts) {
-    if (!isClosingPost(closing, close)) continue;
+    if (!isClosingPost(closing, close, deadlinePattern)) continue;
     const refs = postReferences(closing.body);
     for (const target of source.values()) {
       if (target.number < closing.number && closesPost(closing, target, refs))
@@ -74,9 +88,20 @@ export function scanPosts(
     }
   }
   for (const post of posts) {
-    if (!isClosingPost(post, close) && !isBlocked(post, settings)) {
+    if (
+      !isClosingPost(post, close, deadlinePattern) &&
+      !isBlocked(post, settings)
+    ) {
       const { roomIds, matches, effectivePostedAt, deadlineAt } =
-        resolveRecruitment(post, source, settings, recruit, closed, now);
+        resolveRecruitment(
+          post,
+          source,
+          settings,
+          recruit,
+          closed,
+          now,
+          deadlinePattern,
+        );
       if (!matches || !roomIds.length) continue;
       const item: Recruitment = {
         ...post,
@@ -101,6 +126,7 @@ export function scanPosts(
       recruit,
       closed,
       now,
+      deadlinePattern,
     );
     item.effectivePostedAt = resolved.effectivePostedAt;
     if (resolved.deadlineAt !== undefined)
@@ -112,7 +138,7 @@ export function scanPosts(
     notifications: added.filter(
       (x) =>
         !x.closed &&
-        isRecent(x, settings, now) &&
+        isRecent(x, settings, now, deadlinePattern) &&
         (!settings.allowed_watchois.length ||
           settings.allowed_watchois.includes(x.watchoi)),
     ),
@@ -133,6 +159,7 @@ function resolveRecruitment(
   pattern: RegExp | undefined,
   closed: Set<number>,
   now: number,
+  deadlinePattern: RegExp,
 ) {
   const direct = extractRoomIds(post.body);
   let matches = matchesRecruitment(post.body, direct, pattern);
@@ -140,8 +167,8 @@ function resolveRecruitment(
     "effectivePostedAt" in post ? post.effectivePostedAt : post.postedAt;
   let hasDeadline =
     (("deadlineAt" in post ? post.deadlineAt : undefined) ??
-      parseDeadline(post)?.deadlineAt) !== undefined;
-  let expires = recruitmentExpiresAt(post, settings);
+      parseDeadline(post, deadlinePattern)?.deadlineAt) !== undefined;
+  let expires = recruitmentExpiresAt(post, settings, deadlinePattern);
   let referenceClosed = false;
   let referencesRecent = true;
   const roomIds = new Set<string>();
@@ -161,11 +188,14 @@ function resolveRecruitment(
     if (visited.has(key)) continue;
     visited.add(key);
     referenceClosed ||= closed.has(referenced.number);
-    referencesRecent &&= isRecent(referenced, settings, now);
+    referencesRecent &&= isRecent(referenced, settings, now, deadlinePattern);
     if (isBlocked(referenced, settings)) continue;
     effectivePostedAt = Math.min(effectivePostedAt, referenced.postedAt);
-    hasDeadline ||= parseDeadline(referenced) !== null;
-    expires = Math.min(expires, recruitmentExpiresAt(referenced, settings));
+    hasDeadline ||= parseDeadline(referenced, deadlinePattern) !== null;
+    expires = Math.min(
+      expires,
+      recruitmentExpiresAt(referenced, settings, deadlinePattern),
+    );
     const ids = extractRoomIds(referenced.body);
     if (collect) {
       matches ||= matchesRecruitment(referenced.body, ids, pattern);

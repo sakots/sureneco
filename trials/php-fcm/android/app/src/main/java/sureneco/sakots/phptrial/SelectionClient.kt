@@ -16,10 +16,12 @@ internal data class TrialRecruitment(
     val postedAt: Long,
     val expiresAt: Long,
 )
-internal data class MonitoringSettings(val threadRefreshSec: Int, val filter: String) {
+internal data class MonitoringSettings(val threadRefreshSec: Int, val filter: String, val deadlineRegex: String) {
     companion object {
         val refreshRange = 60..86_400
         val filters = listOf("regex", "loose")
+        const val deadlineRegexMaxLength = 1000
+        const val defaultDeadlineRegex = """まで|(?:で|に)?\s*(?:締(?:め)?(?:切(?:り|る)?)?|〆(?:切り?)?|しめきり|爆破|ちんぽにゃ)"""
     }
 }
 internal data class MonitoringSnapshot(
@@ -74,6 +76,7 @@ internal object SelectionClient {
         val values = JSONObject()
             .put("thread_refresh_sec", settings.threadRefreshSec)
             .put("recruitment_filter", settings.filter)
+            .put("recruitment_deadline_regex", settings.deadlineRegex)
         val body = JSONObject().put("settings", values)
         val snapshot = parseSnapshot(request(bearer, body.toString()))
         if (snapshot.settings != settings) throw IOException()
@@ -158,9 +161,13 @@ internal object SelectionClient {
         val settings = document.getJSONObject("settings")
         val refresh = settings.get("thread_refresh_sec") as? Int ?: throw IOException()
         val filter = settings.get("recruitment_filter") as? String ?: throw IOException()
+        val deadlineRegex = if (settings.has("recruitment_deadline_regex")) {
+            settings.get("recruitment_deadline_regex") as? String ?: throw IOException()
+        } else MonitoringSettings.defaultDeadlineRegex
         if (refresh !in MonitoringSettings.refreshRange || filter !in MonitoringSettings.filters) throw IOException()
+        if (deadlineRegex.isBlank() || deadlineRegex.length > MonitoringSettings.deadlineRegexMaxLength) throw IOException()
         val enabled = if (BuildConfig.PUBLIC_SERVICE) document.get("enabled") as? Boolean ?: throw IOException() else null
-        return MonitoringSnapshot(parsedThreads, parsedRecruitments, MonitoringSettings(refresh, filter), enabled)
+        return MonitoringSnapshot(parsedThreads, parsedRecruitments, MonitoringSettings(refresh, filter, deadlineRegex), enabled)
     }
 
     private fun JSONObject.getThreadId(key: String): String =

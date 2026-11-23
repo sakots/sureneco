@@ -1,4 +1,4 @@
-import { recruitmentExpiresAt } from "../../../src/core/deadline";
+import { compileDeadlinePattern, recruitmentExpiresAt } from "../../../src/core/deadline";
 import { scanPosts } from "../../../src/core/detection";
 import { candidates, parseDat, parseSubject } from "../../../src/core/parser";
 import { defaults, validThreadId } from "../../../src/core/settings";
@@ -33,10 +33,19 @@ export function run(json: string): string {
     const input: unknown = JSON.parse(json);
     if (!input || typeof input !== "object" || Array.isArray(input))
       return failure("invalid_request");
-    const { operation, text, now, threadId, after, filter } = input as Record<
-      string,
-      unknown
-    >;
+    const { operation, text, now, threadId, after, filter, recruitment_deadline_regex } =
+      input as Record<string, unknown>;
+    const suffix = recruitment_deadline_regex === undefined
+      ? defaults.recruitment_deadline_regex
+      : recruitment_deadline_regex;
+    if (operation === "validate_deadline" || operation === "scan") {
+      if (typeof suffix !== "string" || !suffix.trim() || suffix.length > 1000)
+        return failure("invalid_request");
+      if (operation === "validate_deadline") {
+        compileDeadlinePattern(suffix);
+        return JSON.stringify({ ok: true, result: [] });
+      }
+    }
     if (typeof text !== "string" || !nonnegativeInteger(now))
       return failure("invalid_request");
 
@@ -73,7 +82,13 @@ export function run(json: string): string {
     }
     const lastPost = posts.length;
     if (!lastPost) return failure("invalid_dat");
-    const settings = { ...defaults, recruitment_filter: filter } as const;
+    if (typeof suffix !== "string") return failure("invalid_request");
+    const deadlinePattern = compileDeadlinePattern(suffix);
+    const settings = {
+      ...defaults,
+      recruitment_filter: filter,
+      recruitment_deadline_regex: suffix,
+    } as const;
     if (!("previous" in input) || !Array.isArray(input.previous))
       return failure("invalid_request");
     const previous = input.previous;
@@ -94,7 +109,7 @@ export function run(json: string): string {
         savedExpiry.set(previous[i].number, previous[i].expiresAt);
       }
       for (const item of items) {
-        const expiresAt = recruitmentExpiresAt(item, settings);
+        const expiresAt = recruitmentExpiresAt(item, settings, deadlinePattern);
         if (item.closed || expiresAt <= now) {
           closed.push(item.number);
         } else if (expiresAt < (savedExpiry.get(item.number) ?? expiresAt)) {
@@ -114,7 +129,7 @@ export function run(json: string): string {
             posts,
           ).notifications.map((item) => ({
             ...item,
-            expiresAt: recruitmentExpiresAt(item, settings),
+            expiresAt: recruitmentExpiresAt(item, settings, deadlinePattern),
           }));
     return JSON.stringify({
       ok: true,

@@ -1,7 +1,22 @@
 import { scanPosts } from "../src/core/detection";
-import { isClosingPost } from "../src/core/deadline";
+import {
+  compileDeadlinePattern,
+  isClosingPost,
+  recruitmentExpiresAt,
+} from "../src/core/deadline";
 import { candidates, parseDat, parseSubject } from "../src/core/parser";
 import type { Post, Recruitment, Settings } from "../src/core/types";
+
+interface ExpiringRecruitment {
+  item: Recruitment;
+  expires: number;
+}
+
+export interface PendingDetection {
+  notifications: ExpiringRecruitment[];
+  closedPrevious: number[];
+  pendingPrevious: ExpiringRecruitment[];
+}
 
 // Runs inside the isolated Node.js worker. Request values are data, never code.
 export function run(json: string): string {
@@ -9,6 +24,7 @@ export function run(json: string): string {
     const input = JSON.parse(json) as {
       operation: string;
       patterns?: unknown;
+      deadlineSuffix?: unknown;
       threadId: string;
       posts: Post[];
       previous: Recruitment[];
@@ -24,6 +40,7 @@ export function run(json: string): string {
       return JSON.stringify({ ok: false, error: "invalid_request" });
     }
     let patterns: unknown;
+    let deadlineSuffix: unknown;
     if (input.operation === "dat") {
       if (typeof input.dat !== "string") {
         return JSON.stringify({ ok: false, error: "invalid_request" });
@@ -32,6 +49,7 @@ export function run(json: string): string {
     }
     if (input.operation === "validate") {
       patterns = input.patterns;
+      deadlineSuffix = input.deadlineSuffix;
     } else if (input.operation === "scan") {
       if (
         typeof input.threadId !== "string" ||
@@ -51,6 +69,7 @@ export function run(json: string): string {
         input.settings.yujinsen_regex,
         input.settings.closed_yujinsen_regex,
       ];
+      deadlineSuffix = input.settings.recruitment_deadline_regex;
     } else if (input.operation === "subject") {
       if (
         typeof input.subject !== "string" ||
@@ -78,19 +97,26 @@ export function run(json: string): string {
       patterns.length > 4 ||
       patterns.some(
         (pattern) => typeof pattern !== "string" || pattern.length > 1000,
-      )
+      ) ||
+      (deadlineSuffix !== undefined &&
+        (typeof deadlineSuffix !== "string" ||
+          deadlineSuffix.length > 1000 ||
+          !deadlineSuffix.trim()))
     ) {
       return JSON.stringify({ ok: false, error: "invalid_request" });
     }
-    for (const pattern of patterns) {
-      try {
-        new RegExp(pattern, "i");
-      } catch (error) {
-        if (error instanceof SyntaxError) {
-          return JSON.stringify({ ok: false, error: "invalid_pattern" });
-        }
-        throw error;
+    let deadline: RegExp | undefined;
+    try {
+      for (const pattern of patterns) new RegExp(pattern, "i");
+      if (input.operation === "scan" || typeof deadlineSuffix === "string")
+        deadline = compileDeadlinePattern(
+          typeof deadlineSuffix === "string" ? deadlineSuffix : undefined,
+        );
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        return JSON.stringify({ ok: false, error: "invalid_pattern" });
       }
+      throw error;
     }
     if (input.operation === "subject") {
       const threads = parseSubject(input.subject as string);
@@ -121,9 +147,16 @@ export function run(json: string): string {
     if (input.operation === "scan" && input.trackPending && result !== null) {
       // UI history is capped at 200; delivery must reevaluate every pending event.
       const close = new RegExp(input.settings.closed_yujinsen_regex, "i");
-      const closing = input.posts.filter((post) => isClosingPost(post, close));
+      const closing = input.posts.filter((post) =>
+        isClosingPost(post, close, deadline),
+      );
+      // Resolve expiry here too, so custom patterns only run in the worker.
+      const withExpiry = (item: Recruitment): ExpiringRecruitment => ({
+        item,
+        expires: recruitmentExpiresAt(item, input.settings, deadline),
+      });
       const closedPrevious: number[] = [];
-      const pendingPrevious: Recruitment[] = [];
+      const pendingPrevious: ExpiringRecruitment[] = [];
       for (let offset = 0; offset < input.previous.length; offset += 200) {
         const pending = scanPosts(
           input.threadId,
@@ -134,14 +167,16 @@ export function run(json: string): string {
           input.sourcePosts,
         );
         for (const item of pending.items) {
-          pendingPrevious.push(item);
           if (item.closed) closedPrevious.push(item.number);
+          else pendingPrevious.push(withExpiry(item));
         }
       }
-      return JSON.stringify({
-        ok: true,
-        result: { ...result, closedPrevious, pendingPrevious },
-      });
+      const pending: PendingDetection = {
+        notifications: result.notifications.map(withExpiry),
+        closedPrevious,
+        pendingPrevious,
+      };
+      return JSON.stringify({ ok: true, result: { ...result, ...pending } });
     }
     return JSON.stringify({ ok: true, result });
   } catch (error) {

@@ -318,12 +318,14 @@ mod tests {
         let target = root.path().join("selected");
         let _base_lock = single_instance::acquire(&base).unwrap().unwrap();
         let storage = Storage::load(base.clone()).unwrap().unwrap();
+        let mut updated = settings(90);
+        updated["recruitment_deadline_regex"] = json!("受付終了");
         let events = drain(
             storage,
             vec![
                 Command::Settings(settings(45)),
                 Command::ConfigDirectory(target.clone()),
-                Command::Settings(settings(90)),
+                Command::Settings(updated),
                 Command::Stop,
             ],
         );
@@ -335,6 +337,12 @@ mod tests {
                 .unwrap();
         assert_eq!(old["settings"]["update_sec"], 45);
         assert_eq!(saved["settings"]["update_sec"], 90);
+        assert_eq!(saved["settings"]["recruitment_deadline_regex"], "受付終了");
+        assert!(events.iter().any(|event| matches!(
+            event,
+            Event::Snapshot(snapshot)
+                if snapshot.settings["recruitment_deadline_regex"] == "受付終了"
+        )));
         let canonical = target.canonicalize().unwrap();
         assert_eq!(
             events
