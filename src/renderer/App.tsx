@@ -185,8 +185,9 @@ export function App({ api }: { api: Api }) {
     snapshot?.recruitments.filter(
       (x) => !x.closed && isRecent(x, snapshot.settings, Date.now()),
     ).length ?? 0;
-  return (
-    <div className="app">
+  const settingsOpen = page === "settings" && !!snapshot;
+  const content = (
+    <>
       <header className="header">
         <div className="brand">
           <span className="logo" aria-hidden="true">
@@ -572,6 +573,11 @@ export function App({ api }: { api: Api }) {
           )}
         </main>
       )}
+    </>
+  );
+  return (
+    <div className={settingsOpen ? "app app-settings" : "app"}>
+      <div className="app-content">{content}</div>
       <footer>
         <span>
           {snapshot?.updatedAt
@@ -587,6 +593,26 @@ export function App({ api }: { api: Api }) {
             : "閉じるとトレイに常駐します"}
         </span>
       </footer>
+      {settingsOpen && (
+        <div className="form-actions settings-actions">
+          <button
+            type="reset"
+            form="settings-form"
+            className="secondary"
+            disabled={busy}
+          >
+            全体をデフォルトに戻す
+          </button>
+          <button
+            type="submit"
+            form="settings-form"
+            className="primary"
+            disabled={busy}
+          >
+            {busy ? "保存中…" : "設定を保存"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -673,7 +699,11 @@ function SettingsForm({
   );
   return (
     <form
-      className="settings-form"
+      id="settings-form"
+      onReset={(event) => {
+        event.preventDefault();
+        restoreDefaults(Object.keys(defaults) as (keyof Settings)[]);
+      }}
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
@@ -832,21 +862,6 @@ function SettingsForm({
         </p>
         {ng.map(field)}
       </section>
-      <div className="form-actions settings-actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy}
-          onClick={() =>
-            restoreDefaults(Object.keys(defaults) as (keyof Settings)[])
-          }
-        >
-          全体をデフォルトに戻す
-        </button>
-        <button className="primary" type="submit" disabled={busy}>
-          {busy ? "保存中…" : "設定を保存"}
-        </button>
-      </div>
     </form>
   );
 }
