@@ -673,6 +673,7 @@ function SettingsForm({
   );
   return (
     <form
+      className="settings-form"
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
@@ -831,7 +832,7 @@ function SettingsForm({
         </p>
         {ng.map(field)}
       </section>
-      <div className="form-actions">
+      <div className="form-actions settings-actions">
         <button
           type="button"
           className="secondary"
@@ -840,7 +841,7 @@ function SettingsForm({
             restoreDefaults(Object.keys(defaults) as (keyof Settings)[])
           }
         >
-          既定値を入力
+          全体をデフォルトに戻す
         </button>
         <button className="primary" type="submit" disabled={busy}>
           {busy ? "保存中…" : "設定を保存"}

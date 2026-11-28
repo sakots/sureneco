@@ -402,7 +402,9 @@ it("全体の既定値を入力すると緩め募集フィルタも通常へ戻�
   expect(
     (screen.getByLabelText("募集レスの正規表現") as HTMLInputElement).disabled,
   ).toBe(true);
-  await user.click(screen.getByRole("button", { name: "既定値を入力" }));
+  await user.click(
+    screen.getByRole("button", { name: "全体をデフォルトに戻す" }),
+  );
   expect(
     (screen.getByLabelText("募集フィルタ") as HTMLSelectElement).value,
   ).toBe("regex");
@@ -863,7 +865,9 @@ it("通知を許可するワッチョイを一行一件で保存し、既定値�
       allowed_watchois: ["ﾜｯﾁｮｲ allowed", "ﾜｯﾁｮｲ other"],
     }),
   );
-  await user.click(screen.getByRole("button", { name: "既定値を入力" }));
+  await user.click(
+    screen.getByRole("button", { name: "全体をデフォルトに戻す" }),
+  );
   expect((field as HTMLTextAreaElement).value).toBe("");
   await user.click(screen.getByRole("button", { name: "設定を保存" }));
   expect(api.saveSettings).toHaveBeenLastCalledWith(

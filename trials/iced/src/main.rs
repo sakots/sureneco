@@ -982,31 +982,26 @@ impl App {
 
     fn settings_page(&self, available: bool) -> Element<'_, Message> {
         let dirty = self.settings.dirty();
-        let mut actions = row![button(label("全体をデフォルトに戻す").size(13))
-            .padding([6, 12])
-            .style(appearance::secondary)
-            .on_press_maybe(
-                (available && self.default_settings.is_some())
-                    .then_some(Message::RestoreDefaults(settings::Section::All))
-            ),]
+        let actions = row![
+            button(label("全体をデフォルトに戻す").size(13))
+                .padding([6, 12])
+                .style(appearance::secondary)
+                .on_press_maybe(
+                    (available && self.default_settings.is_some())
+                        .then_some(Message::RestoreDefaults(settings::Section::All))
+                ),
+            button(label("保存").size(13))
+                .padding([6, 14])
+                .style(appearance::primary)
+                .on_press_maybe((available && dirty).then_some(Message::SaveSettings)),
+        ]
         .spacing(10)
         .align_y(iced::Alignment::Center);
-        if dirty {
-            actions = actions
-                .push(
-                    button(label("保存").size(13))
-                        .padding([6, 14])
-                        .style(appearance::primary)
-                        .on_press_maybe(available.then_some(Message::SaveSettings)),
-                )
-                .push(label("未保存の変更あり").size(12).style(appearance::muted));
-        }
         let heading = column![
             label("設定").size(18),
             label("検出条件・通知の対象・雀魂の起動方法を調整できます。")
                 .size(13)
                 .style(appearance::muted),
-            actions,
             label("設定は「保存」で反映します。デフォルト復元も保存が必要です。")
                 .size(12)
                 .style(appearance::muted),
@@ -1125,6 +1120,8 @@ impl App {
                 .id(scrollable::Id::new(PAGE_BODY_ID))
                 .height(Length::Fill)
                 .width(Length::Fill),
+            horizontal_rule(1),
+            actions,
         ]
         .spacing(12)
         .height(Length::Fill)
